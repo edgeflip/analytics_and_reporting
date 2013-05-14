@@ -31,15 +31,15 @@ def auths_and_reach(clientId):
     results['current_auths'] = curs.fetchone()[0]
     logger.info("Client %s has %d current authorizations" % (clientId, results['current_auths']))
 
-    sql = """SELECT COUNT(*) AS total_edges, COUNT(DISTINCT fbid) AS total_reach, 
-            SUM(CASE WHEN t.expires > CURRENT_TIMESTAMP THEN 1 ELSE 0 END) AS current_edges,
-            COUNT(DISTINCT CASE WHEN t.expires > CURRENT_TIMESTAMP THEN fbid ELSE NULL END) AS current_reach
+    sql = """SELECT COUNT(*) AS total_edges, COUNT(DISTINCT uc.fbid) AS total_reach, 
+            IFNULL(SUM(CASE WHEN t.expires > CURRENT_TIMESTAMP THEN 1 ELSE 0 END), 0) AS current_edges,
+            COUNT(DISTINCT CASE WHEN t.expires > CURRENT_TIMESTAMP THEN uc.fbid ELSE NULL END) AS current_reach
             FROM user_clients uc
             JOIN clients c USING(client_id)
-            JOIN tokens t c.fb_app_id = t.appid AND uc.fbid = t.ownerid
+            JOIN tokens t ON c.fb_app_id = t.appid AND uc.fbid = t.ownerid
             WHERE uc.client_id = %s"""
     curs.execute(sql, clientId)
-    results['total_edges'], results['total_reach'], reslults['current_edges'], results['current_reach'] = curs.fetchone()
+    results['total_edges'], results['total_reach'], results['current_edges'], results['current_reach'] = curs.fetchone()
     logger.info("Client %s can reach %s people through %s edges" % (clientId, results['total_reach'], results['total_edges']))
     logger.info("Client %s can currently reach %s people through %s edges" % (clientId, results['current_reach'], results['current_edges']))
 
@@ -146,7 +146,7 @@ def clickbacks(clientId):
     # Huh... obviously can't just join the events table on itself since 
     # multiple share records have the same activity_id.
 
-    sql = """CREATE LOCAL TEMPORARY TABLE recip_counts ( KEY(campaign_id, content_id activity_id) )
+    sql = """CREATE TEMPORARY TABLE recip_counts ( KEY(campaign_id, content_id, activity_id) )
         SELECT e.campaign_id, content_id, activity_id, COUNT(*) AS num_recips
         FROM campaigns c JOIN events e USING(campaign_id)
         WHERE e.type='shared' AND e.activity_id IS NOT NULL
@@ -156,7 +156,7 @@ def clickbacks(clientId):
     curs.execute(sql, clientId)
 
 
-    sql = """CREATE LOCAL TEMPORARY TABLE clickback_counts ( KEY(campaign_id, content_id activity_id) )
+    sql = """CREATE TEMPORARY TABLE clickback_counts ( KEY(campaign_id, content_id, activity_id) )
         SELECT e.campaign_id, content_id, activity_id, COUNT(*) AS num_clickbacks
         FROM campaigns c JOIN events e USING(campaign_id)
         WHERE e.type='clickback' AND e.activity_id IS NOT NULL
@@ -169,14 +169,14 @@ def clickbacks(clientId):
     sql = """SELECT rc.campaign_id, rc.content_id,
         SUM(num_recips) AS total_recips,
         SUM(num_clickbacks) AS total_clickbacks,
-        SUM(num_clicbacks) / NULLIF(SUM(num_recips), 0) AS clickback_rate
+        SUM(num_clickbacks) / NULLIF(SUM(num_recips), 0) AS clickback_rate
         FROM recip_counts rc LEFT JOIN clickback_counts cc USING(campaign_id, content_id, activity_id)
         GROUP BY 1,2
     """
     curs.execute(sql)
 
     for row in curs.fetchall():
-        results[(row[0], row[1])]['clickback_rate'] : row[4]
+        results[(row[0], row[1])]['clickback_rate'] = row[4]
         logger.info('Client %s had a clickback rate of %s for campaign %s with content %s' % (clientId, row[0], row[1], row[4]))
 
     return results
