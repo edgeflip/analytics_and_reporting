@@ -50,8 +50,8 @@ class GoodBrowser(object):
 # algorithm to crawl everyones feeds and compile some data objects relating to
 # those feeds
 # an object with the most recent post's "updated_time" is stored and written
-# to a file so that we can pull those user-specific times out when we call
-# crawl_all_feeds the next time
+# to a file so that we can pull those user-specific updated_time's to use in our
+# subsequent queries
 
 
 def crawl_all_feeds():
@@ -63,7 +63,9 @@ def crawl_all_feeds():
 	cur = con.cursor()
 	orm = PySql(cur)
 	pertinent_info = orm.query('SELECT fbid,ownerid,token FROM tokens')
+	# descend into the iterable returned by our PySql instance
 	for i in range(len(pertinent_info)):
+		# key = pertinent_info[i][0] is the user's feed we are crawling
 		key = str(pertinent_info[i][0])
 		primary = str(pertinent_info[i][1])
 		access_token = pertinent_info[i][2]
@@ -71,6 +73,8 @@ def crawl_all_feeds():
 		cur_data[key]["primary_fbid"] = primary
 		formatted_query = api.format(key,feed,access_token)
 		data = json.loads(urllib2.urlopen(formatted_query).read())
+		# to store in our time_object as a reference for the most recently posted item
+		# pertaning to the specific key's feed
 		most_recent_post = data["feed"]["data"][0]["updated_time"]
 		to_update = {key: {primary: most_recent_post}}
 		time_object.update(to_update)
