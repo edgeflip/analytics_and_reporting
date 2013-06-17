@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-# this class relies on the mechanize and cookielib modules
 import mechanize
 import cookielib
 import json
 import MySQLdb as mysql
 from navigate_db import PySql
 import urllib2
+from time import strftime
+import time
+
 
 # not necessarily needed, but good for testing stuff with my own account and credentials
-
 class GoodBrowser(object):
 	def __init__(self):
 		self.br = mechanize.Browser()
@@ -55,6 +56,11 @@ class GoodBrowser(object):
 
 
 def crawl_all_feeds():
+	start = time.time()
+	try:
+		from times import times
+	except ImportError:
+		pass
 	data_object = {"data": []}
 	time_object = {}
 	api = 'https://graph.facebook.com/{0}?fields={1}&access_token={2}'
@@ -62,7 +68,8 @@ def crawl_all_feeds():
 	con = mysql.connect('edgeflip-db.efstaging.com', 'root', '9uDTlOqFmTURJcb', 'edgeflip')
 	cur = con.cursor()
 	orm = PySql(cur)
-	pertinent_info = orm.query('SELECT fbid,ownerid,token FROM tokens')
+	#pertinent_info = orm.query('SELECT fbid,ownerid,token FROM tokens')
+	pertinent_info = orm.query('SELECT fbid,ownerid,token FROM tokens limit 1000')
 	# descend into the iterable returned by our PySql instance
 	for i in range(len(pertinent_info)):
 		# key = pertinent_info[i][0] is the user's feed we are crawling
@@ -71,16 +78,39 @@ def crawl_all_feeds():
 		access_token = pertinent_info[i][2]
 		cur_data = {key: {}}
 		cur_data[key]["primary_fbid"] = primary
-		formatted_query = api.format(key,feed,access_token)
-		data = json.loads(urllib2.urlopen(formatted_query).read())
+	
+		# if we have a times file, use the current key and primary to query the most recent
+		# post's updated_time that we have and use that as our threshold of where to start
+		# getting data from his/her wall
+		try:	
+			pertinent_time = times[key][primary]
+			feed = feed + '.since(%s)' % pertinent_time
+			formatted_query = api.format(key,feed,access_token)
+		except NameError:
+			formatted_query = api.format(key,feed,access_token)
+		try:
+			data = json.loads(urllib2.urlopen(formatted_query).read())
+		except urllib2.HTTPError:
+			time.sleep(601)
 		# to store in our time_object as a reference for the most recently posted item
 		# pertaning to the specific key's feed
-		most_recent_post = data["feed"]["data"][0]["updated_time"]
+		try:
+			most_recent_post = data["feed"]["data"][0]["updated_time"]
+		except KeyError:
+			most_recent_post = strftime('%Y-%m-%d %H:%M:%S')
 		to_update = {key: {primary: most_recent_post}}
 		time_object.update(to_update)
 		data_object["data"].append(data)
+	# if we have a times.py file, delete it, if not, move on
+	try:
+		os.remove('times.py')
+	except NameError:
+		pass
 	times_str = json.dumps(time_object)
 	time_file = open('times.py','w')
 	time_file.write('times = %s' % times_str)
-	time_file.close()	
+	time_file.close()
+	end = time.time()
+	total = end-start
+	print "%s seconds to compute" % str(total)	
 	return data_object

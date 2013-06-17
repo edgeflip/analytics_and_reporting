@@ -157,4 +157,4 @@ def send_to_actionkit():
 
 
 if __name__ == '__main__':
-	run_queries(3)			
+	send_to_actionkit()	
