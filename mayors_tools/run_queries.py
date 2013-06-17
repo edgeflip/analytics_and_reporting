@@ -5,6 +5,9 @@ import os
 import time
 import datetime
 from datetime import datetime
+import urllib2
+import httplib
+import json
 
 """
 run_queries takes a campaign_id, ideally Mayors for now, and is written in a way to accommodate it's daily execution.  Each day, or however often, run_queries is executed the algorithm attempts to open the file "timestamp.txt" and read it's contents. If the "timestamp.txt" file exists it's contents are read and assigned to a variable to limit the results we get.
@@ -73,7 +76,8 @@ def run_queries(campaign_id):
 	return data_object
 
 
-
+# run all the queries necessary and generate a dictionary containing everything we need to send
+# to mayors, as well as creating a timestamp file that will be read the next time around
 
 def run_queries2(campaign_id):
 	data_object = {"data":[]}
@@ -105,7 +109,7 @@ def run_queries2(campaign_id):
 			data_object["data"][i][p_events[i][0]]["lname"] = primary_info[0][1]
 			data_object["data"][i][p_events[i][0]]["email"] = primary_info[0][2]
 			data_object["data"][i][p_events[i][0]]["gender"] = primary_info[0][3]
-			data_object["data"][i][p_events[i][0]]["birthday"] = primary_info[0][4]
+			data_object["data"][i][p_events[i][0]]["birthday"] = str(primary_info[0][4])
 			data_object["data"][i][p_events[i][0]]["city"] = primary_info[0][5]
 			data_object["data"][i][p_events[i][0]]["state"] = primary_info[0][6]
 			# action data
@@ -119,7 +123,7 @@ def run_queries2(campaign_id):
 				s_query = "SELECT fname,lname,email,gender,birthday,city,state FROM users WHERE fbid={0}".format(p_events[i][1])
 				s_info = our_orm.query(s_query)
 
-				data = {p_events[i][1]: {"fname": s_info[0][0], "lname": s_info[0][1], "email": s_info[0][2], "gender": s_info[0][3], "birthday": s_info[0][4], "city": s_info[0][5], "state": s_info[0][6]}}
+				data = {p_events[i][1]: {"fname": s_info[0][0], "lname": s_info[0][1], "email": s_info[0][2], "gender": s_info[0][3], "birthday": str(s_info[0][4]), "city": s_info[0][5], "state": s_info[0][6]}}
 				data_object["data"][i][p_events[i][0]]["action"][p_events[i][2]].update(data)
 			
 			else:
@@ -135,7 +139,21 @@ def run_queries2(campaign_id):
                 # format the timestamp
                 string_timestamp = datetime.fromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
                 print "No new data since %s has been found" % string_timestamp
+
+	# necessary for ActionKit
+	data_object["page"] = "TargetedShareTest"
+	data_object["email"] = "wes@edgeflip.com"	
 	return data_object
+
+
+def send_to_actionkit():
+	headers = {"Content-Type": "application/json; charset=utf-8"}
+	con = httplib.HTTPConnection("maig.actionkit.com")
+	new_data = run_queries2(3)
+	jsoned_data = json.dumps(new_data)
+	con.request("POST", "/rest/v1/action/", jsoned_data, headers)	
+	response = con.getresponse()
+	print response.status, response.reason
 
 
 if __name__ == '__main__':
