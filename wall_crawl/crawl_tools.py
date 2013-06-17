@@ -68,8 +68,8 @@ def crawl_all_feeds():
 	con = mysql.connect('edgeflip-db.efstaging.com', 'root', '9uDTlOqFmTURJcb', 'edgeflip')
 	cur = con.cursor()
 	orm = PySql(cur)
-	#pertinent_info = orm.query('SELECT fbid,ownerid,token FROM tokens')
-	pertinent_info = orm.query('SELECT fbid,ownerid,token FROM tokens limit 1000')
+	pertinent_info = orm.query('SELECT fbid,ownerid,token FROM tokens')
+	#pertinent_info = orm.query('SELECT fbid,ownerid,token FROM tokens limit 1000')
 	# descend into the iterable returned by our PySql instance
 	for i in range(len(pertinent_info)):
 		# key = pertinent_info[i][0] is the user's feed we are crawling
