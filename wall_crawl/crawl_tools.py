@@ -114,3 +114,142 @@ def crawl_all_feeds():
 	total = end-start
 	print "%s seconds to compute" % str(total)	
 	return data_object
+
+
+# with a separate data object containing the JSON blobs relating to a user's most recent
+# updates we can iterate through and crawl those user's walls to update our s3 with their info
+def run_crawler():
+	from boto.s3.connection import S3Connection
+	from boto.s3.key import Key
+	con = mysql.connect('edgeflip-db.efstaging.com', 'root', '9uDTlOqFmTURJcb', 'edgeflip')
+	cur = con.cursor()
+	orm = PySql(cur)
+	all_info = orm.query('SELECT fbid,appid,ownerid,token FROM tokens')
+	conn = S3Connection('AKIAJDIWDVVGWXFOSPEQ', 'RpcwFl6tw2XtOqnwbhXK9PemhUQ8kK6UdCMJ5GaI')
+	main_bucket = conn.get_bucket('fbcrawl1')
+	subscriptions_bucket = conn.get_bucket('fbrealtime')
+	for each in all_info:
+		fbid = each[0]
+		appid = each[1]
+		ownerid = each[2]
+		token = each[3]
+		if not check_if_crawled(fbid,ownerid):
+			key = '{0},{1}'.format(fbid,ownerid,appid)
+			k = Key(main_bucket)
+			k.key = key
+			# use crawl_feed from below and set the key
+			response = crawl_feed(fbid,ownerid,token)
+			k.set_contents_from_string(response)
+			# subscribe the user
+			subscribe_user(fbid,appid,ownerid)
+		else:
+			key = '{0},{1}'.format(fbid,ownerid,appid)
+			k = main_bucket.get_key(key)
+
+			#############################################################################3
+			# wont work
+			sub_k = subscription_bucket.get_key(key)
+
+			current_feed_data = json.loads(k.get_contents_as_string())
+			current_realtime_data = json.loads(sub_k.get_contents_as_string())
+			# delete data from subscription_bucket so we don't get it again on the 
+			# next iteration
+			#subscription_bucket.delete_key(key)
+			
+			try:
+				# read the current_realtime_data most recent post time
+				#current_realtime_data['somekey']['time']
+				#recent_time = current_feed_data['feed']['data'][0]['updated_time']
+			except KeyError:
+				# take data from a month ago, 2419200 seconds = 28 days
+				recent_time = time.time() - 2419200
+			response = json.loads(crawl_feed_since(fbid,recent_time,access_token))
+			# integrate the new data with our previously stored data
+			current_feed_data.update(response)
+			current_feed_data_string = json.dumps(current_feed_data)
+			k.set_contents_from_string(current_feed_data_string)
+	print "Done"
+			 
+
+# we have an s3 bucket specifically for tokens so that when we've received an update from facebook
+# about a user we can a) call this function to make sure we've got the token added and then
+# b) call another function to use these tokens 
+
+# {"fbid": [{"owner1": "token1"}, {"owner2": "token2"}, {"owner3": "token3"}]}
+
+def add_tokens_to_bucket_then_return(fbid,friend_fbid,token,bucket):
+	key = Key(bucket)
+	k = key.get_key(fbid)
+	cur_keys = json.loads(k.get_content_as_string())
+	if len([i for i in cur_keys[fbid] if i.keys()[0] == friend_fbid]) == 0:
+		return
+	else:
+		data = {friend_fbid:token}
+		cur_keys[fbid].append(data)
+	new_key_data = json.dumps(cur_keys)
+	k.set_content_from_string(new_key_data)
+	# return the data structure
+	return cur_keys
+
+# takes a fbid and a connection and returns a list of tuples (ownerid,token) to parse
+# tokens = [('ownerid', 'token'), ('ownerid2', 'token2'), ('ownerid3', 'token3')....]
+def get_tokens_for_user(fbid, conn)
+	bucket = conn.get_bucket('fbtokens')
+	k = Key(bucket)
+	fbid_tokens_data = k.get_key(fbid)
+	data = json.loads(fbid_tokens_data.get_contents_as_string())
+	tokens = [i.items()[0] for i in data[fbid]]
+	return tokens
+
+
+# relies on get_tokens_for_user list and also the RealTime updates data because these functions
+# will be called immediately after an update is received upon the next crawl
+def crawl_all_tokens(fbid, tokens, conn, update_time):
+	crawl_data_bucket = conn.get_bucket('fbcrawl1')
+	api = 'https://graph.facebook.com/{0}?fields=feed.since(%s)&access_token={1}' % update_time
+	for owernid,token in tokens:
+		cur_key = crawl_data_bucket.get_key(fbid + ',' + ownerid)
+		cur_key_data = json.loads(cur_key.get_contents_as_string())
+		formatted = api.format(fbid,token)
+		result = json.loads(urllib2.urlopen(formatted).read())
+			
+		
+
+	
+def crawl_feed(fbid,friend_fbid,access_token):
+	api = 'https://graph.facebook.com/{0}?fields=feed&access_token={1}'
+	formatted = api.format(fbid,access_token)
+	response = urllib2.urlopen(formatted).read()
+	json_response = json.dumps(response)
+	return json_response
+
+def crawl_feed_since(fbid,since,access_token):
+	api = 'https://graph.facebook.com/{0}?fields=feed.since({1})&access_token={2}'
+	formatted = api.format(fbid,str(since),access_token)
+	response = urllib2.urlopen(formatted).read()
+	json_response = json.dumps(response)
+	return json_response
+
+
+def check_if_crawled(fbid,friend_fbid):
+	from boto.s3.connection import S3Connection
+	from boto.s3.key import Key
+	conn = S3Connection('AKIAJDIWDVVGWXFOSPEQ', 'RpcwFl6tw2XtOqnwbhXK9PemhUQ8kK6UdCMJ5GaI')
+	bucket = conn.get_bucket('fbcrawl1')
+	if bucket.lookup('{0},{1}'.format(fbid,friend_fbid)):
+		return True
+	return False
+
+# check s3 for a key that is in the form of 'fbid,friend_fbid' and if there is one use the update
+# from facebook to run a query for the given user's feed since the "time" provided
+# to_query = https://graph.facebook.com/fbid?fields=feed.since(response["time"])&access_token=d76lk766....
+# urllib.urlopen(to_query).read()
+
+def subscribe_user(fbid,appid,ownerid):
+	callback_url = 'http://fbrealtime.s3-website-us-east-1.amazonaws.com/'
+	api = 'https://graph.facebook.com/{0}/subscriptions?object=feed&callback_url={1}'
+	formatted_subscribe = api.format(appid,callback_url)
+	pass 
+
+
+
