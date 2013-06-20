@@ -169,6 +169,69 @@ def run_crawler():
 			current_feed_data_string = json.dumps(current_feed_data)
 			k.set_contents_from_string(current_feed_data_string)
 	print "Done"
+
+
+def always_crawl():
+    # connect to s3 database
+    conn = S3Connection('AKIAJDIWDVVGWXFOSPEQ', 'RpcwFl6tw2XtOqnwbhXK9PemhUQ8kK6UdCMJ5GaI')
+    main_bucket = conn.get_bucket('fbcrawl1')
+    token_bucket = conn.get_bucket('fbtokens')
+    realtime_bucket = conn.get_bucket('fbrealtime')
+
+    # edgeflip databse
+    con = mysql.connect('edgeflip-db.efstaging.com','root','9uDTlOqFmTURJcb','edgeflip')
+    cur = con.cursor()
+    orm = PySql(cur)
+    most_data = orm.query('select fbid,appid,ownerid,token from tokens')
+
+    new_count = 0
+    update_count = 0
+    for item in most_data:
+        fbid = item[0]
+        appid = item[1]
+        ownerid = item[2]
+        token = item[3]
+        main_key = fbid+','+ownerid
+        if not main_bucket.lookup(main_key):
+            # crawl_feed returns a 
+            response = crawl_feed(fbid,token)
+            k = main_bucket.new_key()
+            k.key = main_key
+            k.set_contents_from_string(response)
+            # put the fbid,ownerid, and token in token_bucket
+            token_key = token_bucket.new_key()
+            token_key.key = fbid
+            token_key_struct = {fbid: [{owerid: token}]}
+	    jsoned = json.dumps(token_key_struct)
+            token_key.set_contents_from_string(jsoned)
+            new_count += 1
+            # otherwise we've already crawled our user and there should be information about
+            # him/her in our main_bucket and our token_bucket
+        else:
+        # get everything from the subscribed updates
+            if realtime_bucket.lookup(fbid):
+                cur = realtime_bucket.get_key(fbid)
+                data = json.loads(cur.get_contents_as_string())
+                update_time = data['time']
+                tokens = get_tokens_for_user(fbid, token_bucket)
+                for ownerid, cur_token in tokens:
+                    api = 'https://graph.facebook.com/{0}?fields=feed.since({1})&access_token={2}'
+                    this_api = api.format(fbid,update_time,cur_token)
+                    this_resposne = json.loads(urllib2.urlopen(this_api).read())
+                    # data already stored related to user
+                    pertaining_key = main_bucket.get_key(fbid+','+ownerid)
+                    pertaining_data = json.loads(pertaining_key.get_contents_as_string())
+                    # update the already stored data with the newly acquired data
+                    # remember to convert to a json string to store in our s3 bucket
+                    new_data = json.dumps(pertaining_data.update(this_response))
+                    pertaining_key.set_contents_from_string(new_data)
+                    udpate_count += 1
+                    # if our current fbid isn't in the RealTime updates bucket, move along
+            else:
+                pass
+    print "%s new users added and %s users" % (str(new_count), str(update_count))
+
+
 			 
 
 # we have an s3 bucket specifically for tokens so that when we've received an update from facebook
