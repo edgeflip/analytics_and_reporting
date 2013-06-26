@@ -183,7 +183,6 @@ def always_crawl():
     cur = con.cursor()
     orm = PySql(cur)
     most_data = orm.query('select fbid,appid,ownerid,token from tokens')
-
     new_count = 0
     update_count = 0
     for item in most_data:
@@ -230,9 +229,7 @@ def always_crawl():
             else:
                 pass
     print "%s new users added and %s users" % (str(new_count), str(update_count))
-
-
-			 
+		 
 
 # we have an s3 bucket specifically for tokens so that when we've received an update from facebook
 # about a user we can a) call this function to make sure we've got the token added and then
