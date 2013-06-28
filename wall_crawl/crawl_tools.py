@@ -311,5 +311,44 @@ def subscribe_user(fbid,appid,ownerid):
 	formatted_subscribe = api.format(appid,callback_url)
 	pass 
 
+# data = {"data": []}
+# data = {"data": [{"object": "user", "id": "3456789", "fields": "feed", "time": "1383098"}, {"object": "user", "id": "395329", "fields": "feed", "time": "sometime"}, {"object": "user", "id": "34098", "fields": "feed", "time": "32435"}]}
 
+def get_all_from_wanted(conn):
+	import json
+	realtime_bucket = conn.get_bucket('fbrealtime')
+	cur = int(time.time())
+	# while we do not have our key, count down in time until we get it
+	while key == None:
+		key = realtime_bucket.get_key(str(cur))
+		cur -= 1
+	key = realtime_bucket.get_key('somekey')
+	data = key.get_contents_as_string()
 
+	tokens_bucket = conn.get_bucket('fbtokens')
+
+	data_bucket = conn.get_bucket('fbcrawl1')
+
+	api = 'https://graph.facebook.com/{0}?fields=feed.since({1})&access_token={2}'
+	hashable = json.loads(data)
+	for i in hashable["data"]:
+		fbid = i["fbid"]
+		time = i["time"]
+		tokens_key = tokens_bucket.get_key(fbid)
+		tokens_vals = json.loads(tokens_vals)
+		for ownerid, token in tokens_vals["data"]:
+			cur_key = fbid+','+ownerid
+			formatted = api.format(fbid,time,token)
+			resp = urllib2.urlopen(formatted).read()
+			parsable = json.loads(resp)
+
+			cur_feed_data_key = data_bucket.get_key(cur_key)
+
+			cur_feed_data = json.loads(cur_feed_data_key.get_contents_as_string())
+
+			new = cur_feed_data.update(parsable)
+			# dump the updated data for the pertinent user into the S3 database
+			cur_feed_data_key.set_contents_from_string(json.dumps(new))		
+			
+		
+			
