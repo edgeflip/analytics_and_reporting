@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from generate_data_for_export import create_auth_file, create_share_file, create_clickback_file
+from generate_data_for_export import Reference
 from navigate_db import PySql
 import MySQLdb as mysql
 import time
@@ -9,7 +10,8 @@ import os
 # with PySql we can just pass a cursor object to instantiate it
 
 
-def main():
+
+def main():	
 	try:
 		time_file = open('timestamp.txt','r')
 		timestamp = time_file.read()
@@ -23,6 +25,14 @@ def main():
 		create_auth_file()
 		create_share_file()
 		create_clickback_file()
+
+
+	try:
+		from token_data import token_data
+		make_reference(token_data)
+
+	except ImportError:
+		pass
 
 	f = open('timestamp.txt', 'w')
 	_time = str(int(time.time()))

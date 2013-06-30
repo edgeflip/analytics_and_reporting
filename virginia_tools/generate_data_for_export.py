@@ -10,6 +10,8 @@ conn = mysql.connect('edgeflip-db.efstaging.com', 'root', '9uDTlOqFmTURJcb', 'ed
 cur = conn.cursor()
 tool = PySql(cur)
 
+
+
 def create_auth_file(timestamp=None):
 	if timestamp:
 		_all = tool.query("select session_id,fbid,type,updated from events where updated > FROM_UNIXTIME(%s) AND (type='authorized' or type='auth_fail')" % timestamp)
@@ -20,6 +22,9 @@ def create_auth_file(timestamp=None):
 		os.remove('authorization_data.csv')
 	except OSError:
 		pass
+
+	# try opening our fbid and token file
+	# {"fbid": [tokens,...], "fbid": [tokens...], "fbid": [tokens...]}
 
 	with open('authorization_data.csv', 'wb') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
@@ -33,7 +38,22 @@ def create_auth_file(timestamp=None):
                         elif _type == 'auth_fail':
                                 writer.writerow([session_id,updated,fbid,str(0)])
 
-	print "Authorization data written"
+			try:
+				from token_data import token_data
+				if fbid not in token_data.keys():
+					tokens = tool.query("select token from tokens where fbid='%s'" % fbid)
+					token_data[fbid] = [i[0] for i in tokens]
+					os.remove('token_data.py')
+					f = open('token_data.py','w')
+					f.write("token_data = %s" json.dumps(token_data))
+					f.close()
+					print "Token data file updated\n"
+				else:
+					pass
+			except ImportError:
+				pass
+
+	print "Authorization data written\n\n"
 
 
 
@@ -65,7 +85,26 @@ def create_share_file(timestamp=None):
 			else:
 				to_write = [session_id,updated,fbid,friend_fbid,str(0)]
 			writer.writerow(to_write)
-	print "Shared data written to file"
+
+			try:
+				from token_data import token_data
+				#os.remove('token_data.py')
+				if fbid not in token_data.keys():
+					os.remove('token_data.py')
+					_tokens = tool.query("select token from tokens where fbid='%s'" % fbid)
+					tokens = [i[0] for i in _tokens]
+					token_data[fbid] = tokens
+					f = open('token_data.py', 'w')
+					f.write('token_data = %s' % json.dumps(token_data))
+					f.close()	
+					print "Token data file updated\n"
+				else:
+					pass
+			except ImportError:
+				pass 
+					
+				
+	print "Shared data written to file\n\n"
 
 
 """
@@ -123,4 +162,52 @@ def create_clickback_file(timestamp=None):
 		for each in _all:
 			struct = [each[0], each[2], each[1], str(1)]
 			writer.writerow(struct)
+
+			try:
+				from token_data import token_data
+				if struct[2].isdigit() and struct[2] not in token_data.keys():
+					tokens = tool.query("select token from tokens where fbid='%s'" % struct[2])
+					token_data[struct[2]] = [i[0] for i in tokens]
+				else:
+					pass
+			except ImportError:
+				pass					
+
 	print "Clickback data written"
+
+
+
+def make_fbid_reference(token_data):
+	attrs = ['fname','lname','city','state','dob']
+	api = 'https://graph.facebook.com/{0}?fields=fbid,fname,lname,city,state,birthday&access_token={1}'
+	try:
+		f = open('reference_table.csv','r')
+		reference_table = f.read()
+		refs = reference_table.split('\n')
+				
+
+	except IOError:
+		with open('reference_table.csv','w') as csvfile:
+			writer = csv.writer(csvfile,delimiter=',')
+			
+			for fbid in token_data.keys():
+				attrs = ['first_name','last_name','location','birthday']
+				token = token_data[fbid]
+				formatted = api.format(fbid,token)
+				_res = urllib2.urlopen(formatted)
+				res = json.loads(_res.read())
+				fname = res["first_name"]
+				lname = res["last_name"]
+				loc = res["location"]["name"].split(',')
+				city = loc[0]
+				bday = res["birthday"]
+				try:
+					state = loc[0]
+				except IndexError:
+					state = 'unknown'
+				row = [fbid,fname,lname,city,state,birthday]
+
+				writer.writerow(row)
+				
+				print "Reference table written"
+
