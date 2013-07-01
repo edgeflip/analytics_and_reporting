@@ -4,6 +4,7 @@ import MySQLdb as mysql
 import time
 import csv
 import os
+import json
 
 
 conn = mysql.connect('edgeflip-db.efstaging.com', 'root', '9uDTlOqFmTURJcb', 'edgeflip')
@@ -23,18 +24,17 @@ def create_auth_file(timestamp=None):
 	except OSError:
 		pass
 
+	try:
+		from token_data import token_data
+		os.remove("token_data.py")
+	except ImportError:
+		token_data = {}
+	f = open("token_data.py", "w")
 	# try opening our fbid and token file
 	# {"fbid": [tokens,...], "fbid": [tokens...], "fbid": [tokens...]}
 
 	with open('authorization_data.csv', 'wb') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
-		try:
-			from token_data import token_data
-			os.remove("token_data.py")
-		except ImportError:
-			token_data = {}
-		f = open("token_data.py", "w")
-
 		for each in _all:
                 	session_id = each[0]
                         fbid = each[1]
@@ -172,10 +172,13 @@ def create_clickback_file(timestamp=None):
 	with open('clickback_data.csv', 'wb') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
 		for each in _all:
-			struct = [each[0], each[2], each[1], str(1)]
+			session = each[0]
+			fbid = each[1]
+			updated = str(each[2])
+			struct = [session, fbid, updated, str(1)]
 			writer.writerow(struct)
 
-			if struct[2].isdigit() and struct[2] not in token_data.keys():
+			if not struct[2] not None struct[2].isdigit() and struct[2] not in token_data.keys():
 				tokens = tool.query("select token from tokens where fbid='%s'" % struct[2])
 				token_data[struct[2]] = [i[0] for i in tokens]
 			else:

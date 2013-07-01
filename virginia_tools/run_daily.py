@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 from generate_data_for_export import create_auth_file, create_share_file, create_clickback_file
-from generate_data_for_export import Reference
 from navigate_db import PySql
 import MySQLdb as mysql
 import time
 import csv
 import os
+import json
 
 # with PySql we can just pass a cursor object to instantiate it
 
@@ -29,11 +29,15 @@ def main():
 
 	try:
 		from token_data import token_data
-		make_reference(token_data)
+		make_fbid_reference(token_data)
 
 	except ImportError:
 		pass
 
+	try:
+		os.remove("timestamp.txt")
+	except OSError:
+		pass
 	f = open('timestamp.txt', 'w')
 	_time = str(int(time.time()))
 	f.write(_time)
