@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 from generate_data_for_export import create_auth_file, create_share_file, create_clickback_file
+from generate_data_for_export import make_fbid_reference
 from navigate_db import PySql
 import MySQLdb as mysql
 import time
 import csv
 import os
 import json
+import urllib2
+
 
 # with PySql we can just pass a cursor object to instantiate it
 

@@ -5,7 +5,7 @@ import time
 import csv
 import os
 import json
-
+import urllib2
 
 conn = mysql.connect('edgeflip-db.efstaging.com', 'root', '9uDTlOqFmTURJcb', 'edgeflip')
 cur = conn.cursor()
@@ -173,12 +173,15 @@ def create_clickback_file(timestamp=None):
 		writer = csv.writer(csvfile, delimiter=',')
 		for each in _all:
 			session = each[0]
-			fbid = each[1]
+			if each[1] == None:
+				fbid = 'none'
+			else:
+				fbid = each[1]
 			updated = str(each[2])
-			struct = [session, fbid, updated, str(1)]
+			struct = [session, updated, fbid, str(1)]
 			writer.writerow(struct)
 
-			if not struct[2] not None struct[2].isdigit() and struct[2] not in token_data.keys():
+			if struct[2].isdigit() and struct[2] not in token_data.keys():
 				tokens = tool.query("select token from tokens where fbid='%s'" % struct[2])
 				token_data[struct[2]] = [i[0] for i in tokens]
 			else:
@@ -189,7 +192,7 @@ def create_clickback_file(timestamp=None):
 		print "Token data updated\n"
 	print "Clickback data written\n\n"
 
-
+	
 
 def make_fbid_reference(token_data):
 	api = 'https://graph.facebook.com/{0}?fields=fbid,fname,lname,city,state,birthday&access_token={1}'
@@ -201,7 +204,7 @@ def make_fbid_reference(token_data):
 		# as to reconstruct our reference_table.csv file
 		refs = reference_table.split('\n')
 		
-		current_users = [i[0] for i in refs]
+		current_users = [i[0] for i in refs if len(refs) > 1]
 		
 		token_data_users_not_added = [i for i in token_data.keys() if i not in current_users]
 		with open('reference_table.csv', 'ab') as csvfile:
@@ -267,3 +270,7 @@ def make_fbid_reference(token_data):
 				writer.writerow(row)
 				
 			print "Reference table written"
+
+
+
+
