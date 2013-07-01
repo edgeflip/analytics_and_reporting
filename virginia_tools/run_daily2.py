@@ -8,9 +8,8 @@ def main():
 		_timestamp = open('timestamp.txt','r')
 		timestamp = _timestamp.read()
 
-		create_events_table(timestamp)
+		create_events_table(timestamp=timestamp)
 
-		os.remove('timestamp.txt')
 		
 	except IOError:
 		create_events_table()

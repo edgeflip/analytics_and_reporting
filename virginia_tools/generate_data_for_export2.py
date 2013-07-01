@@ -5,6 +5,7 @@ import json
 import os
 import time
 import csv
+from time import strftime
 
 
 conn = mysql.connect('edgeflip-db.efstaging.com','root','9uDTlOqFmTURJcb','edgeflip')
@@ -15,6 +16,11 @@ tool = PySql(cur)
 
 def create_events_table(timestamp=None):
 	try:
+		os.remove('timestamp.txt')
+	except OSError:
+		pass
+
+	try:
 		from all_campaign_users import all_campaign_users
 		os.remove("all_campaign_users.py")
 	except ImportError:
@@ -22,6 +28,10 @@ def create_events_table(timestamp=None):
 	
 	if timestamp != None:
 		_all = tool.query("select session_id, updated as action_time, fbid, friend_fbid, type, activity_id from events where campaign_id='3' and updated > FROM_UNIXTIME('%s')" % timestamp)
+		timestamp = str(int(time.time()))
+		f = open('timestamp.txt','w')
+		f.write(timestamp)
+		f.close()
 	else:
 		_all = tool.query("select session_id, updated as action_time, fbid, friend_fbid, type, activity_id from events where campaign_id='3'")			
 		timestamp = str(int(time.time()))
@@ -29,10 +39,9 @@ def create_events_table(timestamp=None):
 		f.write(timestamp)
 		f.close()	
 	
-	with open("events_file_%s.csv" % timestamp,"ab") as csvfile:
+	#with open("events_file_%s_%s.csv" % (month,day),"wb") as csvfile:
+	with open("events_file_%s.csv" % str(int(time.time())), "wb") as csvfile:
 		# go to the end of our events_file to append our new data
-		csvfile.seek(0,os.SEEK_END)
-
 		writer = csv.writer(csvfile, delimiter=',')
 
 		for each in _all:
@@ -85,7 +94,7 @@ def create_reference_table(all_campaign_users):
 		fbid = str(int_fbid)
 		if fbid not in already_referenced:
 			query = tool.query("select fname,lname,city,state,birthday from users where fbid='%s'" % fbid)
-		
+
 			try:
 				fname = query[0][0]
 			except IndexError:
@@ -106,7 +115,7 @@ def create_reference_table(all_campaign_users):
 				birthday = str(query[0][4])
 			except IndexError:
 				birthday = 'n/a'
-	
+
 			row = [fbid, fname, lname, city, state, birthday]		
 			writer.writerow(row)
 	
