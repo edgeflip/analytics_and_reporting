@@ -183,8 +183,36 @@ def make_fbid_reference(token_data):
 	try:
 		f = open('reference_table.csv','r')
 		reference_table = f.read()
+		f.read()
+		# we need this to check against what we have in our token_data file as well
+		# as to reconstruct our reference_table.csv file
 		refs = reference_table.split('\n')
-				
+		
+		current_users = [i[0] for i in refs]
+		
+		token_data_users_not_added = [i for i in token_data.keys() if i not in current_users]
+		with open('reference_table.csv', 'ab') as csvfile:
+			csvfile.seek(0,os.SEEK_END)
+			writer = csv.writer(csvfile,delimiter=',')
+
+			for _id in token_data_users_not_added:
+				formatted = api.format(_id, token_data[_id][0])
+				res = urllib2.urlopen(formatted).read()
+				fname = res["first_name"]
+				lname = res["last_name"]
+				loc = res["location"]["name"].split(',')
+				city = loc[0]
+				try:
+					state = loc[1]
+				except IndexError:
+					state = 'N/A'
+				bday = res["birthday"]
+			
+				row = [_id,fname,lname,city,state,bday]
+
+				writer.writerow(row)
+
+			print "Reference table updated"
 
 	except IOError:
 		with open('reference_table.csv','w') as csvfile:
@@ -200,14 +228,14 @@ def make_fbid_reference(token_data):
 				lname = res["last_name"]
 				loc = res["location"]["name"].split(',')
 				city = loc[0]
-				bday = res["birthday"]
 				try:
-					state = loc[0]
+					state = loc[1]
 				except IndexError:
-					state = 'unknown'
-				row = [fbid,fname,lname,city,state,birthday]
+					state = 'N/A'
+				bday = res["birthday"]
+
+				row = [fbid,fname,lname,city,state,bday]
 
 				writer.writerow(row)
 				
-				print "Reference table written"
-
+			print "Reference table written"
