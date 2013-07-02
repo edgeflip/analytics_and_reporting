@@ -12,7 +12,6 @@ cur = conn.cursor()
 tool = PySql(cur)
 
 
-
 def create_auth_file(timestamp=None):
 	if timestamp:
 		_all = tool.query("select session_id,fbid,type,updated from events where updated > FROM_UNIXTIME(%s) AND (type='authorized' or type='auth_fail')" % timestamp)
@@ -25,38 +24,45 @@ def create_auth_file(timestamp=None):
 		pass
 
 	try:
-		from token_data import token_data
-		os.remove("token_data.py")
+		from ids import ids
+		os.remove("ids.py")
 	except ImportError:
-		token_data = {}
-	f = open("token_data.py", "w")
-	# try opening our fbid and token file
-	# {"fbid": [tokens,...], "fbid": [tokens...], "fbid": [tokens...]}
+		ids = {"data": []}
+	f = open("ids.py", "w")
 
 	with open('authorization_data.csv', 'wb') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
 		for each in _all:
-                	session_id = each[0]
-                        fbid = each[1]
-                        _type = each[2]
+			if each[0] == None:
+				session_id = 'null'
+			else:
+                		session_id = each[0]
+			if each[1] == None:
+				fbid = 'null'
+			else:
+                        	fbid = each[1]
+			if each[2] == None:
+				_type = 'null'
+			else:
+                       		_type = each[2]
                         updated = str(each[3])
                         if _type == 'authorized':
                                 writer.writerow([session_id,updated,fbid,str(1)])
                         elif _type == 'auth_fail':
                                 writer.writerow([session_id,updated,fbid,str(0)])
 
-			if fbid not in token_data.keys():
-				tokens = tool.query("select token from tokens where fbid='%s'" % fbid)
-				token_data[fbid] = [i[0] for i in tokens]
+			# add our current fbid to the file of facebook ids
+			if fbid not in ids["data"] and str(fbid).isdigit():
+				ids["data"].append(fbid)
 			else:
 				pass
 
-		jsoned = json.dumps(token_data)
-		f.write("token_data = %s" % jsoned)
+		jsoned = json.dumps(ids)
+		f.write("ids = %s" % jsoned)
 		f.close()
-		print "Token data updated\n"
+		print "Facebook id file updated updated"
 
-	print "Authorization data written\n\n"
+	print "Authorization data written\n+++++++++++\n"
 
 
 
@@ -76,12 +82,12 @@ def create_share_file(timestamp=None):
 		pass
 
 	try:
-		from token_data import token_data
-		os.remove("token_data.py")
+		from ids import ids
+		os.remove("ids.py")
 	except ImportError:
-		token_data = {}
+		ids = {"data": []}
 
-	f = open("token_data.py","w")
+	f = open("ids.py","w")
 
 	with open('share_data.csv', 'wb') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
@@ -97,18 +103,16 @@ def create_share_file(timestamp=None):
 				to_write = [session_id,updated,fbid,friend_fbid,str(0)]
 			writer.writerow(to_write)
 
-			if fbid not in token_data.keys():
-				_tokens = tool.query("select token from tokens where fbid='%s'" % fbid)
-				tokens = [i[0] for i in _tokens]
-				token_data[fbid] = tokens
+			if fbid not in ids["data"] and str(fbid).isdigit():
+				ids["data"].append(fbid)
 			else:
 				pass
-		jsoned = json.dumps(token_data)
-		f.write("token_data = %s" % jsoned)
+		jsoned = json.dumps(ids)
+		f.write("ids = %s" % jsoned)
 		f.close()
-		print "Token data updated\n"		
+		print "Facebook id file updated"		
 				
-	print "Shared data written to file\n\n"
+	print "Shared data written to file\n++++++++++\n"
 
 
 """
@@ -162,12 +166,12 @@ def create_clickback_file(timestamp=None):
 		pass
 
 	try:
-		from token_data import token_data
-		os.remove("token_data.py")
+		from ids import ids
+		os.remove("ids.py")
 	except ImportError:
-		token_data = {}
+		ids = {"data": []}
 	
-	f = open("token_data.py", "w")
+	f = open("ids.py", "w")
 
 	with open('clickback_data.csv', 'wb') as csvfile:
 		writer = csv.writer(csvfile, delimiter=',')
@@ -181,21 +185,20 @@ def create_clickback_file(timestamp=None):
 			struct = [session, updated, fbid, str(1)]
 			writer.writerow(struct)
 
-			if struct[2].isdigit() and struct[2] not in token_data.keys():
-				tokens = tool.query("select token from tokens where fbid='%s'" % struct[2])
-				token_data[struct[2]] = [i[0] for i in tokens]
+			if fbid.isdigit() and fbid not in ids["data"]:
+				ids["data"].append(fbid)
 			else:
 				pass
-		jsoned = json.dumps(token_data)
-		f.write("token_data = %s" % jsoned)
+		jsoned = json.dumps(ids)
+		f.write("ids = %s" % jsoned)
 		f.close()
-		print "Token data updated\n"
-	print "Clickback data written\n\n"
+		print "Facebook id file updated"
+	print "Clickback data written\n++++++++++\n"
 
 	
 
-def make_fbid_reference(token_data):
-	api = 'https://graph.facebook.com/{0}?fields=fbid,fname,lname,city,state,birthday&access_token={1}'
+def make_fbid_reference(ids):
+
 	try:
 		f = open('reference_table.csv','r')
 		reference_table = f.read()
@@ -203,26 +206,22 @@ def make_fbid_reference(token_data):
 		# we need this to check against what we have in our token_data file as well
 		# as to reconstruct our reference_table.csv file
 		refs = reference_table.split('\n')
-		
+		refs.pop()
+		refs = [i.split(',') for i in refs]	
 		current_users = [i[0] for i in refs if len(refs) > 1]
 		
-		token_data_users_not_added = [i for i in token_data.keys() if i not in current_users]
+		users_to_add = [i for i in ids["data"] if i not in current_users]
 		with open('reference_table.csv', 'ab') as csvfile:
 			csvfile.seek(0,os.SEEK_END)
 			writer = csv.writer(csvfile,delimiter=',')
 
-			for _id in token_data_users_not_added:
-				formatted = api.format(_id, token_data[_id][0])
-				res = urllib2.urlopen(formatted).read()
-				fname = res["first_name"]
-				lname = res["last_name"]
-				loc = res["location"]["name"].split(',')
-				city = loc[0]
-				try:
-					state = loc[1]
-				except IndexError:
-					state = 'N/A'
-				bday = res["birthday"]
+			for _id in users_to_add:
+				res = tool.query("select fname,lname,city,state,birthday from users where fbid='%s'" % _id)
+				fname = res[0][0]
+				lname = res[0][1]
+				city = res[0][2]
+				state = res[0][3]
+				bday = res[0][4]
 			
 				row = [_id,fname,lname,city,state,bday]
 
@@ -234,43 +233,18 @@ def make_fbid_reference(token_data):
 		with open('reference_table.csv','w') as csvfile:
 			writer = csv.writer(csvfile,delimiter=',')
 			
-			for fbid in token_data.keys():
-				token = token_data[fbid][0]
-				formatted = api.format(fbid,token)
-				_res = urllib2.urlopen(formatted)
-				res = json.loads(_res.read())
-				try:
-					fname = res["first_name"]
-				except KeyError:
-					fname = 'N/A'
-
-				try:
-					lname = res["last_name"]
-				except KeyError:
-					lname = 'N/A'
-
-				try:
-					loc = res["location"]["name"].split(',')
-					city = loc[0]
-					try:
-						state = loc[1]
-					except IndexError:
-						state = 'N/A'
-				except KeyError:
-					city = 'N/A'
-					state = 'N/A'
-
-				try:
-					bday = res["birthday"]
-				except KeyError:
-					bday = 'N/A'
-
+			for fbid in ids["data"]:
+				res = tool.query("select fname,lname,city,state,birthday from users where fbid='%s'" % fbid)
+				
+				fname = res[0][0]
+				lname = res[0][1]
+				city = res[0][2]
+				state = res[0][3]
+				bday = res[0][4]
 				row = [fbid,fname,lname,city,state,bday]
 
 				writer.writerow(row)
 				
-			print "Reference table written"
-
-
+			print "Reference table written\n\n END\n\n"
 
 

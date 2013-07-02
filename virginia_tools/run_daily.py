@@ -31,8 +31,8 @@ def main():
 
 
 	try:
-		from token_data import token_data
-		make_fbid_reference(token_data)
+		from ids import ids
+		make_fbid_reference(ids)
 
 	except ImportError:
 		pass
@@ -50,6 +50,5 @@ def main():
 
 
 if __name__ == '__main__':
-	for i in range(10):
-		main()
+	main()
 	

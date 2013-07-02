@@ -48,15 +48,21 @@ def create_events_table(timestamp=None):
 			session_id = each[0]
 			action_time = str(each[1])
 			if each[2] == None:
-				fbid = 'none'
+				fbid = 'null'
 			else:
 				fbid = each[2]
 			if each[3] == None:
-				friend_fbid = 'none'
+				friend_fbid = 'null'
 			else:
 				friend_fbid = each[3]
-			_type = each[4]
-			activity_id = each[5]
+			if each[4] == None:
+				_type = 'null'
+			else:
+				_type = each[4]
+			if each[5] == None:
+				activity_id = 'null'
+			else:
+				activity_id = each[5]
 			row = [session_id, action_time, fbid, friend_fbid, _type, activity_id]
 			writer.writerow(row)
 
@@ -98,23 +104,23 @@ def create_reference_table(all_campaign_users):
 			try:
 				fname = query[0][0]
 			except IndexError:
-				fname = 'n/a'
+				fname = 'null'
 			try:
 				lname = query[0][1]
 			except IndexError:
-				lname = 'n/a'
+				lname = 'null'
 			try:
 				city = query[0][2]
 			except IndexError:
-				city = 'n/a'
+				city = 'null'
 			try:
 				state = query[0][3]
 			except IndexError:
-				state = 'n/a'
+				state = 'null'
 			try:
 				birthday = str(query[0][4])
 			except IndexError:
-				birthday = 'n/a'
+				birthday = 'null'
 
 			row = [fbid, fname, lname, city, state, birthday]		
 			writer.writerow(row)
