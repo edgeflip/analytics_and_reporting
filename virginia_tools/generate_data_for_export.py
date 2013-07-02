@@ -14,9 +14,9 @@ tool = PySql(cur)
 
 def create_auth_file(timestamp=None):
 	if timestamp:
-		_all = tool.query("select session_id,fbid,type,updated from events where updated > FROM_UNIXTIME(%s) AND (type='authorized' or type='auth_fail')" % timestamp)
+		_all = tool.query("select session_id,fbid,type,updated from events where (updated > FROM_UNIXTIME(%s) AND campaign_id='3') AND (type='authorized' or type='auth_fail')" % timestamp)
 	else:
-		_all = tool.query("select session_id,fbid,type,updated from events where type='authorized' or type='auth_fail'")
+		_all = tool.query("select session_id,fbid,type,updated from events where (type='authorized' AND campaign_id='3') OR type='auth_fail'")
 	
 	try:
 		os.remove('authorization_data.csv')
@@ -72,9 +72,9 @@ def create_auth_file(timestamp=None):
 
 def create_share_file(timestamp=None):
 	if timestamp:
-		_all = tool.query("select session_id,fbid,friend_fbid,type,updated from events where updated > FROM_UNIXTIME(%s) AND (type='shown' or type='shared' or type='share_click' or type='share_fail' or type='suppressed')" % timestamp)
+		_all = tool.query("select session_id,fbid,friend_fbid,type,updated from events where (updated > FROM_UNIXTIME(%s) AND campaign_id='3') AND (type='shown' or type='shared' or type='share_click' or type='share_fail' or type='suppressed')" % timestamp)
 	else:	
-		_all = tool.query("select session_id,fbid,friend_fbid,type,updated from events where type='shown' or type='shared' or type='share_fail' or type='suppressed'")
+		_all = tool.query("select session_id,fbid,friend_fbid,type,updated from events where campaign_id='3' AND (type='shown' or type='shared' or type='share_fail' or type='suppressed')")
 	
 	try:
 		os.remove('share_data.csv')
@@ -156,9 +156,9 @@ def create_share_file2():
 
 def create_clickback_file(timestamp=None):
 	if timestamp:
-		_all = tool.query("select session_id,fbid,updated from events where updated > FROM_UNIXTIME(%s) AND type='clickback'" % timestamp)
+		_all = tool.query("select session_id,fbid,updated from events where (updated > FROM_UNIXTIME(%s) AND type='clickback') AND campaign_id='3'" % timestamp)
 	else:
-		_all = tool.query("select session_id,fbid,updated from events where type='clickback'")
+		_all = tool.query("select session_id,fbid,updated from events where type='clickback' AND campaign_id='3'")
 
 	try:
 		os.remove('clickback_data.csv')

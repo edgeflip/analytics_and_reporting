@@ -8,7 +8,7 @@ import csv
 import os
 import json
 import urllib2
-
+from generate_report import generate_basic
 
 # with PySql we can just pass a cursor object to instantiate it
 
@@ -45,6 +45,9 @@ def main():
 	_time = str(int(time.time()))
 	f.write(_time)
 	f.close()
+
+	# generate report
+	generate_basic()
 
 	print "Files written and timestamp updated"
 
