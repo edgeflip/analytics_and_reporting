@@ -1,82 +1,114 @@
 #!/usr/bin/env python
 from time import strftime
+from generate_data_for_export3 import tool
+import datetime
+
+# number of users shown queries
+shown_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='button_load' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
+shown_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='button_load' AND campaign_id='{0}';"
+
+# number of authorized queries
+auth_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='authorized' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
+auth_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='authorized' AND campaign_id='{0}';"
+
+# number of shared queries
+shared_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='shared' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
+shared_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='shared' AND campaign_id='{0}';"
+
+# number of clickbacks queries
+click_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='clickback' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
+click_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='clickback' AND campaign_id='{0}';"
+
+# number of shown queries
+shown_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='shown' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
+shown_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='shown' AND campaign_id='{0}'"
+
+# campaign start time
+start_time = "SELECT MIN(updated) FROM events WHERE campaign_id='{0}';"
 
 
-"""
+def generate_daily_report(campaign_id, timestamp):
+	num_visitors_total = tool.query(shown_aggregate.format(campaign_id))[0][0]
+	num_visitors_today = tool.query(shown_not_aggregate.format(campaign_id,timestamp))[0][0]
+	num_auths_total = tool.query(auth_aggregate.format(campaign_id))[0][0]
+	num_auths_today = tool.query(auth_not_aggregate.format(campaign_id,timestamp))[0][0]
+	num_shared_total = tool.query(shared_aggregate.format(campaign_id))[0][0]
+	num_shared_today = tool.query(shared_not_aggregate.format(campaign_id,timestamp))[0][0]
+	num_click_total = tool.query(click_aggregate.format(campaign_id))[0][0]
+	num_click_today = tool.query(click_not_aggregate.format(campaign_id,timestamp))[0][0]
+	num_shown_total = tool.query(shown_aggregate.format(campaign_id))[0][0]
+	num_shown_today = tool.query(shown_not_aggregate.format(campaign_id,timestamp))[0][0]	
+	auth_rate = round(float(int(num_auths_total))/float(int(num_visitors_total)), 2)
+	day_started = tool.query(start_time.format(campaign_id))[0][0]
+	days_str = str(datetime.datetime.now() - day_started)
+	end_of_days = days_str.find('days')-1
+	# the number of days the campaign has been running
+	days = int(days_str[0:end_of_days])
+	average_friends_shown_per_day = round(float(num_shown_total)/float(days), 2)
+	average_friends_shared_per_day = round(float(num_shared_total)/float(days), 2)
+	percent_of_shown_shared = round(float(num_shared_total)/float(num_shown_total), 2)
+	try:
+		average_clickbacks = round(float(num_click_total)/float(days), 2)
+	except ZeroDivisionError:
+		average_clickbacks = 0.0
+	try:
+		percent_of_shown_clicked = round(float(num_click_total)/float(num_shown_total), 2)
+	except ZeroDivisionError:
+		percent_of_shown_clicked = 0.0
+	try:
+		percent_of_shared_clicked = round(float(num_click_total/float(num_shared_total), 2))
+	except ZeroDivisionError:
+		percent_of_shared_clicked = 0.0
 
-	We need this module to count how many people authorized the campaign today, and of those who authorized how many shared, and how many clickbacks we had
-
-"""
-
-
-def generate_basic():
-	auths  = open("authorization_data.csv", "r")
-	auths = auths.read().split('\n')
-	auths = [i.split(',') for i in auths]
-	auths.pop()
+	m = strftime('%m')
+	d = strftime('%d')
+	y = strftime('%Y')
+	today = m+'-'+d+'-'+y
+	report = open("report_{0}_{1}_{2}.txt".format(m,d,y), "w")
 	
-	total_without_trues = len(auths)
-	total_auths = len([i for i in auths if i[3] == '1\r'])
-
-	shared = open("share_data.csv", "r")
-	shared = shared.read().split('\n')
-	shared = [i.split(',') for i in shared]
-	shared.pop()
-
-	total_share_attempts = len(shared)
-	total_successful_shares = len([e for e in shared if e[4] == '1\r'])
-
-	clickback = open("clickback_data.csv","r")
-	clickback = clickback.read().split('\n')
-	
-	total_clickbacks = len(clickback)
-
-	# percentages
-	try: 
-		success_auth_percent = 100*(float(total_auths)/float(total_without_trues))
-	except ZeroDivisionError:
-		success_auth_percent = "no results"
-	try:
-		share_percentage_of_total_attempt_shared = 100 * (float(total_successful_shares)/float(total_share_attempts))
-	except ZeroDivisionError:
-		share_percentage_of_total_attempt_shared = "no results"
-	try:
-		share_percentage_of_auths = 100 * (float(total_successful_shares)/float(total_auths))
-	except ZeroDivisionError:
-		share_percentage_of_auths = "no results"
-	
-	try:
-		clickback_portion_of_auths = 100 * (float(total_clickbacks)/float(total_auths))
-	except ZeroDivisionError:
-		clickback_portion_of_auths = "no results"
-	try:
-		clickback_portion_of_shares = 100 * (float(total_clickbacks)/float(total_successful_shares))
-	except ZeroDivisionError:
-		clickback_portion_of_shares = "no results"
-
-	m = strftime("%m")
-	d = strftime("%d")
-	report = open("report_{0}_{1}.txt".format(m,d), "w")
-
-	# auth stuff
-	report.write("{0} authorization attempts\n{1} authorization successes\n".format(str(total_without_trues),str(total_auths)))
-	report.write("\t{0}% authorization success\n\n".format(success_auth_percent))
-
-	# share stuff
-	report.write("{0} share attempts\n{1} share successes\n".format(str(total_share_attempts),str(total_successful_shares)))
-	report.write("\t{0}% of share attempts were successfully shared\n".format(str(share_percentage_of_total_attempt_shared)))
-	report.write("\t{0}% of authorizations were successfully shared\n\n".format(str(share_percentage_of_auths)))
-
-	# clickback stuff
-	report.write("{0} clickbacks\n".format(str(total_clickbacks)))
-	report.write("\t{0}% of successful shares were clicked back\n".format(str(clickback_portion_of_shares)))
-	report.write("\t{0}% of successful authorizations were clicked back\n\n".format(str(clickback_portion_of_auths)))
-
+	report.write("{0} visitors on {1}\n".format(str(num_visitors_today), today))
+	report.write("{0} visitors total\n\n".format(str(num_visitors_total)))
+	report.write("{0} authorizations on {1}\n".format(str(num_auths_today), today))
+	report.write("{0} authorizations total\n".format(str(num_auths_total)))
+	report.write("\t{0} authorization rate\n\n".format(str(auth_rate)))
+	report.write("{0} shown per day\n".format(str(average_friends_shown_per_day)))
+	report.write("{0} shared per day\n".format(str(average_friends_shared_per_day)))
+	report.write("{0} clickback per day\n".format(str(average_clickbacks)))
+	report.write("\t{0} of shown have clickbacks\n".format(str(percent_of_shown_clicked)))
+	report.write("\n{0} of shared have clickbacks\n".format(str(percent_of_shared_clicked)))
 	report.close()
 
-	print "Report Generated"
+	print "Report for %s generated" % today
 
 
+def generate_report_tests(campaign_id, timestamp=None):
+	if timestamp:
+		shown_query = shown_not_aggregate.format(campaign_id, timestamp)
+		num_shown = tool.query(shown_query)
 
-	
+		auth_query = auth_not_aggregate.format(campaign_id, timestamp)
+		num_auth = tool.query(auth_query)
+
+		shared_query = shared_not_aggregate.format(campaign_id, timestamp)
+		num_shared = tool.query(shared_query)
+
+		click_query = click_not_aggregate.format(campaign_id, timestamp)
+		num_clicked = tool.query(click_query)
+
+		return num_shown, num_auth, num_shared, num_clicked
+
+	else:
+		shown_query = shown_aggregate.format(campaign_id)
+		num_shown = tool.query(shown_query)
+
+		auth_query = auth_aggregate.format(campaign_id)
+		num_auth = tool.query(auth_query)
+
+		shared_query = shared_aggregate.format(campaign_id)
+		num_shared = tool.query(shared_query)
+
+		click_query = click_aggregate.format(campaign_id)
+		num_clicked = tool.query(click_query)
+
+		return num_shown, num_auth, num_shared, num_clicked
 	

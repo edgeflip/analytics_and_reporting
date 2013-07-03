@@ -13,14 +13,14 @@ def create_events_file(campaign_id):
 	no_time = "select session_id, updated as action_time, fbid, friend_fbid, type, activity_id from events where campaign_id='{0}'" 
 	_time = "select session_id, updated as action_time, fbid, friend_fbid, type, activity_id from events where campaign_id='{0}' and updated > FROM_UNIXTIME({1})"
 
-	users_no_time = "select fbid,fname,lname,city,state,birthday from users where fbid in (select fbid from events where campaign_id='{0}')"
-	users_time = "select fbid,fname,lname,city,state,birthday from users where updated > from_unixtime({1}) and fbid in (select fbid from events where campaign_id='{0}' and updated > from_unixtime({2}))"
+	users_no_time = "select fbid,fname,lname,city,state,birthday from users where fbid in (select fbid from events where campaign_id='{0}' union select friend_fbid from events where campaign_id='{0}')"
+	users_time = "select fbid,fname,lname,city,state,birthday from users where updated > from_unixtime({1}) and fbid in (select fbid from events where campaign_id='{0}' and updated > from_unixtime({1}) union select friend_fbid from events where campaign_id='{0}')"
 	try:
 		timestamp = open('timestamp.txt','r').read()
 		os.remove('timestamp.txt')
 		query_formatted = _time.format(str(campaign_id),timestamp)
 		events_res = tool.query(query_formatted)
-		user_query = users_time.format(campaign_id,timestamp, timestamp)
+		user_query = users_time.format(campaign_id,timestamp)
 		users_res = tool.query(user_query)
 		
 	except IOError:
