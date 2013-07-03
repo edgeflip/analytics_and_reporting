@@ -12,6 +12,60 @@ cur = conn.cursor()
 tool = PySql(cur)
 
 
+auth_with_timestamp = "SELECT session_id,updated,fbid,type,CASE type WHEN 'authorized' THEN 1 WHEN 'auth_fail' THEN 0 END FROM events WHERE (updated > FROM_UNIXTIME(%s) AND campaign_id='3') AND (type='authorized' or type='auth_fail');"
+auth_without_timestamp = "SELECT session_id,updated,fbid,type,CASE type WHEN 'authorized' THEN 1 WHEN 'auth_fail' THEN 0 END FROM events WHERE campaign_id='3' AND (type='authorized' OR type='auth_fail');"
+
+
+share_with_timestamp = "SELECT session_id,updated,fbid,friend_fbid,type,CASE type WHEN 'shared' THEN 1 WHEN 'shown' THEN 0 WHEN 'suppressed' THEN 0 WHEN 'share_fail' THEN 0 WHEN 'share_click' THEN 0 END FROM events WHERE (campaign_id='3' AND updated > FROM_UNIXTIME(%s)) AND (type='shared' OR type='shown' OR type='suppressed' OR type='share_fail' OR type='share_click');"
+share_without_timestamp = "SELECT session_id,updated,fbid,friend_fbid,type,CASE type WHEN 'shared' THEN 1 WHEN 'shown' THEN 0 WHEN 'suppressed' THEN 0 WHEN 'share_fail' THEN 0 WHEN 'share_click' THEN 0 END FROM events WHERE campaign_id='3' AND (type='shared' OR type='shown' OR type='suppressed' OR type='share_fail' OR type='share_click');"
+
+
+clickback_with_timestamp = "SELECT session_id, updated, fbid, CASE type WHEN 'clickback' THEN 1 END FROM events WHERE (type='clickback' AND updated > FROM_UNIXTIME(%s)) AND campaign_id='3';"
+clickback_without_timestamp = "SELECT session_id, updated, fbid, CASE type WHEN 'clickback' THEN 1 END FROM events WHERE type='clickback' AND campaign_id='3';"
+
+
+
+def create_auth_file_v2(timestamp=None):
+	if timestamp:
+		_all = tool.query(auth_with_timestamp.format(timestamp))
+	else:
+		_all = tool.query(auth_without_timestamp)
+
+	f = open("auth_file.csv", "wb")
+	csvfile = csv.writer(f, delimiter=',')
+	csvfile.writerows(_all)
+	f.close()
+	print "Auth file written"
+
+def create_share_file_v2(timestamp=None):
+	if timestamp:
+		_all = tool.query(share_with_timestamp.format(timestamp))
+	else:
+		_all = tool.query(share_without_timestamp)
+	f = open("share_file.csv", "wb")
+	csvfile = csv.writer(f, delimiter=',')
+	csvfile.writerows(_all)
+	f.close()
+	print "Share file written"
+
+def create_clickback_file_v2(timestamp=None):
+	if timestamp:
+		_all = tool.query(clickback_with_timestamp.format(timestamp))
+	else:
+		_all = tool.query(clickback_without_timestamp)
+	with open("clickbacks.csv", "wb") as csvfile:
+		writer = csv.writer(csvfile, delimiter=',')
+	csvfile.writerows(_all)
+	f.close()
+	print "Clickbacks file written"
+
+
+
+####################################################################################################################################################
+
+# OLD ALGORITHMS
+
+
 def create_auth_file(timestamp=None):
 	if timestamp:
 		_all = tool.query("select session_id,fbid,type,updated from events where (updated > FROM_UNIXTIME(%s) AND campaign_id='3') AND (type='authorized' or type='auth_fail')" % timestamp)
