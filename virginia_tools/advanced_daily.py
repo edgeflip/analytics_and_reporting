@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-from generate_data_for_export import create_auth_file_v2
-from generate_data_for_export import create_share_file_v2
-from generate_data_for_export import create_clickback_file_v2
+from generate_data_for_export_original import create_auth_file_v2
+from generate_data_for_export_original import create_share_file_v2
+from generate_data_for_export_original import create_clickback_file_v2
 import os, time
 
 def main():

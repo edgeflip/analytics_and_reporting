@@ -2,6 +2,10 @@
 from time import strftime
 from generate_data_for_export3 import tool
 import datetime
+import smtplib
+from email.MIMEMultipart import MIMEMultipart
+from email.MIMEText import MIMEText	
+
 
 # number of users shown queries
 shown_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='button_load' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
@@ -79,6 +83,30 @@ def generate_daily_report(campaign_id, timestamp):
 	report.close()
 
 	print "Report for %s generated" % today
+
+
+
+def email_report(campaign_id):
+        creds = open('.credentials.txt','r').read().split('\n')
+        creds.pop()
+        m, d, y = strftime('%m'), strftime('%d'), strftime('%Y')
+        todays_report = 'report_{0}_{1}_{2}.txt'.format(m,d,y)
+        msg = MIMEMultipart()
+        f = file(todays_report)
+        attachment = MIMEText(f.read())
+        msg['From'] = creds[0]
+        msg['Subject'] = 'Report for %s' % m+'-'+d+'-'+y
+        attachment.add_header('Content-Disposition', 'attachment', filename=todays_report)
+        msg.attach(attachment)
+        mailserver = smtplib.SMTP('smtp.gmail.com',587)
+        mailserver.ehlo()
+        mailserver.starttls()
+        mailserver.ehlo()
+        mailserver.login(creds[0],creds[1])
+        people = ['wes@edgeflip.com','rayid@edgeflip.com','kit@edgeflip.com','matt@edgeflip.com','mark@edgeflip.com','john@edgeflip.com']
+        for person in people:
+                mailserver.sendmail(creds[0],person,msg.as_string())
+
 
 
 def generate_report_tests(campaign_id, timestamp=None):
