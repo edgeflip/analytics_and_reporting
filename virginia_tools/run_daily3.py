@@ -5,6 +5,7 @@ import time
 from virginia_send_to_s3 import send_to_s3
 from time import strftime
 from generate_report import email_report
+from cleanup import cleanup
 
 if __name__ == '__main__':
 	try:
@@ -15,3 +16,4 @@ if __name__ == '__main__':
 	create_events_file(3)
 	send_to_s3()
 	email_report(3)
+	cleanup()
