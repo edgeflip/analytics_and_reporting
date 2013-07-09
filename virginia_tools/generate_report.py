@@ -1,15 +1,87 @@
 #!/usr/bin/env python
 from time import strftime
-from generate_data_for_export3 import tool
+from generate_data_for_export_original import tool
 import datetime
 import smtplib
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText	
+import csv
+
+# visitors, authorizations, shown friends, shared, # visitors shared with, clickbacks
+
+
+# base query, mutable for visitors, authorizations, shown friends, share
+
+baseline_query = "SELECT COUNT(session_id) FROM events WHERE (type='{0}'AND content_id='{1}') AND (campaign_id='{2}' AND updated > FROM_UNIXTIME({3}));"
+
+visitors_shared_with_query = "SELECT COUNT(session_id) FROM events WHERE (type='shared' AND campaign_id='{0}' AND content_id='{1}' AND updated > FROM_UNIXTIME({2})) AND friend_fbid IN (SELECT fbid FROM events WHERE type='button_load');"
+
+campaign_stuff = "SELECT name FROM campaigns WHERE campaign_id='{0}'"
+content_stuff = "SELECT name FROM client_content WHERE content_id='{0}'"
+
+def generate_report2(campaign_id, content_id):
+	timestamp = open('timestamp.txt','r').read()
+	visitors_today = tool.query(baseline_query.format('button_load',campaign_id, content_id,timestamp))[0][0]
+	visitors_aggregate = tool.query(baseline_query.format('button_load',campaign_id, content_id,0))[0][0]
+	
+	auths_today = tool.query(baseline_query.format('authorization',campaign_id,content_id,timestamp))[0][0]
+	auths_aggregate = tool.query(baseline_query.format('authorization',campaign_id,content_id,0))[0][0]
+
+	shown_today = tool.query(baseline_query.format('shown',campaign_id,content_id,timestamp))[0][0]
+	shown_aggregate = tool.query(baseline_query.format('shown',campaign_id,content_id,0))[0][0]
+
+	shared_today = tool.query(baseline_query.format('shared',campaign_id,content_id,timestamp))[0][0]
+	shared_aggregate = tool.query(baseline_query.format('shared',campaign_id,content_id,0))[0][0]
+
+	visitors_shared_with_today = tool.query(visitors_shared_with_query.format(campaign_id,content_id,timestamp))[0][0]
+	visitors_shared_with_aggregate = tool.query(visitors_shared_with_query.format(campaign_id,content_id,0))[0][0]
+
+	clickback_today = tool.query(baseline_query.format('clickback',campaign_id,content_id,timestamp))[0][0]
+	clickback_aggregate = tool.query(baseline_query.format('clickback',campaign_id,content_id,0))[0][0]
+
+	campaign_name = tool.query(campaign_stuff.format(campaign_id))[0][0]
+	content_name = tool.query(content_stuff.format(content_id))[0][0]
+
+	m = strftime('%m')
+	d = strftime('%d')
+	y = strftime('%Y')
+
+	f = open('report_{0}_{1}_{2}.csv'.format(m,d,y),'wb')
+	writer = csv.writer(f,delimiter=',')
+	writer.writerow([campaign_id, campaign_name])
+	writer.writerow([content_id, content_name])
+	writer.writerow([campaign_id, content_id, visitors_today, auths_today, shown_today, shared_today, visitors_shared_with_today, clickback_today])
+	writer.writerow([campaign_id,content_id, visitors_aggregate, shown_aggregate, shared_aggregate, visitors_shared_with_aggregate, clickback_aggregate])
+	
+	f.close()
+
+	msg = MIMEMultipart()
+	msg['From'] = 'wes@edgeflip.com'
+	msg['To'] = 'wes@edgeflip.com'
+	msg['Subject'] = 'report_{0}_{1}_{2} for campaign_id {3} content_id {4}'.format(m,d,y,campaign_id,content_id)
+	name = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
+	f = file(name)
+	attachment = MIMEText(f.read())
+	msg.add_header('Content-Disposition', 'attachment', filename=name)	
+	msg.attach(attachment)
+	mailserver = smtplib.SMTP('smtp.gmail.com',587)
+	mailserver.ehlo()
+	mailserver.starttls()
+	mailserver.ehlo()
+	mailserver.login('wes@edgeflip.com','gipetto3')
+	mailserver.sendmail('wes@edgeflip.com','wes@edgeflip.com',msg.as_string())
+	print "Report emailed"
+
+
+############################################################################################################################################
+
+# ORIGINAL REPORT GENERATION QUERIES
+
 
 
 # number of users shown queries
-shown_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='button_load' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
-shown_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='button_load' AND campaign_id='{0}';"
+visitors_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='button_load' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
+visitors_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='button_load' AND campaign_id='{0}';"
 
 # number of authorized queries
 auth_not_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='authorized' AND (campaign_id='{0}' AND updated > FROM_UNIXTIME({1}));"
@@ -29,6 +101,8 @@ shown_aggregate = "SELECT COUNT(session_id) FROM events WHERE type='shown' AND c
 
 # campaign start time
 start_time = "SELECT MIN(updated) FROM events WHERE campaign_id='{0}';"
+	
+
 
 
 def generate_daily_report(campaign_id, timestamp):
