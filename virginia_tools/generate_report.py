@@ -17,7 +17,7 @@ import time
 
 # base query, mutable for visitors, authorizations, shown friends, share
 
-baseline_query = "SELECT COUNT(session_id) FROM events WHERE (type='{0}'AND content_id='{1}') AND (campaign_id='{2}' AND updated > FROM_UNIXTIME({3}));"
+baseline_query = "SELECT COUNT(session_id) FROM events WHERE (type='{0}' AND content_id='{1}') AND (campaign_id='{2}' AND updated > FROM_UNIXTIME({3}));"
 
 visitors_shared_with_query = "SELECT COUNT(session_id) FROM events WHERE (type='shared' AND campaign_id='{0}' AND content_id='{1}' AND updated > FROM_UNIXTIME({2})) AND friend_fbid IN (SELECT fbid FROM events WHERE type='button_load');"
 
@@ -73,18 +73,115 @@ def generate_report2(campaign_id, content_id, timestamp):
 	y = strftime('%Y')
 
 	f = open('virginia_report_{0}_{1}_{2}.csv'.format(m,d,y),'wb')
+	f1 = open('virginia_report_{0}_{1}_{2}.txt'.format(m,d,y),'w')
 	writer = csv.writer(f,delimiter=',')
 	writer.writerow([campaign_id, campaign_name])
+	f1.write("Campaign id: %s\n" % campaign_id)
+	f1.write("Campaign name: %s\n" % campaign_name)
 	writer.writerow([content_id, content_name])
+	f1.write("Content id: %s\nContent name: %s\n" % (content_id, content_name))
 	writer.writerow([des_message])
+	f1.write("Encrypted slug: %s\n\n" % des_message)
+	f1.write("Stats in the form 'campaign_id, content_id, visitors, authorizations, friends shown, friends shared with, visitors that were shared with, clickbacks.\n")
+	f1.write("Stats for {0}-{1}-{2}:\n".format(y,m,d))
+	f1.write("\t{0},{1},{2},{3},{4},{5},{6}\n".format(campaign_id,content_id,visitors_today,auths_today,shown_today,shared_today,visitors_shared_with_today,clickback_today))
 	writer.writerow([campaign_id, content_id, visitors_today, auths_today, shown_today, shared_today, visitors_shared_with_today, clickback_today])
+	f1.write("Stats overall:\n")
+	f1.write("\t{0},{1},{2},{3},{4},{5},{6}".format(campaign_id,content_id,visitors_aggregate,auths_aggregate,shown_aggregate,shared_aggregate,visitors_shared_with_aggregate,clickback_aggregate))
 	writer.writerow([campaign_id,content_id, visitors_aggregate, auths_aggregate, shown_aggregate, shared_aggregate, visitors_shared_with_aggregate, clickback_aggregate])
 	
 	f.close()
-	
+	f1.close()	
 	print "Report for campaign_id %s and content_id %s generated" % (str(campaign_id), str(content_id))
 
 
+
+# queries for master report
+baseline_query_master = "SELECT COUNT(session_id) FROM events WHERE type='{0}' AND updated > FROM_UNIXTIME({1});"
+visitors_shared_with_master = "SELECT COUNT(session_id) FROM events WHERE (type='shared' AND updated > FROM_UNIXTIME({0})) AND friend_fbid IN (SELECT fbid FROM events WHERE type='button_load');"
+
+def generate_master_report(timestamp):
+	m = strftime('%m')
+	d = strftime('%d')
+	y = strftime('%Y')
+	
+	visitors_today = tool.query(baseline_query_master.format('button_load',timestamp))[0][0]
+	visitors_total = tool.query(baseline_query_master.format('button_laod',0))[0][0]
+	
+	auths_today = tool.query(baseline_query_master.format('authorization',timestamp))[0][0]
+	auths_total = tool.query(baseline_query_master.format('authorization',0))[0][0]
+	
+	shown_today = tool.query(baseline_query_master.format('shown',timestamp))[0][0]
+	shown_total = tool.query(baseline_query_master.format('shown',0))[0][0]
+	
+	shared_today = tool.query(baseline_query_master.format('shared',timestamp))[0][0]
+	shared_total = tool.query(baseline_query_master.format('shared',0))[0][0]
+	
+	visitors_shared_today = tool.query(visitors_shared_with_master.format(timestamp))[0][0]
+	visitors_shared_total = tool.query(visitors_shared_with_master.format(0))[0][0]
+
+	clickback_today = tool.query(baseline_query_master.format('clickback',timestamp))[0][0]
+	clickback_total = tool.query(baseline_query_master.format('clickback',0))[0][0]
+
+	# get the amount of days that we have been in operation divide numbers by that amount
+	day_started = tool.query("SELECT MIN(updated) FROM events;")[0][0]
+	days_str = str(datetime.datetime.now() - day_started)
+	end_of_days = days_str.find('days')-1
+	# the number of days the campaign has been running
+	days = int(days_str[0:end_of_days])
+	try:	
+		avg_visitors_daily = round(float(visitors_total)/float(days),1)
+	except ZeroDivisionError:
+		avg_visitors_daily = 0
+	try:
+		avg_auths_daily = round(float(auths_total)/float(days),1)
+	except ZeroDivisionError:
+		avg_auths_daily = 0
+	try:
+		auth_rate_choose_visitors = round(float(auths_total)/float(visitors_total),2)
+	except ZeroDivisionError:
+		auth_rate_choose_visitors = 0.0
+	try:
+		avg_shown_daily = round(float(shown_total)/float(days),1)
+	except ZeroDivisionError:
+		avg_shown_daily = 0
+	try:
+		avg_shared_daily = round(float(shared_total)/float(days),1)
+	except ZeroDivisionError:
+		avg_shared_daily = 0
+	try:
+		share_rate_choose_shown = round(float(shared_total)/float(shown_total),2)
+	except ZeroDivisionError:
+		share_rate_choose_shown = 0.0
+	try:
+		avg_clickback_daily = round(float(clickback_total)/float(days),1)
+	except ZeroDivisionError:
+		avg_clickback_daily = 0
+	try:
+		clickback_rate_choose_shared = round(float(clickback_total)/float(shared_total),2)
+	except ZeroDivisionError:
+		clickback_rate_choose_shared = 0.0
+	
+	
+	with open('master_report_{0}_{1}_{2}.csv'.format(m,d,y),'wb') as csvfile:
+		writer = csv.writer(csvfile, delimiter=',')
+		writer.writerow(['visitors today, auths today, shown today, shared today, visitors shared today, clickbacks today'])
+		writer.writerow([visitors_today,auths_today,shown_today,shared_today,visitors_shared_today,clickback_today])
+		writer.writerow(['visitors total, auths total, shown total, shard total, visitors shared total, clickbacks total'])
+		writer.writerow([visitors_total,auths_total,shown_total,shared_total,visitors_shared_total,clickback_total])
+		writer.writerow(['avg visitors, avg auths'])
+		writer.writerow([avg_visitors_daily,avg_auths_daily])
+		writer.writerow(['auth rate per visitor'])
+		writer.writerow([auth_rate_choose_visitors])
+		writer.writerow(['avg shown, avg shared'])
+		writer.writerow([avg_shown_daily,avg_shared_daily])
+		writer.writerow(['share rate per shown'])
+		writer.writerow([share_rate_choose_shown])
+		writer.writerow(['avg clickback'])
+		writer.writerow([avg_clickback_daily])
+		writer.writerow(['clickback rate per share'])
+		writer.writerow([clickback_rate_choose_shared])
+	print "Master report for %s generated" % m+'-'+d+'-'+y
 
 ############################################################################################################################################
 

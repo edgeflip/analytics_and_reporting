@@ -2,7 +2,7 @@
 from generate_data_for_export import create_events_file
 from virginia_send_to_s3 import send_to_s3
 from time import strftime
-# mainly generate_report2 and all it's dependencies (encodeDES, secret, etc...)
+# mainly generate_master_report, generate_report2 and all it's dependencies (encodeDES, secret, etc...)
 from generate_report import *
 from cleanup import cleanup
 import time, datetime
@@ -24,6 +24,7 @@ if __name__ == '__main__':
 	#email_report(3)
 	cleanup()
 	generate_report2(4,4,timestamp)
+	generate_master_report(timestamp)	
 	f = open('timestamp.txt','w')
 	f.write(str(int(time.time())))
 	f.close()
