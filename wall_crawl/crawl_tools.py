@@ -134,7 +134,7 @@ def run_crawler():
 		ownerid = each[2]
 		token = each[3]
 		if not check_if_crawled(fbid,ownerid):
-			key = '{0},{1}'.format(fbid,ownerid,appid)
+			key = '{0},{1}'.format(fbid,ownerid)
 			k = Key(main_bucket)
 			k.key = key
 			# use crawl_feed from below and set the key
@@ -143,7 +143,7 @@ def run_crawler():
 			# subscribe the user
 			subscribe_user(fbid,appid,ownerid)
 		else:
-			key = '{0},{1}'.format(fbid,ownerid,appid)
+			key = '{0},{1}'.format(fbid,ownerid)
 			k = main_bucket.get_key(key)
 
 			#############################################################################3
@@ -170,8 +170,21 @@ def run_crawler():
 			k.set_contents_from_string(current_feed_data_string)
 	print "Done"
 
+"""
+	always_crawl_from_database takes a crawl_timestamp as input and crawls all those users and their respective
+	tokens who have been added to the database since the timestamp. if there is no timestamp it means this is
+	the first time the method is being called and we will crawl all users entire feed.  always_crawl_from_database
+	also creates a file with a json string containing all ids that were crawled so we can cross check it when
+	our next method, crawl_realtime_updates is called.  this file will be to eliminate repetitive crawling when
+	facebook sends an update on a newly registered use that we haven't crawled yet and we crawl them with
+	always_crawl_from_database and then go attempt to execute a crawl_realtime_updates crawl on them.  since we
+	just crawled their entire wall we don't need to crawl their wall since the updated
+"""
 
-def always_crawl():
+
+
+def always_crawl_from_database(crawl_timestamp = None):
+    import csv
     # connect to s3 database
     conn = S3Connection('AKIAJDIWDVVGWXFOSPEQ', 'RpcwFl6tw2XtOqnwbhXK9PemhUQ8kK6UdCMJ5GaI')
     main_bucket = conn.get_bucket('fbcrawl1')
@@ -179,35 +192,64 @@ def always_crawl():
     realtime_bucket = conn.get_bucket('fbrealtime')
 
     # edgeflip databse
-    con = mysql.connect('edgeflip-db.efstaging.com','root','9uDTlOqFmTURJcb','edgeflip')
-    cur = con.cursor()
-    orm = PySql(cur)
-    most_data = orm.query('select fbid,appid,ownerid,token from tokens')
+    orm = PySql('edgeflip-db.efstaging.com','root','9uDTlOqFmTURJcb','edgeflip')
+    orm.connect()
+    if crawl_timestamp:
+        most_data = orm.query('select fbid,ownerid,token from tokens')
+    else:
+	most_data = orm.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME(%s)' % crawl_timestamp)
+
+    crawl_log = open('crawl_log.csv','wb')
+    crawl_log_writer = csv.writer(crawl_log,delimiter=',')
     new_count = 0
     update_count = 0
     for item in most_data:
         fbid = item[0]
-        appid = item[1]
         ownerid = item[2]
         token = item[3]
         main_key = fbid+','+ownerid
         if not main_bucket.lookup(main_key):
-            # crawl_feed returns a 
+	    # go ahead and write the fbid to the csv log file
+	    writer.writerow([fbid])
+            # crawl_feed returns a json blob of the users feed
+	    # on this pass of the code we are getting the entire feed 
             response = crawl_feed(fbid,token)
             k = main_bucket.new_key()
+	    # set the bucket's key to be fbid,ownerid
             k.key = main_key
             k.set_contents_from_string(response)
             # put the fbid,ownerid, and token in token_bucket
-            token_key = token_bucket.new_key()
-            token_key.key = fbid
-            token_key_struct = {fbid: [{owerid: token}]}
-	    jsoned = json.dumps(token_key_struct)
-            token_key.set_contents_from_string(jsoned)
+            # there may already be a token bucket key for this user so check first
+            if not token_bucket.lookup(fbid):
+                token_key = token_bucket.new_key()
+                token_key.key = fbid
+                token_key_struct = {fbid: [{owerid: token}]}
+	        jsoned = json.dumps(token_key_struct)
+                token_key.set_contents_from_string(jsoned)
+	    else:
+		token_key = token_bucket.get_key(fbid)
+		# get the current tokens blob we have and convert it to a json object
+		cur_tokens_blob = json.loads(token_key.get_contents_as_string())
+		# check if this owner already has his/her token registered
+		if ownerid in [i.keys()[0] for i in cur_tokens_blob[fbid]]:
+		    pass
+		else:
+		    cur_tokens_blob[fbid].append({ownerid:token})
+		# convert the current tokens blob back into a json string and put it back into the s3 fbtokens bucket
+		cur_tokens_blob = json.dumps(cur_tokens_blob)
+		token_key.set_contents_from_string(cur_tokens_blob)
+
             new_count += 1
-            # otherwise we've already crawled our user and there should be information about
-            # him/her in our main_bucket and our token_bucket
+        # otherwise we've already crawled our user and there should be information about
+        # him/her in our main_bucket and our token_bucket
         else:
-        # get everything from the subscribed updates
+        # get everything from the subscribed updates with the next method's execution
+	    pass
+
+
+
+
+def crawl_realtime_updates():
             if realtime_bucket.lookup(fbid):
                 cur = realtime_bucket.get_key(fbid)
                 data = json.loads(cur.get_contents_as_string())
@@ -276,7 +318,7 @@ def crawl_all_tokens(fbid, tokens, conn, update_time):
 		
 
 	
-def crawl_feed(fbid,friend_fbid,access_token):
+def crawl_feed(fbid,access_token):
 	api = 'https://graph.facebook.com/{0}?fields=feed&access_token={1}'
 	formatted = api.format(fbid,access_token)
 	response = urllib2.urlopen(formatted).read()
