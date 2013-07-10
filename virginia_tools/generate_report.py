@@ -6,6 +6,10 @@ import smtplib
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText	
 import csv
+from Crypto.Cipher import DES
+import logging.config
+import urllib
+import base64
 
 # visitors, authorizations, shown friends, shared, # visitors shared with, clickbacks
 
@@ -19,8 +23,27 @@ visitors_shared_with_query = "SELECT COUNT(session_id) FROM events WHERE (type='
 campaign_stuff = "SELECT name FROM campaigns WHERE campaign_id='{0}'"
 content_stuff = "SELECT name FROM client_content WHERE content_id='{0}'"
 
+# encryption stuff for our campaign_id/content_id DES encryption
+
+secret = '5un W@h!'
+cipher = DES.new(secret)
+PADDING = ' '
+BLOCK_SIZE = 8
+pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE)*PADDING
+
+def encodeDES(message):
+    """Encrypt a message with DES cipher, returning a URL-safe, quoted string"""
+    message = str(message)
+    encrypted = cipher.encrypt(pad(message))
+    b64encoded = base64.urlsafe_b64encode(encrypted)
+    encoded = urllib.quote(b64encoded)
+    return encoded
+
+
 def generate_report2(campaign_id, content_id):
 	timestamp = open('timestamp.txt','r').read()
+	
+	# get all campaign and content pertinent data for today and aggregate by formatted the queries from above
 	visitors_today = tool.query(baseline_query.format('button_load',campaign_id, content_id,timestamp))[0][0]
 	visitors_aggregate = tool.query(baseline_query.format('button_load',campaign_id, content_id,0))[0][0]
 	
@@ -42,11 +65,14 @@ def generate_report2(campaign_id, content_id):
 	campaign_name = tool.query(campaign_stuff.format(campaign_id))[0][0]
 	content_name = tool.query(content_stuff.format(content_id))[0][0]
 
+	# encrypt our campaign_id and content_id with the encodeDES algorithm
+	des_message = encodeDES(str(campaign_id) + '/' + str(content_id))
+
 	m = strftime('%m')
 	d = strftime('%d')
 	y = strftime('%Y')
 
-	f = open('report_{0}_{1}_{2}.csv'.format(m,d,y),'wb')
+	f = open('report_{0}_{1}_{2}_{3}.csv'.format(m,d,y,des_message),'wb')
 	writer = csv.writer(f,delimiter=',')
 	writer.writerow([campaign_id, campaign_name])
 	writer.writerow([content_id, content_name])
@@ -54,23 +80,9 @@ def generate_report2(campaign_id, content_id):
 	writer.writerow([campaign_id,content_id, visitors_aggregate, shown_aggregate, shared_aggregate, visitors_shared_with_aggregate, clickback_aggregate])
 	
 	f.close()
+	
+	print "Report for campaign_id %s and content_id %s generated" % (str(campaign_id), str(content_id))
 
-	msg = MIMEMultipart()
-	msg['From'] = 'wes@edgeflip.com'
-	msg['To'] = 'wes@edgeflip.com'
-	msg['Subject'] = 'report_{0}_{1}_{2} for campaign_id {3} content_id {4}'.format(m,d,y,campaign_id,content_id)
-	name = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
-	f = file(name)
-	attachment = MIMEText(f.read())
-	msg.add_header('Content-Disposition', 'attachment', filename=name)	
-	msg.attach(attachment)
-	mailserver = smtplib.SMTP('smtp.gmail.com',587)
-	mailserver.ehlo()
-	mailserver.starttls()
-	mailserver.ehlo()
-	mailserver.login('wes@edgeflip.com','gipetto3')
-	mailserver.sendmail('wes@edgeflip.com','wes@edgeflip.com',msg.as_string())
-	print "Report emailed"
 
 
 ############################################################################################################################################
