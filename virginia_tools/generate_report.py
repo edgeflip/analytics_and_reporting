@@ -10,6 +10,7 @@ from Crypto.Cipher import DES
 import logging.config
 import urllib
 import base64
+import time
 
 # visitors, authorizations, shown friends, shared, # visitors shared with, clickbacks
 
@@ -40,8 +41,7 @@ def encodeDES(message):
     return encoded
 
 
-def generate_report2(campaign_id, content_id):
-	timestamp = open('timestamp.txt','r').read()
+def generate_report2(campaign_id, content_id, timestamp):
 	
 	# get all campaign and content pertinent data for today and aggregate by formatted the queries from above
 	visitors_today = tool.query(baseline_query.format('button_load',campaign_id, content_id,timestamp))[0][0]
@@ -146,7 +146,7 @@ def generate_daily_report(campaign_id, timestamp):
 	except ZeroDivisionError:
 		percent_of_shown_clicked = 0.0
 	try:
-		percent_of_shared_clicked = round(float(num_click_total/float(num_shared_total), 2))
+		percent_of_shared_clicked = round(float(num_click_total)/float(num_shared_total), 2)
 	except ZeroDivisionError:
 		percent_of_shared_clicked = 0.0
 
