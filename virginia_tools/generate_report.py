@@ -72,12 +72,13 @@ def generate_report2(campaign_id, content_id, timestamp):
 	d = strftime('%d')
 	y = strftime('%Y')
 
-	f = open('report_{0}_{1}_{2}_{3}.csv'.format(m,d,y,des_message),'wb')
+	f = open('virginia_report_{0}_{1}_{2}.csv'.format(m,d,y),'wb')
 	writer = csv.writer(f,delimiter=',')
 	writer.writerow([campaign_id, campaign_name])
 	writer.writerow([content_id, content_name])
+	writer.writerow([des_message])
 	writer.writerow([campaign_id, content_id, visitors_today, auths_today, shown_today, shared_today, visitors_shared_with_today, clickback_today])
-	writer.writerow([campaign_id,content_id, visitors_aggregate, shown_aggregate, shared_aggregate, visitors_shared_with_aggregate, clickback_aggregate])
+	writer.writerow([campaign_id,content_id, visitors_aggregate, auths_aggregate, shown_aggregate, shared_aggregate, visitors_shared_with_aggregate, clickback_aggregate])
 	
 	f.close()
 	
