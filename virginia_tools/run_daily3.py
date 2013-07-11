@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
 	generate_daily_report(4,timestamp)
 	create_events_file(4,timestamp)
-	send_to_s3()
+	#send_to_s3()
 	#email_report(3)
 	cleanup()
 	generate_report2(4,4,timestamp)
