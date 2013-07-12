@@ -14,18 +14,21 @@ if __name__ == '__main__':
 		# make a timestamp from a datetime object
 		y = strftime('%Y')
 		m = strftime('%m')
-		d = strftime('%d')
+		d = str(int(strftime('%d'))-1)
+		if len(d) == 1:
+			d = '0'+d
 		morning = datetime.datetime(int(y),int(m),int(d),00,00,00)
 		timestamp = str(int(time.mktime(morning.timetuple())))
-
-	generate_daily_report(4,timestamp)
-	create_events_file(4,timestamp)
-	#send_to_s3()
+	# make a new timestamp before the processes start so as to not lose data
+	new_timestamp = str(int(time.time()))
+	create_events_file(2,timestamp)
+	send_to_s3()
 	#email_report(3)
-	cleanup()
-	generate_report2(4,4,timestamp)
-	generate_master_report(timestamp)	
+	#cleanup()
+	#generate_report2(2,timestamp)
+	#generate_master_report(timestamp)	
 	f = open('timestamp.txt','w')
-	f.write(str(int(time.time())))
+	f.write(new_timestamp)
 	f.close()
+	#_mail_master()
 	

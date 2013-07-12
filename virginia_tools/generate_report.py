@@ -69,7 +69,10 @@ def generate_report2(campaign_id, content_id, timestamp):
 	des_message = encodeDES(str(campaign_id) + '/' + str(content_id))
 
 	m = strftime('%m')
-	d = strftime('%d')
+	# reports are for the day prior
+	d = str(int(strftime('%d'))-1)
+	if len(d) == 1:
+		d = '0' + d
 	y = strftime('%Y')
 
 	f = open('virginia_report_{0}_{1}_{2}.csv'.format(m,d,y),'wb')
@@ -99,7 +102,9 @@ visitors_shared_with_master = "SELECT COUNT(session_id) FROM events WHERE (type=
 
 def generate_master_report(timestamp):
 	m = strftime('%m')
-	d = strftime('%d')
+	d = str(int(strftime('%d'))-1)
+	if len(d) == 1:
+		d = '0' + d
 	y = strftime('%Y')
 	
 	visitors_today = tool.query(baseline_query_master.format('button_load',timestamp))[0][0]
