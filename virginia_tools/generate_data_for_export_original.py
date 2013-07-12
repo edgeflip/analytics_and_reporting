@@ -7,8 +7,12 @@ import os
 import json
 import urllib2
 
-tool = PySql('edgeflip-db.efstaging.com','root','9uDTlOqFmTURJcb','edgeflip')
+tool = PySql('edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com','root','YUUB2ctgkn8zfe','edgeflip')
 tool.connect()
+
+
+#tool = PySql('edgeflip-db.efstaging.com','root','9uDTlOqFmTURJcb','edgeflip')
+#tool.connect()
 
 auth_with_timestamp = "SELECT session_id,updated,fbid,type,CASE type WHEN 'authorized' THEN 1 WHEN 'auth_fail' THEN 0 END FROM events WHERE (updated > FROM_UNIXTIME(%s) AND campaign_id='3') AND (type='authorized' or type='auth_fail');"
 auth_without_timestamp = "SELECT session_id,updated,fbid,type,CASE type WHEN 'authorized' THEN 1 WHEN 'auth_fail' THEN 0 END FROM events WHERE campaign_id='3' AND (type='authorized' OR type='auth_fail');"

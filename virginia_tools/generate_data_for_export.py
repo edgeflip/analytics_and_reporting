@@ -44,10 +44,12 @@ def create_events_file(client_id, timestamp=None):
 	if len(events_res) == 0:
 		events_writer.writerow(['No new data'])
 	else:
+		events_writer.writerow(['session id', 'action time', 'fbid', 'friend fbid', 'action type'])
 		events_writer.writerows(events_res)
 	if len(users_res) == 0:
 		ref_writer.writerow(['No new users'])
 	else:
+		ref_writer.writerow(['fbid', 'first name', 'last name', 'city', 'state', 'birthday'])
 		ref_writer.writerows(users_res)
 
 	print "Data written"

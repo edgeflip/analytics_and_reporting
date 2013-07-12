@@ -11,15 +11,7 @@ import logging.config
 import urllib
 import base64
 import time
-
-# visitors, authorizations, shown friends, shared, # visitors shared with, clickbacks
-
-
-# base query, mutable for visitors, authorizations, shown friends, share
-
-baseline_query = "SELECT COUNT(session_id) FROM events WHERE (type='{0}' AND content_id='{1}') AND (campaign_id='{2}' AND updated > FROM_UNIXTIME({3}));"
-
-visitors_shared_with_query = "SELECT COUNT(session_id) FROM events WHERE (type='shared' AND campaign_id='{0}' AND content_id='{1}' AND updated > FROM_UNIXTIME({2})) AND friend_fbid IN (SELECT fbid FROM events WHERE type='button_load');"
+import MySQLdb as mysql
 
 campaign_stuff = "SELECT name FROM campaigns WHERE campaign_id='{0}'"
 content_stuff = "SELECT name FROM client_content WHERE content_id='{0}'"
@@ -41,58 +33,170 @@ def encodeDES(message):
     return encoded
 
 
-def generate_report2(campaign_id, content_id, timestamp):
-	
-	# get all campaign and content pertinent data for today and aggregate by formatted the queries from above
-	visitors_today = tool.query(baseline_query.format('button_load',campaign_id, content_id,timestamp))[0][0]
-	visitors_aggregate = tool.query(baseline_query.format('button_load',campaign_id, content_id,0))[0][0]
-	
-	auths_today = tool.query(baseline_query.format('authorization',campaign_id,content_id,timestamp))[0][0]
-	auths_aggregate = tool.query(baseline_query.format('authorization',campaign_id,content_id,0))[0][0]
 
-	shown_today = tool.query(baseline_query.format('shown',campaign_id,content_id,timestamp))[0][0]
-	shown_aggregate = tool.query(baseline_query.format('shown',campaign_id,content_id,0))[0][0]
+main_query = """SELECT SUM(CASE WHEN type='button_load' THEN 1 ELSE 0 END) as Visits,
+       SUM(CASE WHEN type='button_click' THEN 1 ELSE 0 END) as Clicks,
+       SUM(CASE WHEN type='authorized' THEN 1 ELSE 0 END) as Authorizations,
+       COUNT(DISTINCT CASE WHEN type='authorized' THEN fbid ELSE NULL END) as "Distinct Facebook Users Authorized",
+       COUNT(DISTINCT CASE WHEN type='shown' THEN fbid ELSE NULL END) as "# Users Shown Friends",
+       COUNT(DISTINCT CASE WHEN type='shared' THEN fbid ELSE NULL END) as "# Users Who Shared",
+       SUM(CASE WHEN type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with",
+       COUNT(DISTINCT CASE WHEN type='shared' THEN friend_fbid ELSE NULL END) as "# Distinct Friends Shared",
+       SUM(CASE WHEN type='clickback' THEN 1 ELSE 0 END) as "# Clickbacks"
+              FROM events e
+JOIN client_content c USING(content_id)
+WHERE c.client_id='{0}' and updated > FROM_UNIXTIME({1}) and updated < FROM_UNIXTIME({2});"""
 
-	shared_today = tool.query(baseline_query.format('shared',campaign_id,content_id,timestamp))[0][0]
-	shared_aggregate = tool.query(baseline_query.format('shared',campaign_id,content_id,0))[0][0]
 
-	visitors_shared_with_today = tool.query(visitors_shared_with_query.format(campaign_id,content_id,timestamp))[0][0]
-	visitors_shared_with_aggregate = tool.query(visitors_shared_with_query.format(campaign_id,content_id,0))[0][0]
 
-	clickback_today = tool.query(baseline_query.format('clickback',campaign_id,content_id,timestamp))[0][0]
-	clickback_aggregate = tool.query(baseline_query.format('clickback',campaign_id,content_id,0))[0][0]
+beginning_day = "SELECT MIN(updated) FROM events e JOIN client_content c USING(content_id) WHERE c.client_id='{0}';"
 
-	campaign_name = tool.query(campaign_stuff.format(campaign_id))[0][0]
-	content_name = tool.query(content_stuff.format(content_id))[0][0]
 
-	# encrypt our campaign_id and content_id with the encodeDES algorithm
-	des_message = encodeDES(str(campaign_id) + '/' + str(content_id))
+def get_start_of_campaign(client_id):
+	# res returns a [[datetime.datetime()]] 
+	res = tool.query(beginning_day.format(client_id))[0][0]
+	res = time.mktime(res.timetuple())
+	return str(int(res))
 
+def beginning_of_day():
+	# we always start from the beginning of yesterday for these reports
 	m = strftime('%m')
-	# reports are for the day prior
+	d = str(int(strftime('%d'))-1)
+	if len(d) == 1:
+		d = '0' + d
+	y = strftime('%Y')
+	beginning_datetime = datetime.datetime(int(y),int(m),int(d),00,00,00)
+	beginning_of_day = str(int(time.mktime(beginning_datetime.timetuple())))
+	return beginning_of_day
+
+
+def mail_report():
+	import smtplib
+	from email.MIMEMultipart import MIMEMultipart
+	from email.MIMEText import MIMEText
+	msg = MIMEMultipart()
+	msg['From'] = 'wesleymadrigal_99@hotmail.com'
+	msg['To'] = 'wesley7879@gmail.com'
+	msg['Subject'] = 'Report test'
+	m = strftime('%m')
 	d = str(int(strftime('%d'))-1)
 	if len(d) == 1:
 		d = '0' + d
 	y = strftime('%Y')
 
+	filename = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
+	f = file(filename).read()
+	attachment = MIMEText(f)
+	attachment.add_header('Content-Disposition','attachment',filename=filename)
+	msg.attach(attachment)
+
+	mailserver = smtplib.SMTP('smtp.live.com',587)
+	mailserver.ehlo()
+	mailserver.starttls()
+	mailserver.ehlo()
+	mailserver.login('wesleymadrigal_99@hotmail.com','madman2890')
+	mailserver.sendmail('wesleymadrigal_99@hotmail.com','wesley7879@gmail.com',msg.as_string())
+	print "Report Mailed"
+	
+
+
+
+def generate_report_or_get_specific(client_id, from_time, to_time=None):
+	conn = mysql.connect('edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com', 'root', 'YUUB2ctgkn8zfe', 'edgeflip')
+	tool = conn.cursor()
+	if to_time:
+		results_today = tool.execute(main_query.format(client_id, from_time, to_time))
+		#results_aggregate = tool.query(main_query.format(client_id, _min[0][0]
+		return results_today
+	else:
+		now = str(int(time.time()))	
+		m = strftime('%m')
+		d = str(int(strftime('%d'))-1)
+		if len(d) == 1:
+			d = '0'+d
+		y = strftime('%Y')
+		results_today = tool.execute(main_query.format(client_id, from_time, now))
+		with open('report_{0}_{1}_{2}.csv'.format(m,d,y), 'wt') as csvfile:
+			writer = csv.writer(csvfile, delimiter=',')
+			writer.writerow(['Stats for today {0}/{1}/{2}'.format(m,d,y)])
+			writer.writerow([i[0] for i in tool.description])
+			writer.writerows(tool)
+			campaign_start = get_start_of_campaign(client_id)
+			results_aggregate = tool.execute(main_query.format(client_id, campaign_start, now))
+			writer.writerow(['Stats for all time'])
+			writer.writerow([i[0] for i in tool.description])
+			writer.writerows(tool)
+		del writer
+		print "Report for {0}/{1}/{2} generated".format(m,d,y)
+		
+
+
+
+
+
+####
+# original queries
+baseline_query1 = "SELECT COUNT(session_id) FROM events WHERE (type='{0}' AND content_id='{1}') AND (campaign_id='{2}' AND updated > FROM_UNIXTIME({3}));"
+visitors_shared_with_query1 = "SELECT COUNT(session_id) FROM events WHERE (type='shared' AND campaign_id='{0}' AND content_id='{1}' AND updated > FROM_UNIXTIME({2})) AND friend_fbid IN (SELECT fbid FROM events WHERE type='button_load');"
+####
+
+####
+# queries in use
+baseline_query = "SELECT COUNT(session_id) FROM events WHERE (type='{0}' AND client_id='{1}' AND updated > FROM_UNIXTIME({2}));"
+visitors_shared_with_query = "SELECT COUNT(session_id) FROM events WHERE (type='shared' AND client_id='{0}' AND updated > FROM_UNIXTIME({2})) AND friend_fbid IN (SELECT fbid FROM events WHERE type='button_load');"
+####
+
+# edited to just take a client 
+def generate_report2(client_id, timestamp):
+	# get all campaign and content pertinent data for today and aggregate by formatted the queries from above
+	visitors_today = tool.query(baseline_query.format('button_load',client_id,timestamp))[0][0]
+	visitors_aggregate = tool.query(baseline_query.format('button_load',client_id,0))[0][0]
+	
+	auths_today = tool.query(baseline_query.format('authorized',client_id,timestamp))[0][0]
+	auths_aggregate = tool.query(baseline_query.format('authorized',client_id,0))[0][0]
+
+	shown_today = tool.query(baseline_query.format('shown',client_id,timestamp))[0][0]
+	shown_aggregate = tool.query(baseline_query.format('shown',client_id,0))[0][0]
+
+	shared_today = tool.query(baseline_query.format('shared',client_id,timestamp))[0][0]
+	shared_aggregate = tool.query(baseline_query.format('shared',client_id,0))[0][0]
+
+	visitors_shared_with_today = tool.query(visitors_shared_with_query.format(client_id,timestamp))[0][0]
+	visitors_shared_with_aggregate = tool.query(visitors_shared_with_query.format(client_id,0))[0][0]
+
+	clickback_today = tool.query(baseline_query.format('clickback',client_id,timestamp))[0][0]
+	clickback_aggregate = tool.query(baseline_query.format('clickback',client_id,0))[0][0]
+
+	#campaign_name = tool.query(campaign_stuff.format(campaign_id))[0][0]
+	#content_name = tool.query(content_stuff.format(content_id))[0][0]
+	# encrypt our campaign_id and content_id with the encodeDES algorithm
+	#des_message = encodeDES(str(campaign_id) + '/' + str(content_id))
+
+	m = strftime('%m')
+	d = str(int(strftime('%d'))-1)
+	if len(d) == 1:
+		d = '0'+d
+	y = strftime('%Y')
+
 	f = open('virginia_report_{0}_{1}_{2}.csv'.format(m,d,y),'wb')
 	writer = csv.writer(f,delimiter=',')
-	writer.writerow(['%s Targeted Sharing Report' % campaign_name])
-	writer.writerow(['Campaigns currently running'])
-	writer.writerow(['Campaign id, Campaign name'])
-	writer.writerow([campaign_id, campaign_name])
-	writer.writerow(['Content currently running'])
-	writer.writerow(['Content id, Content name'])
-	writer.writerow([content_id, content_name])
+	writer.writerow(['Targeted Sharing Report'])
+	#writer.writerow(['Campaigns currently running'])
+	#writer.writerow(['Campaign id', 'Campaign name'])
+	#writer.writerow([campaign_id, campaign_name])
+	#writer.writerow(['Content currently running'])
+	#writer.writerow(['Content id', 'Content name'])
+	#writer.writerow([content_id, content_name])
 	writer.writerow(['Stats for today ({0}/{1}/{2})'.format(m,d,y)])
-	writer.writerow(['Campaign/content/slug','visitors', 'authorizations', '# people shown friends', '# friends shared with', '# visitors shared with', '# clickbacks'])
-	writer.writerow([des_message, visitors_today, auths_today, shown_today, shared_today, visitors_shared_with_today, clickback_today])
+	writer.writerow(['visitors', 'authorizations', '# people shown friends', '# friends shared with', '# visitors shared with', '# clickbacks'])
+	writer.writerow([visitors_today, auths_today, shown_today, shared_today, visitors_shared_with_today, clickback_today])
 	writer.writerow(['Stats from beginning to now'])
-	writer.writerow(['Campaign/content/slug', 'visitors','authorizations', '# people shown friends', '# friends shared with', '# visitors shared with', '# clickbacks'])
-	writer.writerow([des_message, visitors_aggregate, auths_aggregate, shown_aggregate, shared_aggregate, visitors_shared_with_aggregate, clickback_aggregate])
+	writer.writerow(['visitors','authorizations', '# people shown friends', '# friends shared with', '# visitors shared with', '# clickbacks'])
+	writer.writerow([visitors_aggregate, auths_aggregate, shown_aggregate, shared_aggregate, visitors_shared_with_aggregate, clickback_aggregate])
 	
 	f.close()
-	print "Report for campaign_id %s and content_id %s generated" % (str(campaign_id), str(content_id))
+	#print "Report for campaign_id %s and content_id %s generated" % (str(campaign_id), str(content_id))
+	print "Report generated for VA"
 
 
 
@@ -102,16 +206,14 @@ visitors_shared_with_master = "SELECT COUNT(session_id) FROM events WHERE (type=
 
 def generate_master_report(timestamp):
 	m = strftime('%m')
-	d = str(int(strftime('%d'))-1)
-	if len(d) == 1:
-		d = '0' + d
+	d = strftime('%d')
 	y = strftime('%Y')
 	
 	visitors_today = tool.query(baseline_query_master.format('button_load',timestamp))[0][0]
-	visitors_total = tool.query(baseline_query_master.format('button_laod',0))[0][0]
+	visitors_total = tool.query(baseline_query_master.format('button_load',0))[0][0]
 	
-	auths_today = tool.query(baseline_query_master.format('authorization',timestamp))[0][0]
-	auths_total = tool.query(baseline_query_master.format('authorization',0))[0][0]
+	auths_today = tool.query(baseline_query_master.format('authorized',timestamp))[0][0]
+	auths_total = tool.query(baseline_query_master.format('authorized',0))[0][0]
 	
 	shown_today = tool.query(baseline_query_master.format('shown',timestamp))[0][0]
 	shown_total = tool.query(baseline_query_master.format('shown',0))[0][0]
@@ -183,7 +285,34 @@ def generate_master_report(timestamp):
 		writer.writerow([avg_clickback_daily])
 		writer.writerow(['clickback rate per share'])
 		writer.writerow([clickback_rate_choose_shared])
+
+	
 	print "Master report for %s generated" % m+'-'+d+'-'+y
+
+def _mail_master():
+	# email the report to everyone
+	m = strftime('%m')
+	d = str(int(strftime('%d'))-1)
+	if len(d) == 1:
+		d = '0'+d
+	strftime('%Y')
+	msg = MIMEMultipart()
+	msg['From'] = 'wesleymadrigal_99@hotmail.com'
+	msg['To'] = 'rayid@edgeflip.com'
+	msg['Cc'] = 'wes@edgeflip.com'
+	msg['Subject'] = 'Targeted Sharing Report: McAuliffe for Governor - {0}/{1}/{2}'.format(m,d,y)
+	filename = 'virginia_report_{0}_{1}_{2}.csv'.format(m,d,y)
+	f = file(filename)
+	attachment = MIMEText(f.read())
+	attachment.add_header('Content-Disposition','attachment',filename=filename)
+	msg.attach(attachment)
+	mailserver = smtplib.SMTP('smtp.live.com',587)
+	mailserver.ehlo()
+	mailserver.starttls()
+	mailserver.ehlo()
+	mailserver.login('wesleymadrigal_99@hotmail.com','madman2890')
+	mailserver.sendmail('wesleymadrigal_99@hotmail.com','rayid@edgeflip.com',msg.as_string())
+	print "Report mailed"
 
 ############################################################################################################################################
 
