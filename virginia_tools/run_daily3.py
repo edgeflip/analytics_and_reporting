@@ -7,6 +7,7 @@ from generate_report import generate_report_or_get_specific
 from generate_report import beginning_of_day
 from generate_report import mail_report
 import time, datetime
+from mail_s3 import mail_to_s3
 
 if __name__ == '__main__':
 	try:
@@ -22,7 +23,9 @@ if __name__ == '__main__':
 		timestamp = str(int(time.mktime(morning.timetuple())))
 	begin = beginning_of_day()
 	create_events_file(2,begin)
+
 	send_to_s3()
+	mail_to_s3()
 	# make a new timestamp before the processes start so as to not lose data
 	#new_timestamp = str(int(time.time()))
 	# generate our report

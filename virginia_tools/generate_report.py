@@ -62,8 +62,6 @@ def beginning_of_day():
 	# we always start from the beginning of yesterday for these reports
 	m = strftime('%m')
 	d = str(int(strftime('%d'))-1)
-	if len(d) == 1:
-		d = '0' + d
 	y = strftime('%Y')
 	beginning_datetime = datetime.datetime(int(y),int(m),int(d),00,00,00)
 	beginning_of_day = str(int(time.mktime(beginning_datetime.timetuple())))
@@ -74,28 +72,30 @@ def mail_report():
 	import smtplib
 	from email.MIMEMultipart import MIMEMultipart
 	from email.MIMEText import MIMEText
-	msg = MIMEMultipart()
-	msg['From'] = 'wesleymadrigal_99@hotmail.com'
-	msg['To'] = 'wesley7879@gmail.com'
-	msg['Subject'] = 'Report test'
-	m = strftime('%m')
-	d = str(int(strftime('%d'))-1)
-	if len(d) == 1:
-		d = '0' + d
-	y = strftime('%Y')
-
-	filename = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
-	f = file(filename).read()
-	attachment = MIMEText(f)
-	attachment.add_header('Content-Disposition','attachment',filename=filename)
-	msg.attach(attachment)
 
 	mailserver = smtplib.SMTP('smtp.live.com',587)
 	mailserver.ehlo()
 	mailserver.starttls()
 	mailserver.ehlo()
 	mailserver.login('wesleymadrigal_99@hotmail.com','madman2890')
-	mailserver.sendmail('wesleymadrigal_99@hotmail.com','wesley7879@gmail.com',msg.as_string())
+	people = ['rayid@edgeflip.com','wes@edgeflip.com','wesley7879@gmail.com']
+	for person in people:
+		msg = MIMEMultipart()
+		msg['From'] = 'wesleymadrigal_99@hotmail.com'
+		msg['To'] = person
+		m = strftime('%m')
+		d = str(int(strftime('%d'))-1)
+		if len(d) == 1:
+			d = '0' + d
+		y = strftime('%Y')
+		msg['Subject'] = 'Report for {0}/{1}/{2}'.format(m,d,y)
+
+		filename = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
+		f = file(filename).read()
+		attachment = MIMEText(f)
+		attachment.add_header('Content-Disposition','attachment',filename=filename)
+		msg.attach(attachment)
+		mailserver.sendmail('wesleymadrigal_99@hotmail.com',person,msg.as_string())
 	print "Report Mailed"
 	
 
