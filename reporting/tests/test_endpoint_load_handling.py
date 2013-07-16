@@ -5,18 +5,18 @@ import time
 
 """
     Using the requests module we will run a series of 
-    user-specified tests against our newly established
-    endpoint and check it's capacity.  For this test
-    we are using virginia's credentials.
+    user-specified tests against our endpoint that we 
+    have established to display the reports.
 """
 
 if __name__ == '__main__':
     amount = sys.argv[1]
+    url = sys.argv[2]
     if amount.isdigit():
         start_time = time.time()
         n = 0
         for i in range(int(amount)):
-            r = requests.get('http://50.16.226.172?client_id=DXzVnCY4EZ0%3D')
+            r = requests.get(url)
             if r.status_code == 200:
                 n += 1
             elif r.status_code != 200:
