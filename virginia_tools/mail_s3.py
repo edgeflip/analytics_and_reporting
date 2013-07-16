@@ -18,7 +18,7 @@ def mail_to_s3():
 	mailserver.ehlo()
 	mailserver.starttls()
 	mailserver.ehlo()
-	mailserver.login('wesleymadrigal_99@hotmail.com','madman2890')
+	mailserver.login('wes@edgeflip.com','gipetto3')
 	
 	for person in to_send:
 		msg['To'] = person

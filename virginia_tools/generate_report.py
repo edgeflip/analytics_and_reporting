@@ -77,11 +77,11 @@ def mail_report():
 	mailserver.ehlo()
 	mailserver.starttls()
 	mailserver.ehlo()
-	mailserver.login('wesleymadrigal_99@hotmail.com','madman2890')
-	people = ['rayid@edgeflip.com','wes@edgeflip.com','wesley7879@gmail.com']
+	mailserver.login('wes@edgeflip.com','gipetto3')
+	people = ['rayid@edgeflip.com','wesley7879@gmail.com']
 	for person in people:
 		msg = MIMEMultipart()
-		msg['From'] = 'wesleymadrigal_99@hotmail.com'
+		msg['From'] = 'wes@edgeflip.com'
 		msg['To'] = person
 		m = strftime('%m')
 		d = str(int(strftime('%d'))-1)
@@ -95,7 +95,7 @@ def mail_report():
 		attachment = MIMEText(f)
 		attachment.add_header('Content-Disposition','attachment',filename=filename)
 		msg.attach(attachment)
-		mailserver.sendmail('wesleymadrigal_99@hotmail.com',person,msg.as_string())
+		mailserver.sendmail('wes@edgeflip.com',person,msg.as_string())
 	print "Report Mailed"
 	
 
@@ -130,7 +130,14 @@ def generate_report_or_get_specific(client_id, from_time, to_time=None):
 		print "Report for {0}/{1}/{2} generated".format(m,d,y)
 		
 
-
+def generate_report_for_endpoint(client_id):
+	from generate_data_for_export_original import tool
+	start_of_day = time.mktime(datetime.datetime(int(strftime('%y')), int(strftime('%m')), int(strftime('%d')), 00, 00, 00).timetuple())
+	now = str(int(time.time()))
+	results_today_now = tool.query(main_query.format(client_id, start_of_day, now))
+	results_aggregate_now = tool.query(main_query.format(client_id,0,now))
+	return results_today_now, results_aggregate_now
+	
 
 
 
