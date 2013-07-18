@@ -1,14 +1,17 @@
 <html>
     <head>
-                        <script type='text/javascript' src='http://code.jquery.com/jquery-latest.min.js'></script>
-                        <script type='text/javascript' src='https://www.google.com/jsapi'></script>
-                        <script type='text/javascript'>
+        <!--                        <script type='text/javascript' src='http://code.jquery.com/jquery-latest.min.js'></script>
+        /!-->
+                        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+                        <script type="text/javascript">
                                 // Load the Visualization API and Table chart
-                        google.load('visualization', '1', {'packages': ['table','corechart']});
+                        google.load("visualization", "1.0", {"packages": ["table", "corechart"]});
+                        //google.setOnLoadCallback(drawStuff);
                         google.setOnLoadCallback(drawStuff);
-                        
+
                                 function drawStuff()    {
                                     // Daily report table stuff
+                                     
                                         var data = new google.visualization.DataTable();
                                         data.addColumn('number', 'Visits');
                                         data.addColumn('number', 'Clicks');
@@ -43,83 +46,65 @@
                                         var table2 = new google.visualization.Table(document.getElementById('table2_div'));
                                         table2.draw(data2,{showRowNumber: true});
 
+                            
 
 
                                         // Line chart Day data
 
                                         var arr = new Array();
-                                        var my_data = jQuery.parseJSON("{{hourly_dater}}");
-                                    
-                                        //var hourly_data = JSON.parse(hourly_data);
-                                        //var hourly_data_json = JSON.parse(hourly_data);
-                                        document.getElementById('test').innerHTML = typeof my_data;
+                                        var json = '{{hourly_data}}';
+                                        json = json.replace(/&#39;/ig, '"');
+                                        json = JSON.parse(json);
                                         arr[0] = ['Hour', 'Visits', 'Clicks', 'Auths', 'Distinct Facebook Auths', '# Users Shown Friends', '# Users Who Shared', '# Friends Shared With', '# Distinct Friends Shared', '# Clickbacks'];
-                                        /*
-                                        for(i = 1; i < hourly_data_json.data.length; i++)
+                                        
+                                        for(i = 0; i < json.data.length; i++)
                                         {
-                                            //arr[i] = hourly_data.data[i];
-                                            arr[i] = hourly_data.data[i];
+                                            arr[i+1] = json.data[i];
                                         }
-                                        */
-                                     
-                                        
-                                        arr[1] = [1, 2, 0, 0, 0, 0, 0, 0, 0, 1];
-                                        arr[2] = [2, 6, 3, 2, 0, 0, 2, 0, 0, 2];
-                                        arr[3] = [5, 10, 4, 2, 1, 2, 1, 0, 0, 1];
-                                        
-                                        var chart_data2 = google.visualization.arrayToDataTable(arr);
-                                        var options2 = {title: 'Hour by hour visits'};
-                                        var chart2 = new google.visualization.LineChart(document.getElementById('linechart2'));
-                                        chart2.draw(chart_data2, options2);
-
-
-                                        var my_array = [['Hour', 'Visits', 'Clicks', 'Auths', 'Distinct Facebook Users'],$
-                                                        [0, 5, 4, 2, 1],$               
-                                                        [1, 2, 0, 0, 1],$               
-                                                        [2, 6, 5, 7, 0],$               
-                                                        [5, 6, 3, 0, 2],$               
-                                                        [12, 4, 8, 0, 1],$              
-                                                        [20, 4, 0, 0, 2]];
-
-                                        /*
-                                        var chart_data1 = google.visualization.arrayToDataTable([
-                                                ['Hour', 'Visits', 'Clicks', 'Auths', 'Distinct Facebook Users'],
-                                                [0, 5, 4, 2, 1],
-                                                [1, 2, 0, 0, 1],
-                                                [2, 6, 5, 7, 0],
-                                                [5, 6, 3, 0, 2],
-                                                [12, 4, 8, 0, 1],
-                                                [20, 4, 0, 0, 2]
-                                                ]);
-                                        */
-                                        var chart_data1 = google.visualization.arrayToDataTAble(my_array);
-                                        var options = {title: 'Hour by hour visits'};
+                                        var chart_data1 = google.visualization.arrayToDataTable(arr);
+                                        var options1 = {title: 'Hour By Hour Visits'};
                                         var chart1 = new google.visualization.LineChart(document.getElementById('linechart1'));
-                                        chart1.draw(chart_data1, options);
-                                        /*
-                                        var arr = new Array();
-                                        var hourly_data = "{{hourly_data}}";
-                                        var keys = hourly_data.data[0].keys;
-                                        alert(keys);
-                                        */
+                                        chart1.draw(chart_data1, options1);
+
+                                        //alert("Second Callback");
+                                        // Month data
+                                        
+                                        var arr2 = new Array();
+                                        arr2[0] = ['Day', 'Visits', 'Clicks', 'Auths', 'Distinct Facebook Auths', '#Users Shown Friends', '# Users Who Shared', '# Friends Shared With', '# Distinct Friends Shared', '# Clickbacks'];
+                                        var json2 = '{{daily_data}}';
+                                        json2 = json2.replace(/&#39;/ig, '"');
+                                        json2 = JSON.parse(json2);
+                                       
+                                        for(i = 0; i < json2.data.length; i++)
+                                        {
+                                            arr2[i+1] = json2.data[i];
+                                        }
+
+                                        var chart_data2 = google.visualization.arrayToDataTable(arr2);
+                                        var options2 = {title: 'Data By Day For One Month'};
+                                        var chart2 = new google.visualization.LineChart(document.getElementById('line2'));
+                                        chart2.draw(chart_data2, options2);
+                                        
+                                        
                                 }
 
-                                
+
 
                         </script>
-                </head>
+    </head>
                 <body>
-            <p>Report for <b>{{today}}</b> to right now</p>
+                    <p>Report for <b>{{today}}</b> to right now</p>
                         <div id='table_div'></div>
-            <br><br>
-            <p>Report for all time</p>
-            <div id='table2_div'></div>
+                    <br><br>
+                    <p>Report for all time</p>
+                        <div id='table2_div'></div>
+                        <hr>
+                        <br>
 
-
-            <div id='linechart1'></div>
-
-            <div id='linechart2'></div>
-            <p id='test'></p>
+                        <div id='linechart1'></div>
+                    <br><br>
+                        <div id='line2'></div>
+                       
                 </body>
 </html>
 

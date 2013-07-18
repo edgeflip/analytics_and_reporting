@@ -330,11 +330,19 @@ def crawl_realtime_updates(tool):
 				pass
 	# delete all the obsolete keys that we've crawled that were created earlier than
 	# this algorithm was invoked
-	realtime_bucket.delete_keys([key for key in realtime_bucket if int(key) < _time]) 
+	#realtime_bucket.delete_keys([key for key in realtime_bucket if int(key) < _time]) 
+    delete_obsolete_keys(realtime_bucket, _time)
 	print "Realtime updates added to s3"	
 	
 
-
+def delete_obsolete_keys(bucket,timestamp):
+    for key in bucket:
+        if not key.key.isdigit():
+            bucket.delete_key(key)
+    try:
+        bucket.delete_keys([i for i in bucket if int(i.key) < timestamp])
+    except ValueError:
+        delete_obsolete_keys(bucket,timestamp)
 # we have an s3 bucket specifically for tokens so that when we've received an update from facebook
 # about a user we can a) call this function to make sure we've got the token added and then
 # b) call another function to use these tokens 
