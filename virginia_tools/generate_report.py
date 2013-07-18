@@ -70,74 +70,74 @@ def beginning_of_day():
 
 
 def mail_report():
-	import smtplib
-	from email.MIMEMultipart import MIMEMultipart
-	from email.MIMEText import MIMEText
+    import smtplib
+    from email.MIMEMultipart import MIMEMultipart
+    from email.MIMEText import MIMEText
+    _pass = open('.credentials.txt','r').read()
+    mailserver = smtplib.SMTP('smtp.live.com',587)
+    mailserver.ehlo()
+    mailserver.starttls()
+    mailserver.ehlo()
+    mailserver.login('wes@edgeflip.com',_pass)
+    people = ['rayid@edgeflip.com','wesley7879@gmail.com']
+    for person in people:
+        msg = MIMEMultipart()
+        msg['From'] = 'wes@edgeflip.com'
+    msg['To'] = person
+    m = strftime('%m')
+    d = str(int(strftime('%d'))-1)
+    if len(d) == 1:
+        d = '0' + d
+        y = strftime('%Y')
+        msg['Subject'] = 'Report for {0}/{1}/{2}'.format(m,d,y)
 
-	mailserver = smtplib.SMTP('smtp.live.com',587)
-	mailserver.ehlo()
-	mailserver.starttls()
-	mailserver.ehlo()
-	mailserver.login('wes@edgeflip.com','gipetto3')
-	people = ['rayid@edgeflip.com','wesley7879@gmail.com']
-	for person in people:
-		msg = MIMEMultipart()
-		msg['From'] = 'wes@edgeflip.com'
-		msg['To'] = person
-		m = strftime('%m')
-		d = str(int(strftime('%d'))-1)
-		if len(d) == 1:
-			d = '0' + d
-		y = strftime('%Y')
-		msg['Subject'] = 'Report for {0}/{1}/{2}'.format(m,d,y)
-
-		filename = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
-		f = file(filename).read()
-		attachment = MIMEText(f)
-		attachment.add_header('Content-Disposition','attachment',filename=filename)
-		msg.attach(attachment)
-		mailserver.sendmail('wes@edgeflip.com',person,msg.as_string())
-	print "Report Mailed"
+        filename = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
+        f = file(filename).read()
+        attachment = MIMEText(f)
+        attachment.add_header('Content-Disposition','attachment',filename=filename)
+        msg.attach(attachment)
+        mailserver.sendmail('wes@edgeflip.com',person,msg.as_string())
+    print "Report Mailed"
 	
 
 
 
 def generate_report_or_get_specific(client_id, from_time, to_time=None):
-	conn = mysql.connect('edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com', 'root', 'YUUB2ctgkn8zfe', 'edgeflip')
-	tool = conn.cursor()
-	if to_time:
-		results_today = tool.execute(main_query.format(client_id, from_time, to_time))
-		#results_aggregate = tool.query(main_query.format(client_id, _min[0][0]
-		return results_today
-	else:
-		now = str(int(time.time()))	
-		m = strftime('%m')
-		d = str(int(strftime('%d'))-1)
-		if len(d) == 1:
-			d = '0'+d
-		y = strftime('%Y')
-		results_today = tool.execute(main_query.format(client_id, from_time, now))
-		with open('report_{0}_{1}_{2}.csv'.format(m,d,y), 'wt') as csvfile:
-			writer = csv.writer(csvfile, delimiter=',')
-			writer.writerow(['Stats for today {0}/{1}/{2}'.format(m,d,y)])
-			writer.writerow([i[0] for i in tool.description])
-			writer.writerows(tool)
-			campaign_start = get_start_of_campaign(client_id)
-			results_aggregate = tool.execute(main_query.format(client_id, campaign_start, now))
-			writer.writerow(['Stats for all time'])
-			writer.writerow([i[0] for i in tool.description])
-			writer.writerows(tool)
-		del writer
-		print "Report for {0}/{1}/{2} generated".format(m,d,y)
-		
+    conn = mysql.connect('edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com', 'root', 'YUUB2ctgkn8zfe', 'edgeflip')
+    tool = conn.cursor()
+    if to_time:
+        results_today = tool.execute(main_query.format(client_id, from_time, to_time))
+    #results_aggregate = tool.query(main_query.format(client_id, _min[0][0]
+    return results_today
+    else:
+        now = str(int(time.time()))	
+        m = strftime('%m')
+        d = str(int(strftime('%d'))-1)
+        if len(d) == 1:
+            d = '0'+d
+        y = strftime('%Y')
+        results_today = tool.execute(main_query.format(client_id, from_time, now))
+        with open('report_{0}_{1}_{2}.csv'.format(m,d,y), 'wt') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',')
+            writer.writerow(['Stats for today {0}/{1}/{2}'.format(m,d,y)])
+            writer.writerow([i[0] for i in tool.description])
+            writer.writerows(tool)
+            campaign_start = get_start_of_campaign(client_id)
+            results_aggregate = tool.execute(main_query.format(client_id, campaign_start, now))
+            writer.writerow(['Stats for all time'])
+            writer.writerow([i[0] for i in tool.description])
+            writer.writerows(tool)
+        del writer
+        print "Report for {0}/{1}/{2} generated".format(m,d,y)
+
 
 def generate_report_for_endpoint(client_id):
-	from generate_data_for_export_original import tool
-	start_of_day = handle_time_difference()
-	now = str(int(time.time()))
-	results_today_now = tool.query(main_query.format(client_id, start_of_day, now))
-	results_aggregate_now = tool.query(main_query.format(client_id,0,now))
-	return results_today_now, results_aggregate_now
+    from generate_data_for_export_original import tool
+    start_of_day = handle_time_difference()
+    now = str(int(time.time()))
+    results_today_now = tool.query(main_query.format(client_id, start_of_day, now))
+    results_aggregate_now = tool.query(main_query.format(client_id,0,now))
+    return results_today_now, results_aggregate_now
 	
 
 

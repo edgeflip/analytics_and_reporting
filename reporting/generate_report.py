@@ -49,6 +49,10 @@ JOIN client_content c USING(content_id)
 WHERE c.client_id='{0}' and updated > FROM_UNIXTIME({1}) and updated < FROM_UNIXTIME({2});"""
 
 
+hour_by_hour = """SELECT hour(updated), SUM(CASE WHEN type='button_load' THEN 1 ELSE 0 END) as Visits, SUM(CASE WHEN type='button_click' THEN 1 ELSE 0 END) as Clicks, SUM(CASE WHEN type='authorized' THEN 1 ELSE 0 END) as Authorizations, COUNT(DISTINCT CASE WHEN type='authorized' THEN fbid ELSE NULL END) as "Distinct Facebook Users Authorized", COUNT(DISTINCT CASE WHEN type='shown' THEN fbid ELSE NULL END) as "# Users Shown Friends", COUNT(DISTINCT CASE WHEN type='shared' THEN fbid ELSE NULL END) as "# Users Who Shared", SUM(CASE WHEN type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with", COUNT(DISTINCT CASE WHEN type='shared' THEN friend_fbid ELSE NULL END) as "# Distinct Friends Shared", SUM(CASE WHEN type='clickback' THEN 1 ELSE 0 END) as "# Clickbacks" FROM events e JOIN client_content c USING(content_id) WHERE c.client_id='{0}' and day(updated)='{1}' and month(updated)='{2}' and year(updated)='{3}' group by hour(updated),day(updated),month(updated),year(updated) order by year(updated),month(updated),day(updated),hour(updated)"""
+
+
+
 
 beginning_day = "SELECT MIN(updated) FROM events e JOIN client_content c USING(content_id) WHERE c.client_id='{0}';"
 
@@ -139,6 +143,35 @@ def generate_report_for_endpoint(client_id):
 	results_aggregate_now = tool.query(main_query.format(client_id,0,now))
 	return results_today_now, results_aggregate_now
 	
+
+def get_hour_by_hour(client_id):
+    from generate_data_for_export_original import tool
+    d = strftime('%d')
+    m = strftime('%m')
+    y = strftime('%Y')
+    formatted = hour_by_hour.format(client_id, d, m, y)
+    results = tool.query(formatted)
+    return results
+
+def make_hour_by_hour_object(client_id):
+    results = get_hour_by_hour(client_id)
+    obj = {'data': []}
+    for each in results:
+        hour = str(int(each[0]))
+        visits = str(int(each[1]))
+        clicks = str(int(each[2]))
+        auths = str(int(each[3]))
+        distinct_auths = str(int(each[4]))
+        num_shown = str(int(each[5]))
+        num_shared = str(int(each[6]))
+        num_shared_with = str(int(each[7]))
+        num_distinct_shared_with = str(int(each[8]))
+        clickbacks = str(int(each[9]))
+        obj['data'].append([hour, visits,clicks,auths,distinct_auths,num_shown,num_shared,num_shared_with,num_distinct_shared_with,clickbacks])
+    return obj
+
+ 
+   
 
 
 
