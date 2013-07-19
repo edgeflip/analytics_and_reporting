@@ -62,7 +62,7 @@
                                             arr[i+1] = json.data[i];
                                         }
                                         var chart_data1 = google.visualization.arrayToDataTable(arr);
-                                        var options1 = {title: 'Hour By Hour Visits'};
+                                        var options1 = {title: 'Hourly Report for Today'};
                                         var chart1 = new google.visualization.LineChart(document.getElementById('linechart1'));
                                         chart1.draw(chart_data1, options1);
 
@@ -81,7 +81,7 @@
                                         }
 
                                         var chart_data2 = google.visualization.arrayToDataTable(arr2);
-                                        var options2 = {title: 'Data By Day For One Month'};
+                                        var options2 = {title: 'Daily Report(for the past 30 days)'};
                                         var chart2 = new google.visualization.LineChart(document.getElementById('line2'));
                                         chart2.draw(chart_data2, options2);
                                         
@@ -93,10 +93,11 @@
                         </script>
     </head>
                 <body>
-                    <p>Report for <b>{{today}}</b> to right now</p>
+                <h2>Targeted Sharing Report</h2>
+                    <p>Daily Report for <b>{{today}}</b></p>
                         <div id='table_div'></div>
                     <br><br>
-                    <p>Report for all time</p>
+                    <p>Report from beginning of the campaign</p>
                         <div id='table2_div'></div>
                         <hr>
                         <br>
