@@ -15,13 +15,13 @@ app = flask.Flask(__name__)
 
 """
 
-	Flask application with endpoints to subscribe our app to the Realtime Updates API
-	so we will be notified by facebook when our users update their news feed.  This data
-	will be stored in an s3 bucket called "fbrealtime" and that bucket will be persistently
-	checked for updates by our crawler.  The data the crawler finds within the bucket
-	will be extracted, utilized, and then deleted.  The data we get from using the
-	"fbrealtime" data will be stored in another s3 bucket called "fbcrawl1" containing
-	all our users' news feeds.
+    Flask application with endpoints to subscribe our app to the Realtime Updates API
+    so we will be notified by facebook when our users update their news feed.  This data
+    will be stored in an s3 bucket called "fbrealtime" and that bucket will be persistently
+    checked for updates by our crawler.  The data the crawler finds within the bucket
+    will be extracted, utilized, and then deleted.  The data we get from using the
+    "fbrealtime" data will be stored in another s3 bucket called "fbcrawl1" containing
+    all our users' news feeds.
 
 """
 
@@ -35,7 +35,7 @@ def subscribe_app():
     # object, fields, callback_url, and verify_token are sent as urllib.urlencode([('param','val')])
     CALLBACK_URL = 'http://50.16.226.172:5000'
     payload_url = "https://graph.facebook.com/{0}/subscriptions".format(FB_CLIENT_ID)
-    payload = {"access_token": APP_ACCESS_TOKEN, "object": "user", "fields": "feed", "verify_token": VERIFY_TOKEN, "callback_url": CALLBACK_URL}	
+    payload = {"access_token": APP_ACCESS_TOKEN, "object": "user", "fields": "feed", "verify_token": VERIFY_TOKEN, "callback_url": CALLBACK_URL}    
     r = requests.post(payload_url, data=payload)
     return r.text
 
@@ -80,7 +80,7 @@ def subscription_app():
             f.seek(0, os.SEEK_END)
             f.write(cur_data_str+'\n')
             f.close()
-            return	
+            return    
         #print "We received some update data!"
 
 
