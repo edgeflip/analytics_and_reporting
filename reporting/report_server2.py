@@ -7,9 +7,9 @@ from time import strftime
 import socket
 import json
 
-app = flask.Flask(__name__)
+application = flask.Flask(__name__)
 
-@app.route('/',methods=['GET','POST'])
+@application.route('/',methods=['GET','POST'])
 def main_handler():
     if request.method == 'GET':
         try:
@@ -34,5 +34,10 @@ def main_handler():
 
 
 if __name__ == '__main__':
-    app.debug=True
-    app.run()
+    application.debug = True
+    application.run()
+#    sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+#    sock.bind(('0.0.0.0',80))
+#    port = sock.getsockname()[1]
+#    sock.close()
+#    application.run(host='0.0.0.0',port=port)

@@ -50,7 +50,6 @@
 
 
                                         // Line chart Day data
-
                                         var arr = new Array();
                                         var json = '{{hourly_data}}';
                                         json = json.replace(/&#39;/ig, '"');
@@ -68,22 +67,33 @@
 
                                         //alert("Second Callback");
                                         // Month data
-                                        
+                                        var line_chart = new google.visualization.DataTable();
+                                        line_chart.addColumn('date', 'Date');
+                                        line_chart.addColumn('number', 'Visits');
+                                        line_chart.addColumn('number', 'Clicks');
+                                        line_chart.addColumn('number', 'Auths');
+                                        line_chart.addColumn('number', 'Distinct Facebook Auths');
+                                        line_chart.addColumn('number', '# Users Shown Friends');
+                                        line_chart.addColumn('number', '# Users Who Shared');
+                                        line_chart.addColumn('number', '# Friends Shared With');
+                                        line_chart.addColumn('number', '# Distinct Friends Shared');
+                                        line_chart.addColumn('number', '# Clickbacks');
                                         var arr2 = new Array();
-                                        arr2[0] = ['Day', 'Visits', 'Clicks', 'Auths', 'Distinct Facebook Auths', '#Users Shown Friends', '# Users Who Shared', '# Friends Shared With', '# Distinct Friends Shared', '# Clickbacks'];
+                               
                                         var json2 = '{{daily_data}}';
                                         json2 = json2.replace(/&#39;/ig, '"');
                                         json2 = JSON.parse(json2);
                                        
                                         for(i = 0; i < json2.data.length; i++)
                                         {
-                                            arr2[i+1] = json2.data[i];
+                                            var _date = [new Date(json2.data[i][0], json2.data[i][1], json2.data[i][2])];
+                                            arr2[i] = _date.concat(json2.data[i].slice(3,json2.data[i].length));
                                         }
-
-                                        var chart_data2 = google.visualization.arrayToDataTable(arr2);
+                                        line_chart.addRows(arr2);
+                                        alert(arr2);
                                         var options2 = {title: 'Daily Report(for the past 30 days)'};
                                         var chart2 = new google.visualization.LineChart(document.getElementById('line2'));
-                                        chart2.draw(chart_data2, options2);
+                                        chart2.draw(line_chart, options2);
                                         
                                         
                                 }
