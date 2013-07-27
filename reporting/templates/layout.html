@@ -26,7 +26,7 @@
                                                 [{{visits}},{{clicks}},{{auths}},{{distinct_auths}},{{users_shown}},{{users_shared}},{{friends_shared}},{{distinct_friends_shared}},{{clickbacks}}]
                                         ]);
                                         var table = new google.visualization.Table(document.getElementById('table_div'));
-                                        table.draw(data, {showRowNumber: true});
+                                        table.draw(data, {showRowNumber: true, width:'100%', titlePosition: 'out'});
 
                                         // Aggregate report table stuff
                                         var data2 = new google.visualization.DataTable();
@@ -44,7 +44,7 @@
                                                ]);
 
                                         var table2 = new google.visualization.Table(document.getElementById('table2_div'));
-                                        table2.draw(data2,{showRowNumber: true});
+                                        table2.draw(data2,{showRowNumber: true, width: '100%', titlePosition: 'out'});
 
                             
 
@@ -61,7 +61,7 @@
                                             arr[i+1] = json.data[i];
                                         }
                                         var chart_data1 = google.visualization.arrayToDataTable(arr);
-                                        var options1 = {title: 'Hourly Report for Today'};
+                                        var options1 = {title: 'Hourly Report for Today', fontSize: '10', enableInteractivity: 'true'};
                                         var chart1 = new google.visualization.LineChart(document.getElementById('linechart1'));
                                         chart1.draw(chart_data1, options1);
 
@@ -86,12 +86,12 @@
                                        
                                         for(i = 0; i < json2.data.length; i++)
                                         {
-                                            var _date = [new Date(json2.data[i][0], json2.data[i][1], json2.data[i][2])];
+                                            var _date = [new Date(json2.data[i][0], json2.data[i][1]-1, json2.data[i][2])];
                                             arr2[i] = _date.concat(json2.data[i].slice(3,json2.data[i].length));
                                         }
                                         line_chart.addRows(arr2);
-                                        alert(arr2);
-                                        var options2 = {title: 'Daily Report(for the past 30 days)'};
+                                
+                                        var options2 = {title: 'Daily Report(for the past 30 days)', fontSize: '10'};
                                         var chart2 = new google.visualization.LineChart(document.getElementById('line2'));
                                         chart2.draw(line_chart, options2);
                                         

@@ -15,8 +15,22 @@ def main_handler():
         try:
             client_id_hash = request.args.get('client_id')
             if client_id_hash == 'DXzVnCY4EZ0=':
-                from hourly_data_va import hourly_data
-                from daily_data_va import daily_data
+	        hourly_data = {'data': []}
+	        hour_reader = csv.reader(open('hourly_data_va.csv','r'))
+                try:
+		    while True:
+			hourly_data['data'].append([int(i) for i in hour_reader.next()])
+		except StopIteration:
+			pass
+		# read in daily_data
+		daily_data = {'data': []}
+		day_reader = csv.reader(open('daily_data_va.csv','r'))
+		try:
+		    while True:
+			daily_data['data'].append([int(i) for i in day_reader.next()])
+		except StopIteration:
+		    pass
+
                 csvfile = open('current_data_va.csv','r')
                 reader = csv.reader(csvfile,delimiter=',')
                 first_row = reader.next()
@@ -34,10 +48,8 @@ def main_handler():
 
 
 if __name__ == '__main__':
-    application.debug = True
-    application.run()
-#    sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-#    sock.bind(('0.0.0.0',80))
-#    port = sock.getsockname()[1]
-#    sock.close()
-#    application.run(host='0.0.0.0',port=port)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('0.0.0.0',80))
+    port = sock.getsockname()[1]
+    sock.close()
+    application.run(host='0.0.0.0',port=port)
