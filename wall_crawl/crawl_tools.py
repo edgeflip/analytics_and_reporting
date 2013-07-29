@@ -195,7 +195,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
     if not crawl_timestamp:
         most_data = tool.query('select fbid,ownerid,token from tokens')
     else:
-    most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME(%s)' % crawl_timestamp)
+        most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME(%s)' % crawl_timestamp)
     crawl_log = open('crawl_log.csv','wb')
     crawl_log_writer = csv.writer(crawl_log,delimiter=',')
     new_count = 0
@@ -205,16 +205,16 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
         token = item[2]
         main_key = str(fbid)+','+str(ownerid)
         if not main_bucket.lookup(main_key):
-        # go ahead and write the fbid to the csv log file
-        crawl_log_writer.writerow([fbid])
+            # go ahead and write the fbid to the csv log file
+            crawl_log_writer.writerow([fbid])
             # crawl_feed returns a json blob of the users feed
-        # on this pass of the code we are getting the entire feed
-        try: 
+            # on this pass of the code we are getting the entire feed
+            try: 
                 response = crawl_feed(fbid,token)
-        except urllib2.HTTPError:
-        response = ''
+            except urllib2.HTTPError:
+                response = ''
             k = main_bucket.new_key()
-        # set the bucket's key to be fbid,ownerid
+            # set the bucket's key to be fbid,ownerid
             k.key = main_key
             k.set_contents_from_string(response)
             # put the fbid,ownerid, and token in token_bucket
@@ -222,27 +222,27 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
             if not token_bucket.lookup(fbid):
                 token_key = token_bucket.new_key()
                 token_key.key = fbid
-                token_key_struct = {fbid: [{ownerid: token}]}
-            jsoned = json.dumps(token_key_struct)
+                token_key_struct = {fbid: [(ownerid,token)]}
+                jsoned = json.dumps(token_key_struct)
                 token_key.set_contents_from_string(jsoned)
-        else:
-        token_key = token_bucket.get_key(fbid)
-        # get the current tokens blob we have and convert it to a json object
-        cur_tokens_blob = json.loads(token_key.get_contents_as_string())
-        # check if this owner already has his/her token registered
-        if ownerid in [i.keys()[0] for i in cur_tokens_blob[fbid]]:
-            pass
-        else:
-            cur_tokens_blob[fbid].append({ownerid:token})
-        # convert the current tokens blob back into a json string and put it back into the s3 fbtokens bucket
-        cur_tokens_blob = json.dumps(cur_tokens_blob)
-        token_key.set_contents_from_string(cur_tokens_blob)
+            else:
+                token_key = token_bucket.get_key(fbid)
+                # get the current tokens blob we have and convert it to a json object
+                cur_tokens_blob = json.loads(token_key.get_contents_as_string())
+                # check if this owner already has his/her token registered
+                if ownerid in [x for x,y in cur_tokens_blob[fbid]]:
+                    pass
+                else:
+                    cur_tokens_blob[fbid].append((ownerid:token))
+                # convert the current tokens blob back into a json string and put it back into the s3 fbtokens bucket
+                cur_tokens_blob = json.dumps(cur_tokens_blob)
+                token_key.set_contents_from_string(cur_tokens_blob)
             new_count += 1
         # otherwise we've already crawled our user and there should be information about
         # him/her in our main_bucket and our token_bucket
         else:
-        # get everything from the subscribed updates with the next method's execution
-        pass
+            # get everything from the subscribed updates with the next method's execution
+            pass
     return new_count
 
 
@@ -275,6 +275,8 @@ def crawl_realtime_updates(tool):
     # users_crawled will also have pre-included fbids from the always_crawl_from_database algorithm
     # which generates a crawled log of fbids from it's execution in order to avoid duplicate crawling
     users_crawled = []
+###################################################################################
+    # this COULD be saving elsewhere and not being read in properly
     reader = csv.reader(open('crawl_log.csv','r'),delimiter=',')
     # read all the fbids from our file and add them to users_crawled
     try:
@@ -300,7 +302,7 @@ def crawl_realtime_updates(tool):
                     token_stuff = []
                     for each in fbid_tokens:
                         # add {ownerid:token} to the struct
-                        token_struct[fbid].append({each[0]:each[1]})
+                        token_struct[fbid].append((each[0]:each[1]))
                         token_stuff.append((each[0],each[1]))
                     k = token_bucket.new_key()
                     k.key = fbid
@@ -366,7 +368,7 @@ def add_tokens_to_bucket_then_return(fbid,friend_fbid,token,bucket):
 def get_tokens_for_user(fbid, bucket):
     fbid_tokens_data = bucket.get_key(fbid)
     data = json.loads(fbid_tokens_data.get_contents_as_string())
-    token_stuff = data[fbid].items()
+    token_stuff = data[fbid]
     return token_stuff
 
 
