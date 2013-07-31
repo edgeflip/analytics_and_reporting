@@ -1,0 +1,39 @@
+<html>
+<head>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>$
+    <script type="text/javascript">
+        google.load("visualization", "1.0", {"packages": ["table", "corechart"]});
+        google.setOnLoadCallback(drawStuff);
+
+        function drawStuff
+        {
+            var arr = JSON.parse({{data}});
+            alert(typeof arr);
+            /*
+            for (campaign in {{campaigns}})
+            {
+                var data1 = new google.visualization.DataTable();
+                data1.addColumn('number', 'Visits');
+                data1.addColumn('number', 'Clicks');
+                data1.addColumn('number', 'Authorizations');
+                data1.addColumn('number', 'Distinct Facebook Authorizations');
+                data1.addColumn('number', '# Users Shown Friends');
+                data1.addColumn('number', '# Users Who Shared');
+                data1.addColumn('number', '# Friends Shared With');
+                data1.addColumn('number', '# Distinct Friends Shared');
+                data1.addColumn('number', '# Clickbacks');
+                data1.addRows(2darray);
+                var first_table = new google.visualization.Table(document.getElementById("table1_div"));
+                first_table.draw(data1, {showRowNumber: true, width: '100%', titlePosition: 'out'});
+            }
+            */
+        }
+     </script>
+</head>
+
+    <body>
+        <div id="table1_div">{{data}}</div>
+
+    </body>
+
+</html>

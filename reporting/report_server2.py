@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# LOCAL VERSION
+# NEED TO UNCOMMENT THE SOCKET BINDS IN if __name__ == '__main__' FOR LIVE USE
 import csv
 import flask
 from flask import request
@@ -48,8 +50,9 @@ def main_handler():
 
 
 if __name__ == '__main__':
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('0.0.0.0',80))
-    port = sock.getsockname()[1]
-    sock.close()
-    application.run(host='0.0.0.0',port=port)
+    application.run()
+    #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #sock.bind(('0.0.0.0',80))
+    #port = sock.getsockname()[1]
+    #sock.close()
+    #application.run(host='0.0.0.0',port=port)
