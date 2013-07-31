@@ -4,9 +4,8 @@ import requests
 import time
 
 """
-    Using the requests module we will run a series of 
-    user-specified tests against our endpoint that we 
-    have established to display the reports.
+    Takes a command line an integer n as integer argument and u as uri string argument
+    for the program to execute n GET requests to u to test load handling
 """
 
 if __name__ == '__main__':
