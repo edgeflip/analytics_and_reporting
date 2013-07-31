@@ -8,10 +8,20 @@ from flask import render_template
 from time import strftime
 import socket
 import json
+from flask.ext.basicauth import BasicAuth
+
+#application.config['BASIC_AUTH_PASSWORD'] = 'password'
+
 
 application = flask.Flask(__name__)
 
+application.config['BASIC_AUTH_USERNAME'] = 'virginia'
+application.config['BASIC_AUTH_PASSWORD'] = 'sharing'
+
+basic_auth = BasicAuth(application)
+
 @application.route('/',methods=['GET','POST'])
+@basic_auth.required
 def main_handler():
     if request.method == 'GET':
         try:

@@ -9,26 +9,49 @@
         {
             
            
-            var json = '{{data}}';
+            var all_json = '{{data}}';
             //alert(json);
-            json = json.replace(/&#34;/ig, '"');
-            json = JSON.parse(json);
+            all_json = json.replace(/&#34;/ig, '"');
+            all_json = JSON.parse(json);
             // create an array with our keys in it
-            var keys = []
-            for (name in json)
+            var all_keys = []
+            for (name in all_json)
             {
-                keys.push(name);
+                all_keys.push(name);
             }
 
+            var all_campaigns = [];
+            for(i=0; i<all_keys.length; i++)
+            {
+                all_campaigns.push(all_json[all_keys[i]][0]);
+            }
+            
 
+            // we need to sort the keys in descending order from 
+            // most recently started campaign which we know the higher
+            // the number the newer the campaign
+            for(i=0; i<all_keys.length; i++)
+            {
+                for(j=0; j<all_keys.length-1;j++)
+                {
+                    if(parseInt(all_json[all_keys[j]][0],10) < parseInt(all_json[all_keys[j+1]][0],10))
+                    {
+                        var tmp = all_keys[j];
+                        all_keys[j] = all_keys[j+1];
+                        all_keys[j+1] = tmp;
+                    }
+                }
+            }
+
+            
             // create the first second that lists out our campaigns for this client
             var client = document.createElement('p');
-            client.innerHTML = 'Campaigns Currently Running for Client {{client_id}}';
+            client.innerHTML = 'Campaigns Currently Running for Client <b>{{client_name}}</b>';
             var items = document.createElement('ul');
-            for (i=0; i < keys.length; i++)
+            for (i=0; i < all_keys.length; i++)
             {
                 var cur = document.createElement('li');
-                cur.innerHTML = keys[i];
+                cur.innerHTML = all_keys[i];
                 items.appendChild(cur);
             }
             document.body.appendChild(client);
@@ -85,7 +108,7 @@
      </script>
 </head>
 
-    <body>
-    </body>
+<body>
+ </body>
 
 </html>

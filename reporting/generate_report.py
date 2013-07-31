@@ -63,11 +63,11 @@ main_query_new ="""SELECT
      FROM                                                                       
          (SELECT e1.*,NULL as cb_session_id FROM events e1 WHERE type <> 'clickback'
          UNION                                                                  
-         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id     as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared')
+         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id     as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared' AND e2.updated > FROM_UNIXTIME({0}) AND e3.updated > FROM_UNIXTIME({0}))
      t                                                   
-         LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load')
+         LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load' and updated > FROM_UNIXTIME({0}))
      e4                                                                         
-         USING (session_id)                                                                                           
+         USING (session_id)
          GROUP BY e4.campaign_id;"""
 
 def new_query(_time):
