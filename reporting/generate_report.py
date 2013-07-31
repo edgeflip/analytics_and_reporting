@@ -70,8 +70,8 @@ main_query_new ="""SELECT
          USING (session_id)                                                                                           
          GROUP BY e4.campaign_id;"""
 
-def new_query():
-    res = tool.query(main_query_new)
+def new_query(_time):
+    res = tool.query(main_query_new.format(_time))
     return res
 
 def get_campaign_stuff_for_client(client_id):

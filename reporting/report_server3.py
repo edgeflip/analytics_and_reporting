@@ -16,11 +16,14 @@ def handle_request():
     client = client.replace('=','%3D')
     all_clients = tool.query("select distinct client_id from campaigns")
     mappings = {encodeDES(int(i[0])): int(i[0]) for i in all_clients}
-    client_id = mappings[client]
-    f = open('client_{0}_data.txt'.format(client_id),'r')
-    data = f.read()
-    f.close()
-    return render_template("layout2.html", data=data) 
+    try:
+        client_id = mappings[client]
+        f = open('client_{0}_data.txt'.format(client_id),'r')
+        data = f.read()
+        f.close()
+        return render_template("layout2.html", data=data, client_id=client_id) 
+    except KeyError:
+        return render_template("layout2.html", error=error)
 
 
 

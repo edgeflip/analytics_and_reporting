@@ -5,35 +5,87 @@
         google.load("visualization", "1.0", {"packages": ["table", "corechart"]});
         google.setOnLoadCallback(drawStuff);
 
-        function drawStuff
+        function drawStuff()
         {
-            var arr = JSON.parse({{data}});
-            alert(typeof arr);
-            /*
-            for (campaign in {{campaigns}})
+            
+           
+            var json = '{{data}}';
+            //alert(json);
+            json = json.replace(/&#34;/ig, '"');
+            json = JSON.parse(json);
+            // create an array with our keys in it
+            var keys = []
+            for (name in json)
             {
-                var data1 = new google.visualization.DataTable();
-                data1.addColumn('number', 'Visits');
-                data1.addColumn('number', 'Clicks');
-                data1.addColumn('number', 'Authorizations');
-                data1.addColumn('number', 'Distinct Facebook Authorizations');
-                data1.addColumn('number', '# Users Shown Friends');
-                data1.addColumn('number', '# Users Who Shared');
-                data1.addColumn('number', '# Friends Shared With');
-                data1.addColumn('number', '# Distinct Friends Shared');
-                data1.addColumn('number', '# Clickbacks');
-                data1.addRows(2darray);
-                var first_table = new google.visualization.Table(document.getElementById("table1_div"));
-                first_table.draw(data1, {showRowNumber: true, width: '100%', titlePosition: 'out'});
+                keys.push(name);
             }
+
+
+            // create the first second that lists out our campaigns for this client
+            var client = document.createElement('p');
+            client.innerHTML = 'Campaigns Currently Running for Client {{client_id}}';
+            var items = document.createElement('ul');
+            for (i=0; i < keys.length; i++)
+            {
+                var cur = document.createElement('li');
+                cur.innerHTML = keys[i];
+                items.appendChild(cur);
+            }
+            document.body.appendChild(client);
+            document.body.appendChild(items);
+            document.body.appendChild(document.createElement('br'));
+            document.body.appendChild(document.createElement('br'));
+            document.body.appendChild(document.createElement('hr'));
+
+            /*
+            alert(keys);
+            alert(json[keys[1]]);
+            alert(json[keys[1]].slice(1, json[keys[1]].length));
             */
+
+            
+
+            for(i = 0; i < keys.length; i++)
+            {
+                // for each key in our keys array create a new div for it
+                var div = "campaign_{0}"
+                div = div.replace('{0}', i.toString());
+                var new_div = document.createElement("div");
+                new_div.id = div;
+
+                // The div we just created for this campaign is the div
+                // we will use to create our data table
+                var data = new google.visualization.DataTable();
+                data.addColumn('number', 'Visits');
+                data.addColumn('number', 'Clicks');
+                data.addColumn('number', 'Authorizations');
+                data.addColumn('number', 'Distinct Authorized Facebook Users');
+                data.addColumn('number', '# Users Shown Friends');
+                data.addColumn('number', '# Users Who Shared');
+                data.addColumn('number', '# Friends Shared With');
+                data.addColumn('number', '# Distint Friends Shared');
+                data.addColumn('number', 'Clickbacks');
+                //var title = {title: keys[i]};
+                var this_data = json[keys[i]].slice(1,json[keys[i]].length);
+                data.addRows([this_data]);
+                var table = new google.visualization.Table(new_div);
+                table.draw(data, {title: keys[i]});
+
+                
+                //new_div.innerHTML = keys[i];
+                var title = document.createElement('p');
+                title.innerHTML = keys[i];
+                document.body.appendChild(title);
+                document.body.appendChild(new_div);
+                document.body.appendChild(document.createElement('br'));
+               
+            }
+            
         }
      </script>
 </head>
 
     <body>
-        <div id="table1_div">{{data}}</div>
-
     </body>
 
 </html>
