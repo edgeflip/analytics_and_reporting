@@ -128,6 +128,33 @@ main_query_hour_by_hour ="""SELECT
          WHERE t.updated > FROM_UNIXTIME({0}) 
          GROUP BY e4.campaign_id, HOUR(t.updated);"""
 
+
+
+main_query_day_by_day ="""SELECT                                                         
+         e4.campaign_id,
+         YEAR(updated),
+         MONTH(updated),
+         DAY(updated),
+         SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) as Visits,       
+         SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) as Clicks, 
+         SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) as Authorizations,
+         COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.fbid ELSE NULL END) as "Distinct Facebook Users Authorized",
+         COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.fbid ELSE NULL END) as "# Users Shown Friends",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.fbid ELSE NULL END) as "# Users Who Shared",
+         SUM(CASE WHEN t.type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) as "# Distinct Friends Shared",
+         COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_session_id ELSE NULL END) as "# Clickbacks"
+     FROM                                                                       
+         (SELECT e1.*,NULL as cb_session_id FROM events e1 WHERE type <> 'clickback'
+         UNION                                                                  
+         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared')
+     t                     
+         LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load')
+     e4                                                                         
+         USING (session_id)
+         WHERE t.updated > FROM_UNIXTIME({0}) 
+         GROUP BY e4.campaign_id, YEAR(updated), MONTH(updated), DAY(updated);"""
+
 def new_query(_time):
     res = tool.query(main_query_new.format(_time))
     return res
@@ -136,6 +163,26 @@ def new_hour_query():
     _time = str(int(handle_time_difference()))
     res = tool.query(main_query_hour_by_hour.format(_time))
     return res
+
+def month_ago():
+    one_month = 30 * 24 * 60 * 60
+    return str(int(time.time())-one_month)
+
+def new_month_query():
+    _time = month_ago()
+    res = tool.query(main_query_day_by_day.format(_time))
+    return res
+
+# for the month queries we are going to need something unique to handle the time stuff
+# we can pass this list to the our data Object for JavaScript to turn these timestamps
+# into objects
+def create_unix_time_for_each_day():
+    start = int(month_ago())
+    days = []
+    for i in range(30):
+        start += 86400
+        days.append(start)
+    return days
 
 def get_campaign_stuff_for_client(client_id):
     res = tool.query("select campaign_id, name from campaigns where client_id='{0}' and campaign_id in (select distinct campaign_id from events where type='button_load')".format(client_id))

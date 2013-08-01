@@ -31,9 +31,12 @@ def handle_request():
         f3 = open('client_{0}_data_hourly.txt'.format(client_id),'r')
         hourly_data = f3.read()
         f3.close()
+        f4 = open('client_{0}_data_monthly.txt'.format(client_id), 'r')
+        monthly_data = f4.read()
+        f4.close()
         today = strftime('%m') + '/' + strftime('%d') + '/' + strftime('%Y')
 
-        return render_template("layout2.html", all_data=all_data, day_data=day_data, hourly_data=hourly_data, client_name=client_name, today=today) 
+        return render_template("layout2.html", all_data=all_data, day_data=day_data, hourly_data=hourly_data, monthly_data=monthly_data, client_name=client_name, today=today) 
     except KeyError:
         error = "Hit an error"
         return render_template("layout2.html", error=error)
