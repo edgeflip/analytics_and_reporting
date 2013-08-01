@@ -16,12 +16,12 @@ def couple_data_with_info(client_id):
             campaigns_alltime_data["%s" % i[1]] = [int(w) for w in [e for e in alltime_data if e[0] == i[0]][0]]
         else:
             # we got none 
-            campaigns_alltime_data["%s" % i[1]] = [0 for i in range(9)]
+            campaigns_alltime_data["%s" % i[1]] = [0 for e in range(9)]
 
         if i[0] in [e[0] for e in day_data]:
             campaigns_day_ago_data["%s" % i[1]] = [int(w) for w in [e for e in day_data if e[0] == i[0]][0]]
         else:
-            campaigns_day_ago_data["%s" % i[1]] = [0 for i in range(9)]
+            campaigns_day_ago_data["%s" % i[1]] = [0 for e in range(9)]
 
 
     #campaigns_alltime_data = {"%s" % i[1]: [int(w) for w in [e for e in alltime_data if e[0] == i[0]][0]] for i in campaign_stuff}

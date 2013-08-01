@@ -9,10 +9,13 @@
         {
             
            
-            var all_json = '{{data}}';
+            var all_json = '{{all_data}}';
+            var day_json = '{{day_data}}';
+            day_json = day_json.replace(/&#34;/ig, '"');
+            day_json = JSON.parse(day_json);
             //alert(json);
-            all_json = json.replace(/&#34;/ig, '"');
-            all_json = JSON.parse(json);
+            all_json = all_json.replace(/&#34;/ig, '"');
+            all_json = JSON.parse(all_json);
             // create an array with our keys in it
             var all_keys = []
             for (name in all_json)
@@ -21,6 +24,8 @@
             }
 
             var all_campaigns = [];
+            // We need to use the aggregate data json object because the day
+            // and hour objects won't necessarily always have the campaign_ids
             for(i=0; i<all_keys.length; i++)
             {
                 all_campaigns.push(all_json[all_keys[i]][0]);
@@ -68,13 +73,18 @@
 
             
 
-            for(i = 0; i < keys.length; i++)
+            for(i = 0; i < all_keys.length; i++)
             {
-                // for each key in our keys array create a new div for it
-                var div = "campaign_{0}"
+                // for each key in our keys array create divs for the aggregate
+                // and for the daily data
+                var div = "aggregate_campaign_{0}";
+                var div1 = "daily_campaign_{0}";
                 div = div.replace('{0}', i.toString());
+                div1 = div1.replace('{0}', i.toString());
                 var new_div = document.createElement("div");
+                var new_div1 = document.createElement("div");
                 new_div.id = div;
+                new_div1.id = div1;
 
                 // The div we just created for this campaign is the div
                 // we will use to create our data table
@@ -89,19 +99,41 @@
                 data.addColumn('number', '# Distint Friends Shared');
                 data.addColumn('number', 'Clickbacks');
                 //var title = {title: keys[i]};
-                var this_data = json[keys[i]].slice(1,json[keys[i]].length);
+                var this_data = all_json[all_keys[i]].slice(1,all_json[all_keys[i]].length);
                 data.addRows([this_data]);
                 var table = new google.visualization.Table(new_div);
-                table.draw(data, {title: keys[i]});
+                table.draw(data, {title: all_keys[i]});
 
-                
+                var data1 = new google.visualization.DataTable();
+                data1.addColumn('number', 'Visits');
+                data1.addColumn('number', 'Clicks');
+                data1.addColumn('number', 'Authorizations');
+                data1.addColumn('number', 'Distinct Authorized Facebook Users');
+                data1.addColumn('number', '# Users Shown Friends');
+                data1.addColumn('number', '# Users Who Shared');
+                data1.addColumn('number', '# Friends Shared With');
+                data1.addColumn('number', '# Distint Friends Shared');
+                data1.addColumn('number', 'Clickbacks');
+                var this_data1 = day_json[all_keys[i]].slice(1,day_json[all_keys[i]].length); 
+                data1.addRows([this_data1]);
+                var table1 = new google.visualization.Table(new_div1);
+                table1.draw(data1, {title: all_keys[i]});
+
                 //new_div.innerHTML = keys[i];
                 var title = document.createElement('p');
-                title.innerHTML = keys[i];
+                title.innerHTML = all_keys[i];
+                var all_data_disclaimer = document.createElement('p');
+                all_data_disclaimer.innerHTML = "Data From Beginning of Campaign to {{today}}";
+                var day_data_disclaimer = document.createElement('p');
+                day_data_disclaimer.innerHTML = "Data for {{today}}";
                 document.body.appendChild(title);
+                document.body.appendChild(all_data_disclaimer);
                 document.body.appendChild(new_div);
+                document.body.appendChild(day_data_disclaimer);
+                document.body.appendChild(new_div1);
                 document.body.appendChild(document.createElement('br'));
-               
+                document.body.appendChild(document.createElement('br'));
+              
             }
             
         }
