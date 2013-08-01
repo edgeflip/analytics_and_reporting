@@ -164,36 +164,41 @@ def crawl_realtime_updates(tool):
                     token_struct = {fbid: []}
                         
                     token_stuff = []
-                    for each in fbid_tokens:
-                        # add {ownerid:token} to the struct
-                        token_struct[fbid].append((each[0]:each[1]))
-                        token_stuff.append((each[0],each[1]))
-                    k = token_bucket.new_key()
-                    k.key = fbid
-                    k.set_contents_from_string(json.dumps(token_struct))
+                    try:
+                        for each in fbid_tokens:
+                            # add {ownerid:token} to the struct
+                            token_struct[fbid].append((each[0]:each[1]))
+                            token_stuff.append((each[0],each[1]))
+                        k = token_bucket.new_key()
+                        k.key = fbid
+                        k.set_contents_from_string(json.dumps(token_struct))
+                    except TypeError:
+                        token_stuff = None
+
                      
                 # for each pair of (ownerid,token) in the list of fbid's tokens...
                 # crawl his/her wall with each token and update the data in the main
                 # fbcrawl bucket
-                for ownerid, token in token_stuff:
-                    # first let's get what we have on the current pair fbid,ownerid out of
-                    # fbcrawl1 so we can add the new update stuff to it
-                    main = str(fbid)+','+str(ownerid)
-                    main_key = main_bucket.get_key(main)
-                    # the data we already have....
-                    cur_data = json.loads(main_key.get_contents_as_string())
-                    # the new data...we will add the old data to this for chronology purposes
-                    graph_api = api.format(fbid,update_time,token)
-                    updated_stuff = json.loads(urllib2.urlopen(graph_api))
-                    updated_stuff['feed']['data'] += cur_data['feed']['data']
-                    # store the the data back where we got it with the new information added
-                    main_key.set_contents_from_string(json.dumps(updated_stuff))
+                if token_stuff != None:
+                    for ownerid, token in token_stuff:
+                        # first let's get what we have on the current pair fbid,ownerid out of
+                        # fbcrawl1 so we can add the new update stuff to it
+                        main = str(fbid)+','+str(ownerid)
+                        main_key = main_bucket.get_key(main)
+                        # the data we already have....
+                        cur_data = json.loads(main_key.get_contents_as_string())
+                        # the new data...we will add the old data to this for chronology purposes
+                        graph_api = api.format(fbid,update_time,token)
+                        updated_stuff = json.loads(urllib2.urlopen(graph_api))
+                        updated_stuff['feed']['data'] += cur_data['feed']['data']
+                        # store the the data back where we got it with the new information added
+                        main_key.set_contents_from_string(json.dumps(updated_stuff))
                     
-                    ############################################################
-                    # run our metrics analysis on the new data and replace our old stuff
-                    metric_object = metrics(updated_stuff)
-                    m_key = metric_bucket.get_key(main)
-                    m_key.set_contents_from_string(json.dumps(metric_object))
+                        ############################################################
+                        # run our metrics analysis on the new data and replace our old stuff
+                        metric_object = metrics(updated_stuff)
+                        m_key = metric_bucket.get_key(main)
+                        m_key.set_contents_from_string(json.dumps(metric_object))
 
                 # add our fbid to users crawled since we've crawled him/her now
                 users_crawled.append(fbid)

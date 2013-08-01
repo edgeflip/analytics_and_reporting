@@ -49,42 +49,9 @@ JOIN client_content c USING(content_id)
 WHERE c.client_id='{0}' and updated > FROM_UNIXTIME({1}) and updated < FROM_UNIXTIME({2});"""
 
 
-main_query_new ="""SELECT                                                         
-         e4.campaign_id,
-         SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) as Visits,       
-         SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) as Clicks, 
-         SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) as Authorizations,
-         COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.fbid ELSE NULL END) as "Distinct Facebook Users Authorized",
-         COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.fbid ELSE NULL END) as "# Users Shown Friends",
-         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.fbid ELSE NULL END) as "# Users Who Shared",
-         SUM(CASE WHEN t.type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with",
-         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) as "# Distinct Friends Shared",
-         COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_session_id ELSE NULL END) as "# Clickbacks"
-     FROM                                                                       
-         (SELECT e1.*,NULL as cb_session_id FROM events e1 WHERE type <> 'clickback'
-         UNION                                                                  
-         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id     as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared' AND e2.updated > FROM_UNIXTIME({0}) AND e3.updated > FROM_UNIXTIME({0}))
-     t                                                   
-         LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load' and updated > FROM_UNIXTIME({0}))
-     e4                                                                         
-         USING (session_id)
-         GROUP BY e4.campaign_id;"""
-
-def new_query(_time):
-    res = tool.query(main_query_new.format(_time))
-    return res
-
-def get_campaign_stuff_for_client(client_id):
-    res = tool.query("select campaign_id, name from campaigns where client_id='{0}' and campaign_id in (select distinct campaign_id from events where type='button_load')".format(client_id))
-    return res
-
 hour_by_hour = """SELECT hour(updated), SUM(CASE WHEN type='button_load' THEN 1 ELSE 0 END) as Visits, SUM(CASE WHEN type='button_click' THEN 1 ELSE 0 END) as Clicks, SUM(CASE WHEN type='authorized' THEN 1 ELSE 0 END) as Authorizations, COUNT(DISTINCT CASE WHEN type='authorized' THEN fbid ELSE NULL END) as "Distinct Facebook Users Authorized", COUNT(DISTINCT CASE WHEN type='shown' THEN fbid ELSE NULL END) as "# Users Shown Friends", COUNT(DISTINCT CASE WHEN type='shared' THEN fbid ELSE NULL END) as "# Users Who Shared", SUM(CASE WHEN type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with", COUNT(DISTINCT CASE WHEN type='shared' THEN friend_fbid ELSE NULL END) as "# Distinct Friends Shared", SUM(CASE WHEN type='clickback' THEN 1 ELSE 0 END) as "# Clickbacks" FROM events e JOIN client_content c USING(content_id) WHERE c.client_id='{0}' and day(updated)='{1}' and month(updated)='{2}' and year(updated)='{3}' group by hour(updated),day(updated),month(updated),year(updated) order by year(updated),month(updated),day(updated),hour(updated)"""
 
 day_by_day = """SELECT YEAR(updated), MONTH(updated), DAY(updated), SUM(CASE WHEN type='button_load' THEN 1 ELSE 0 END) as Visits, SUM(CASE WHEN type='button_click' THEN 1 ELSE 0 END) as Clicks, SUM(CASE WHEN type='authorized' THEN 1 ELSE 0 END) as Authorizations, COUNT(DISTINCT CASE WHEN type='authorized' THEN fbid ELSE NULL END) as "Distinct Facebook Users Authorized", COUNT(DISTINCT CASE WHEN type='shown' THEN fbid ELSE NULL END) as "# Users Shown Friends", COUNT(DISTINCT CASE WHEN type='shared' THEN fbid ELSE NULL END) as "# Users Who Shared", SUM(CASE WHEN type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with", COUNT(DISTINCT CASE WHEN type='shared' THEN friend_fbid ELSE NULL END) as "# Distinct Friends Shared", SUM(CASE WHEN type='clickback' THEN 1 ELSE 0 END) as "# Clickbacks" FROM events e JOIN client_content c USING(content_id) WHERE c.client_id='{0}' AND updated > (SELECT DATE_SUB(NOW(), INTERVAL 1 MONTH)) AND year(updated)='{1}' GROUP BY day(updated),month(updated),year(updated) ORDER BY year(updated),month(updated),day(updated)"""
-
-
-
-
 
 hour_by_hour_new ="""SELECT                                                         
          e4.campaign_id,
@@ -109,6 +76,73 @@ hour_by_hour_new ="""SELECT
 	 
 	 GROUP BY e4.campaign_id;"""
 
+
+
+##################################################################
+##################################################################
+# NEW REPORT QUERIES
+
+
+main_query_new ="""SELECT                                                         
+         e4.campaign_id,
+         SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) as Visits,       
+         SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) as Clicks, 
+         SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) as Authorizations,
+         COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.fbid ELSE NULL END) as "Distinct Facebook Users Authorized",
+         COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.fbid ELSE NULL END) as "# Users Shown Friends",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.fbid ELSE NULL END) as "# Users Who Shared",
+         SUM(CASE WHEN t.type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) as "# Distinct Friends Shared",
+         COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_session_id ELSE NULL END) as "# Clickbacks"
+     FROM                                                                       
+         (SELECT e1.*,NULL as cb_session_id FROM events e1 WHERE type <> 'clickback'
+         UNION                                                                  
+         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id     as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared' AND e2.updated > FROM_UNIXTIME({0}) AND e3.updated > FROM_UNIXTIME({0}))
+     t                                                   
+         LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load' and updated > FROM_UNIXTIME({0}))
+     e4                                                                         
+         USING (session_id)
+         GROUP BY e4.campaign_id;"""
+
+
+main_query_hour_by_hour ="""SELECT                                                         
+         e4.campaign_id,
+         HOUR(t.updated),
+         SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) as Visits,       
+         SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) as Clicks, 
+         SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) as Authorizations,
+         COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.fbid ELSE NULL END) as "Distinct Facebook Users Authorized",
+         COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.fbid ELSE NULL END) as "# Users Shown Friends",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.fbid ELSE NULL END) as "# Users Who Shared",
+         SUM(CASE WHEN t.type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) as "# Distinct Friends Shared",
+         COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_session_id ELSE NULL END) as "# Clickbacks"
+     FROM                                                                       
+         (SELECT e1.*,NULL as cb_session_id FROM events e1 WHERE type <> 'clickback'
+         UNION                                                                  
+         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared')
+     t                     
+         LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load')
+     e4                                                                         
+         USING (session_id)
+         WHERE t.updated > FROM_UNIXTIME({0}) 
+         GROUP BY e4.campaign_id, HOUR(t.updated);"""
+
+def new_query(_time):
+    res = tool.query(main_query_new.format(_time))
+    return res
+
+def new_hour_query():
+    _time = str(int(handle_time_difference()))
+    res = tool.query(main_query_hour_by_hour.format(_time))
+    return res
+
+def get_campaign_stuff_for_client(client_id):
+    res = tool.query("select campaign_id, name from campaigns where client_id='{0}' and campaign_id in (select distinct campaign_id from events where type='button_load')".format(client_id))
+    return res
+
+
+
 def test_hour_by_hour():
     day = strftime('%d')
     month = strftime('%m')
@@ -120,82 +154,9 @@ beginning_day = "SELECT MIN(updated) FROM events e JOIN client_content c USING(c
 
 
 def get_start_of_campaign(client_id):
-	# res returns a [[datetime.datetime()]] 
 	res = tool.query(beginning_day.format(client_id))[0][0]
 	res = time.mktime(res.timetuple())
 	return str(int(res))
-
-def beginning_of_day():
-	# we always start from the beginning of yesterday for these reports
-	m = strftime('%m')
-	d = str(int(strftime('%d'))-1)
-	y = strftime('%Y')
-	beginning_datetime = datetime.datetime(int(y),int(m),int(d),00,00,00)
-	beginning_of_day = str(int(time.mktime(beginning_datetime.timetuple())))
-	return beginning_of_day
-
-
-def mail_report():
-	import smtplib
-	from email.MIMEMultipart import MIMEMultipart
-	from email.MIMEText import MIMEText
-
-	mailserver = smtplib.SMTP('smtp.live.com',587)
-	mailserver.ehlo()
-	mailserver.starttls()
-	mailserver.ehlo()
-	mailserver.login('wes@edgeflip.com','gipetto3')
-	people = ['rayid@edgeflip.com','wesley7879@gmail.com']
-	for person in people:
-		msg = MIMEMultipart()
-		msg['From'] = 'wes@edgeflip.com'
-		msg['To'] = person
-		m = strftime('%m')
-		d = str(int(strftime('%d'))-1)
-		if len(d) == 1:
-			d = '0' + d
-		y = strftime('%Y')
-		msg['Subject'] = 'Report for {0}/{1}/{2}'.format(m,d,y)
-
-		filename = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
-		f = file(filename).read()
-		attachment = MIMEText(f)
-		attachment.add_header('Content-Disposition','attachment',filename=filename)
-		msg.attach(attachment)
-		mailserver.sendmail('wes@edgeflip.com',person,msg.as_string())
-	print "Report Mailed"
-	
-
-
-
-def generate_report_or_get_specific(client_id, from_time, to_time=None):
-	conn = mysql.connect('edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com', 'root', 'YUUB2ctgkn8zfe', 'edgeflip')
-	tool = conn.cursor()
-	if to_time:
-		results_today = tool.execute(main_query.format(client_id, from_time, to_time))
-		#results_aggregate = tool.query(main_query.format(client_id, _min[0][0]
-		return results_today
-	else:
-		now = str(int(time.time()))	
-		m = strftime('%m')
-		d = str(int(strftime('%d'))-1)
-		if len(d) == 1:
-			d = '0'+d
-		y = strftime('%Y')
-		results_today = tool.execute(main_query.format(client_id, from_time, now))
-		with open('report_{0}_{1}_{2}.csv'.format(m,d,y), 'wt') as csvfile:
-			writer = csv.writer(csvfile, delimiter=',')
-			writer.writerow(['Stats for today {0}/{1}/{2}'.format(m,d,y)])
-			writer.writerow([i[0] for i in tool.description])
-			writer.writerows(tool)
-			campaign_start = get_start_of_campaign(client_id)
-			results_aggregate = tool.execute(main_query.format(client_id, campaign_start, now))
-			writer.writerow(['Stats for all time'])
-			writer.writerow([i[0] for i in tool.description])
-			writer.writerows(tool)
-		del writer
-		print "Report for {0}/{1}/{2} generated".format(m,d,y)
-		
 
 def generate_report_for_endpoint(client_id):
 	from generate_data_for_export_original import tool
@@ -259,8 +220,73 @@ def make_day_by_day_object(client_id):
     return obj
 
 
+def get_start_of_campaign(client_id):
+	res = tool.query(beginning_day.format(client_id))[0][0]
+	res = time.mktime(res.timetuple())
+	return str(int(res))
 
 
+def mail_report():
+	import smtplib
+	from email.MIMEMultipart import MIMEMultipart
+	from email.MIMEText import MIMEText
+
+	mailserver = smtplib.SMTP('smtp.live.com',587)
+	mailserver.ehlo()
+	mailserver.starttls()
+	mailserver.ehlo()
+	mailserver.login('wes@edgeflip.com','gipetto3')
+	people = ['rayid@edgeflip.com','wesley7879@gmail.com']
+	for person in people:
+		msg = MIMEMultipart()
+		msg['From'] = 'wes@edgeflip.com'
+		msg['To'] = person
+		m = strftime('%m')
+		d = str(int(strftime('%d'))-1)
+		if len(d) == 1:
+			d = '0' + d
+		y = strftime('%Y')
+		msg['Subject'] = 'Report for {0}/{1}/{2}'.format(m,d,y)
+
+		filename = 'report_{0}_{1}_{2}.csv'.format(m,d,y)
+		f = file(filename).read()
+		attachment = MIMEText(f)
+		attachment.add_header('Content-Disposition','attachment',filename=filename)
+		msg.attach(attachment)
+		mailserver.sendmail('wes@edgeflip.com',person,msg.as_string())
+	print "Report Mailed"
+	
+
+
+
+def generate_report_or_get_specific(client_id, from_time, to_time=None):
+	conn = mysql.connect('edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com', 'root', 'YUUB2ctgkn8zfe', 'edgeflip')
+	tool = conn.cursor()
+	if to_time:
+		results_today = tool.execute(main_query.format(client_id, from_time, to_time))
+		#results_aggregate = tool.query(main_query.format(client_id, _min[0][0]
+		return results_today
+	else:
+		now = str(int(time.time()))	
+		m = strftime('%m')
+		d = str(int(strftime('%d'))-1)
+		if len(d) == 1:
+			d = '0'+d
+		y = strftime('%Y')
+		results_today = tool.execute(main_query.format(client_id, from_time, now))
+		with open('report_{0}_{1}_{2}.csv'.format(m,d,y), 'wt') as csvfile:
+			writer = csv.writer(csvfile, delimiter=',')
+			writer.writerow(['Stats for today {0}/{1}/{2}'.format(m,d,y)])
+			writer.writerow([i[0] for i in tool.description])
+			writer.writerows(tool)
+			campaign_start = get_start_of_campaign(client_id)
+			results_aggregate = tool.execute(main_query.format(client_id, campaign_start, now))
+			writer.writerow(['Stats for all time'])
+			writer.writerow([i[0] for i in tool.description])
+			writer.writerows(tool)
+		del writer
+		print "Report for {0}/{1}/{2} generated".format(m,d,y)
+		
 ####
 # original queries
 baseline_query1 = "SELECT COUNT(session_id) FROM events WHERE (type='{0}' AND content_id='{1}') AND (campaign_id='{2}' AND updated > FROM_UNIXTIME({3}));"

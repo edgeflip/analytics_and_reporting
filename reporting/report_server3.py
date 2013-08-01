@@ -6,6 +6,8 @@ from flask import request
 from generate_data_for_export_original import tool
 from generate_report import encodeDES
 from flask import render_template
+from time import strftime
+
 
 application = flask.Flask(__name__)
 
@@ -26,9 +28,14 @@ def handle_request():
         f2 = open('client_{0}_data_day.txt'.format(client_id),'r')
         day_data = f2.read()
         f2.close()
+        f3 = open('client_{0}_data_hourly.txt'.format(client_id),'r')
+        hourly_data = f3.read()
+        f3.close()
+        today = strftime('%m') + '/' + strftime('%d') + '/' + strftime('%Y')
 
-        return render_template("layout2.html", all_data=all_data, day_data=day_data, client_name=client_name) 
+        return render_template("layout2.html", all_data=all_data, day_data=day_data, hourly_data=hourly_data, client_name=client_name, today=today) 
     except KeyError:
+        error = "Hit an error"
         return render_template("layout2.html", error=error)
 
 

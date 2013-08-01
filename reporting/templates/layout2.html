@@ -11,11 +11,14 @@
            
             var all_json = '{{all_data}}';
             var day_json = '{{day_data}}';
+            var hourly_json = '{{hourly_data}}';
             day_json = day_json.replace(/&#34;/ig, '"');
             day_json = JSON.parse(day_json);
             //alert(json);
             all_json = all_json.replace(/&#34;/ig, '"');
             all_json = JSON.parse(all_json);
+            hourly_json = hourly_json.replace(/&#34;/ig, '"');
+            hourly_json = JSON.parse(hourly_json);
             // create an array with our keys in it
             var all_keys = []
             for (name in all_json)
@@ -72,19 +75,24 @@
             */
 
             
-
+            
             for(i = 0; i < all_keys.length; i++)
             {
                 // for each key in our keys array create divs for the aggregate
                 // and for the daily data
                 var div = "aggregate_campaign_{0}";
                 var div1 = "daily_campaign_{0}";
+                var div2 = "hourly_campaign_{0}";
+
                 div = div.replace('{0}', i.toString());
                 div1 = div1.replace('{0}', i.toString());
+                div2 = div2.replace('{0}', i.toString());
                 var new_div = document.createElement("div");
                 var new_div1 = document.createElement("div");
+                var new_div2 = document.createElement("div");
                 new_div.id = div;
                 new_div1.id = div1;
+                new_div2.id = div2;
 
                 // The div we just created for this campaign is the div
                 // we will use to create our data table
@@ -119,18 +127,39 @@
                 var table1 = new google.visualization.Table(new_div1);
                 table1.draw(data1, {title: all_keys[i]});
 
+
+                // Line Charts for hourly graphs
+                var line1_array = new Array();
+                line1_array[0] = ['Hour', 'Visits', 'Clicks', 'Authorizations', 'Distinct Authorized Facebook Users', '# Users Shown Friends', '# Users Who Shared', '# Friends Shared With', '# Distinct Friends Shared', 'Clickbacks'];
+                for(w=0; w < hourly_json[all_keys[i]].length; w++)
+                {
+                    line1_array[w+1] = hourly_json[all_keys[i]][w];
+                }
+                var line1_chart_data = google.visualization.arrayToDataTable(line1_array);
+                var line1_options = {title: 'Hourly Report', fontSize: '10', enableInteractivity: 'true'};
+                var line1 = new google.visualization.LineChart(new_div2);
+                line1.draw(line1_chart_data, line1_options);
+
+
+
+
                 //new_div.innerHTML = keys[i];
                 var title = document.createElement('p');
-                title.innerHTML = all_keys[i];
+                title.innerHTML = '<h3>' + all_keys[i] + '</h3>';
                 var all_data_disclaimer = document.createElement('p');
-                all_data_disclaimer.innerHTML = "Data From Beginning of Campaign to {{today}}";
+                all_data_disclaimer.innerHTML = "Data From Beginning of Campaign to <b>{{today}}</b>";
                 var day_data_disclaimer = document.createElement('p');
-                day_data_disclaimer.innerHTML = "Data for {{today}}";
+                day_data_disclaimer.innerHTML = "Data for <b>{{today}}</b>";
+                var hourly_data_disclaimer = document.createElement('p');
+                hourly_data_disclaimer.innerHTML = "Hourly data for <b>{{today}}</b>";
                 document.body.appendChild(title);
                 document.body.appendChild(all_data_disclaimer);
                 document.body.appendChild(new_div);
                 document.body.appendChild(day_data_disclaimer);
                 document.body.appendChild(new_div1);
+                document.body.appendChild(hourly_data_disclaimer);
+                document.body.appendChild(new_div2);
+                document.body.appendChild(document.createElement('hr'));
                 document.body.appendChild(document.createElement('br'));
                 document.body.appendChild(document.createElement('br'));
               
@@ -141,6 +170,7 @@
 </head>
 
 <body>
- </body>
+    <p style="color:red">{{error}}</p>
+</body>
 
 </html>
