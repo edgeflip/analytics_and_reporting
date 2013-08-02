@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from generate_report import generate_report_for_endpoint_new
 from generate_report import new_query
 from generate_report import get_campaign_stuff_for_client
 from generate_report import new_hour_query
@@ -101,6 +102,9 @@ def write_and_consume():
     all_clients = tool.query("select distinct client_id from campaigns")
     for each_client in all_clients:
         client = each_client[0]
+        today_all_campaigns, aggregate_all_campaigns = generate_report_for_endpoint_new(client)
+        today_all_campaigns_json = json.dumps({"data": today_all_campaigns})
+        aggregate_all_campaigns_json = json.dumps({"data": aggregate_all_campaigns})
         clients_data_all, clients_data_day = couple_data_with_info(client)
         clients_hourly_data = generate_hourly_object(client)
         clients_monthly_data = create_month_object(client)
@@ -108,10 +112,18 @@ def write_and_consume():
         clients_data_day_str = json.dumps(clients_data_day)
         clients_data_hourly_str = json.dumps(clients_hourly_data)
         clients_data_monthly_str = json.dumps(clients_monthly_data)
+        today_all_campaigns = 'client_{0}_all_campaigns_day.txt'.format(client)
+        aggregate_all_campaigns = 'client_{0}_all_campaigns_aggregate.txt'.format(client)
         all_data_file = 'client_{0}_data_all.txt'.format(client)
         day_data_file = 'client_{0}_data_day.txt'.format(client)
         hourly_data_file = 'client_{0}_data_hourly.txt'.format(client)
         monthly_data_file = 'client_{0}_data_monthly.txt'.format(client)
+        _today = open(today_all_campaigns,'w')
+        _today.write(today_all_campaigns_json)
+        _today.close()
+        _aggregate = open(aggregate_all_campaigns,'w')
+        _aggregate.write(aggregate_all_campaigns_json)
+        _aggregate.close()
         f1 = open(all_data_file,'w')
         f1.write(clients_data_all_str)
         f1.close()

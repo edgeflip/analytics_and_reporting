@@ -22,6 +22,12 @@ def handle_request():
         client_id = mappings[client]
         client_name = tool.query("select name from clients where client_id='{0}'".format(client_id))
         client_name = client_name[0][0]
+        _today = open('client_{0}_all_campaigns_day.txt'.format(client_id),'r')
+        _today_data = _today.read()
+        _today.close()
+        aggregate = open('client_{0}_all_campaigns_aggregate.txt'.format(client_id),'r')
+        aggregate_data = aggregate.read()
+        aggregate.close()
         f1 = open('client_{0}_data_all.txt'.format(client_id),'r')
         all_data = f1.read()
         f1.close()
@@ -36,7 +42,7 @@ def handle_request():
         f4.close()
         today = strftime('%m') + '/' + strftime('%d') + '/' + strftime('%Y')
 
-        return render_template("layout2.html", all_data=all_data, day_data=day_data, hourly_data=hourly_data, monthly_data=monthly_data, client_name=client_name, today=today) 
+        return render_template("layout2.html", today_data=_today_data, aggregate_data=aggregate_data, all_data=all_data, day_data=day_data, hourly_data=hourly_data, monthly_data=monthly_data, client_name=client_name, today=today) 
     except KeyError:
         error = "Hit an error"
         return render_template("layout2.html", error=error)

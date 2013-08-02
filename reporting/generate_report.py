@@ -173,6 +173,10 @@ def new_month_query():
     res = tool.query(main_query_day_by_day.format(_time))
     return res
 
+def new_aggregate_query_by_day():
+    res = tool.query(main_query_day_by_day.format(0))
+    return res
+
 # for the month queries we are going to need something unique to handle the time stuff
 # we can pass this list to the our data Object for JavaScript to turn these timestamps
 # into objects
@@ -212,7 +216,17 @@ def generate_report_for_endpoint(client_id):
 	results_today_now = tool.query(main_query.format(client_id, start_of_day, now))
 	results_aggregate_now = tool.query(main_query.format(client_id,0,now))
 	return results_today_now, results_aggregate_now
-	
+
+def generate_report_for_endpoint_new(client_id):
+    start_of_day = handle_time_difference()
+    now = str(int(time.time()))
+    results_today_now = tool.query(main_query.format(client_id,start_of_day,now))
+    results_today_now = [int(i) for i in results_today_now[0]]
+    results_aggregate_now = tool.query(main_query.format(client_id,0,now))
+    results_aggregate_now = [int(i) for i in results_aggregate_now[0]]
+    return results_today_now, results_aggregate_now
+    
+
 
 def get_hour_by_hour(client_id):
     from generate_data_for_export_original import tool

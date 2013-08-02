@@ -7,15 +7,21 @@
 
         function drawStuff()
         {
-            
-           
+            // turn all of the json strings that we get passed from our flask
+            // app into JSON objects that can have their attributes accessed
+            // nicely and those attributes parsed
+            var today_json = '{{today_data}}';
+            var aggregate_json = '{{aggregate_data}}';
             var all_json = '{{all_data}}';
             var day_json = '{{day_data}}';
             var hourly_json = '{{hourly_data}}';
             var monthly_json = '{{monthly_data}}';
+            today_json = today_json.replace(/&#34;/ig, '"');
+            today_json = JSON.parse(today_json);
+            aggregate_json = aggregate_json.replace(/&#34;/ig, '"');
+            aggregate_json = JSON.parse(aggregate_json);
             day_json = day_json.replace(/&#34;/ig, '"');
             day_json = JSON.parse(day_json);
-            //alert(json);
             all_json = all_json.replace(/&#34;/ig, '"');
             all_json = JSON.parse(all_json);
             hourly_json = hourly_json.replace(/&#34;/ig, '"');
@@ -62,7 +68,12 @@
             for (i=0; i < all_keys.length; i++)
             {
                 var cur = document.createElement('li');
-                cur.innerHTML = all_keys[i];
+                var cur_link = document.createElement('a');
+                var cur_link_href = "#aggregate_campaign_{0}";
+                cur_link_href = cur_link_href.replace('{0}', i.toString());
+                cur_link.href = cur_link_href;
+                cur_link.innerHTML = all_keys[i];
+                cur.appendChild(cur_link);
                 items.appendChild(cur);
             }
             document.body.appendChild(client);
@@ -71,13 +82,60 @@
             document.body.appendChild(document.createElement('br'));
             document.body.appendChild(document.createElement('hr'));
 
-            /*
-            alert(keys);
-            alert(json[keys[1]]);
-            alert(json[keys[1]].slice(1, json[keys[1]].length));
-            */
+            // AGGREGATE CAMPAIGN DISPLAY WITH ALL CAMPAIGNS INCLUDED
+            // create the div to put it in
+            var agg_div = document.createElement("div");
+            agg_div.id = "agg_div";
 
-            alert(monthly_json[all_keys[0]]); 
+            var Data = new google.visualization.DataTable();
+            Data.addColumn('number', 'Visits');
+            Data.addColumn('number', 'Clicks');
+            Data.addColumn('number', 'Authorizations');
+            Data.addColumn('number', 'Distinct Authorized Facebook Users');
+            Data.addColumn('number', '# Users Shown Friends');
+            Data.addColumn('number', '# Users Who Shared');
+            Data.addColumn('number', '# Friends Shared With');
+            Data.addColumn('number', '# Distint Friends Shared');
+            Data.addColumn('number', 'Clickbacks');
+            Data.addRows([aggregate_json.data]);
+
+            var Aggregate_Table = new google.visualization.Table(agg_div);
+            Aggregate_Table.draw(Data, {showRowNumberPosition: 'true', width:'100%', position: 'out'});
+
+
+            // TODAY CAMPAIGN DISPLAY WITH ALL CAMPAIGNS INCLUDED
+            var today_div = document.createElement("div");
+            today_div.id = "today_div";
+
+            var Data1 = new google.visualization.DataTable();
+            Data1.addColumn('number', 'Visits');
+            Data1.addColumn('number', 'Clicks');
+            Data1.addColumn('number', 'Authorizations');
+            Data1.addColumn('number', 'Distinct Authorized Facebook Users');
+            Data1.addColumn('number', '# Users Shown Friends');
+            Data1.addColumn('number', '# Users Who Shared');
+            Data1.addColumn('number', '# Friends Shared With');
+            Data1.addColumn('number', '# Distint Friends Shared');
+            Data1.addColumn('number', 'Clickbacks');
+            Data1.addRows([today_json.data]);
+
+            var Today_Table = new google.visualization.Table(today_div);
+            Today_Table.draw(Data1, {showRowNumberPosition: 'true', width: '100%', position: 'out'});
+
+            // Add the div to the document that contains our Aggregate_Table
+            var agg_title = document.createElement("p");
+            agg_title.innerHTML = "Aggregate Data for All Campaigns";
+            document.body.appendChild(agg_title);
+            document.body.appendChild(agg_div);
+            document.body.appendChild(document.createElement('br'));
+            var today_title = document.createElement("p");
+            today_title.innerHTML = "Data for All Campaigns for {{today}}";
+            document.body.appendChild(today_title);
+            document.body.appendChild(today_div);
+            document.body.appendChild(document.createElement('br'));
+            document.body.appendChild(document.createElement('br'));
+            document.body.appendChild(document.createElement('hr'));
+            
             
             for(i = 0; i < all_keys.length; i++)
             {
@@ -87,6 +145,11 @@
                 var div1 = "daily_campaign_{0}";
                 var div2 = "hourly_campaign_{0}";
                 var div3 = "monthly_campaign_{0}";
+
+                // associate each div with the iteration we are on allowing
+                // for a dynamic amount of divs to be created in turn
+                // allowing for a dynamic number of tables and charts
+                // to be displayed for our clients
 
                 div = div.replace('{0}', i.toString());
                 div1 = div1.replace('{0}', i.toString());
@@ -99,7 +162,10 @@
                 new_div.id = div;
                 new_div1.id = div1;
                 new_div2.id = div2;
+                //new_div2.style.width = "800px";
+
                 new_div3.id = div3;
+                //new_div3.style.width = "800px";
 
                 // The div we just created for this campaign is the div
                 // we will use to create our data table
@@ -135,7 +201,8 @@
                 table1.draw(data1, {title: all_keys[i]});
 
 
-                // Line Charts for hourly graphs
+                // Line Charts for hourly graphs using the the hourly_json object
+                // we defined from above
                 var line1_array = new Array();
                 line1_array[0] = ['Hour', 'Visits', 'Clicks', 'Authorizations', 'Distinct Authorized Facebook Users', '# Users Shown Friends', '# Users Who Shared', '# Friends Shared With', '# Distinct Friends Shared', 'Clickbacks'];
                 for(w=0; w < hourly_json[all_keys[i]].length; w++)
@@ -143,12 +210,14 @@
                     line1_array[w+1] = hourly_json[all_keys[i]][w];
                 }
                 var line1_chart_data = google.visualization.arrayToDataTable(line1_array);
-                var line1_options = {title: 'Hourly Report', fontSize: '10', enableInteractivity: 'true'};
+                var line1_options = {title: 'Hourly Report', fontSize: '10', enableInteractivity: 'true', 'width': 1000};
                 var line1 = new google.visualization.LineChart(new_div2);
                 line1.draw(line1_chart_data, line1_options);
 
 
-                // Line Chart for the monthly graphs
+                // Line Chart for the monthly graphs using the monthly_json
+                // Object we defined at the top
+
                 var line2 = new google.visualization.DataTable();
                 line2.addColumn('date', 'Date');
                 line2.addColumn('number', 'Visits');
@@ -171,31 +240,28 @@
                 }
 
                 line2.addRows(arr2);
-                var line2opt = {title: 'Daily Report(for last 30 days)', fontSize: '10'};
+                var line2opt = {title: 'Daily Report(for last 30 days)', fontSize: '10', 'width': 1000};
                 var chart2 = new google.visualization.LineChart(new_div3);
                 chart2.draw(line2, line2opt);
                     
 
 
+                // Adding all non-existent titles to their respective tables/charts
+                // After adding the titles binding the div elements that contain our tables
+                // and line charts to the html DOM.
 
-
-
-
-                //new_div.innerHTML = keys[i];
                 var title = document.createElement('p');
                 title.innerHTML = '<h3>' + all_keys[i] + '</h3>';
                 var all_data_disclaimer = document.createElement('p');
                 all_data_disclaimer.innerHTML = "Data From Beginning of Campaign to <b>{{today}}</b>";
                 var day_data_disclaimer = document.createElement('p');
                 day_data_disclaimer.innerHTML = "Data for <b>{{today}}</b>";
-                var hourly_data_disclaimer = document.createElement('p');
-                hourly_data_disclaimer.innerHTML = "Hourly data for <b>{{today}}</b>";
+               
                 document.body.appendChild(title);
                 document.body.appendChild(all_data_disclaimer);
                 document.body.appendChild(new_div);
                 document.body.appendChild(day_data_disclaimer);
                 document.body.appendChild(new_div1);
-                document.body.appendChild(hourly_data_disclaimer);
                 document.body.appendChild(new_div2);
                 document.body.appendChild(new_div3);
                 document.body.appendChild(document.createElement('hr'));
@@ -207,9 +273,7 @@
         }
      </script>
 </head>
-
 <body>
     <p style="color:red">{{error}}</p>
 </body>
-
 </html>

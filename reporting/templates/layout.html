@@ -61,7 +61,7 @@
                                             arr[i+1] = json.data[i];
                                         }
                                         var chart_data1 = google.visualization.arrayToDataTable(arr);
-                                        var options1 = {title: 'Hourly Report for Today', fontSize: '10', enableInteractivity: 'true'};
+                                        var options1 = {title: 'Hourly Report for Today', width: '100%', fontSize: '10', enableInteractivity: 'true'};
                                         var chart1 = new google.visualization.LineChart(document.getElementById('linechart1'));
                                         chart1.draw(chart_data1, options1);
 
