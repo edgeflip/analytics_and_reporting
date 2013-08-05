@@ -12,6 +12,8 @@
             // nicely and those attributes parsed
             var today_json = '{{today_data}}';
             var aggregate_json = '{{aggregate_data}}';
+            var hourly_aggregate = '{{hourly_aggregate}}';
+            var daily_aggregate = '{{daily_aggregate}}';
             var all_json = '{{all_data}}';
             var day_json = '{{day_data}}';
             var hourly_json = '{{hourly_data}}';
@@ -20,6 +22,10 @@
             today_json = JSON.parse(today_json);
             aggregate_json = aggregate_json.replace(/&#34;/ig, '"');
             aggregate_json = JSON.parse(aggregate_json);
+            hourly_aggregate = hourly_aggregate.replace(/&#34;/ig, '"');
+            hourly_aggregate = JSON.parse(hourly_aggregate);
+            daily_aggregate = daily_aggregate.replace(/&#34;/ig, '"');
+            daily_aggregate = JSON.parse(daily_aggregate);
             day_json = day_json.replace(/&#34;/ig, '"');
             day_json = JSON.parse(day_json);
             all_json = all_json.replace(/&#34;/ig, '"');
@@ -122,6 +128,53 @@
             var Today_Table = new google.visualization.Table(today_div);
             Today_Table.draw(Data1, {showRowNumberPosition: 'true', width: '100%', position: 'out'});
 
+
+
+            // LINE CHART FOR HOULY DATA FOR ALL CAMPAIGNS
+            var hourly_agg_div = document.createElement("div");
+            hourly_agg_div.id = "hourly_agg_div";
+            var hourly_agg_arr = new Array();
+            hourly_agg_arr[0] = ['Hour', 'Visits', 'Clicks', 'Authorizations', 'Distinct Authorized Facebook Users', '# Users Shown Friends', '# Users Who Shared', '# Friends Shared With', '# Distinct Friends Shared', 'Clickbacks'];
+            for(w=0; w < hourly_aggregate.data.length; w++)
+            {
+                hourly_agg_arr[w+1] = hourly_aggregate.data[w];
+            }
+            var hr_agg_data = google.visualization.arrayToDataTable(hourly_agg_arr);
+            var hr_agg_options = {title: 'Hourly Report', fontSize: '10', enableInteractivity: 'true', 'width': 1000};
+            var hr_agg_chart = new google.visualization.LineChart(hourly_agg_div);
+            hr_agg_chart.draw(hr_agg_data, hr_agg_options);
+
+
+            // LINE CHART FOR DAILY DATA FOR ALL CAMPAIGNS
+            var daily_agg_div = document.createElement("div");
+            daily_agg_div.id = "daily_agg_div";
+            var daily_data = new google.visualization.DataTable(); 
+
+            daily_data.addColumn('date', 'Date');
+            daily_data.addColumn('number', 'Visits');
+            daily_data.addColumn('number', 'Clicks');
+            daily_data.addColumn('number', 'Auths');
+            daily_data.addColumn('number', 'Distinct Facebook Auths');
+            daily_data.addColumn('number', '# Users Shown Friends');
+            daily_data.addColumn('number', '# Users Who Shared');
+            daily_data.addColumn('number', '# Friends Shared With');
+            daily_data.addColumn('number', '# Distinct Friends Shared');
+            daily_data.addColumn('number', 'Clickbacks');
+            var daily_data_arr = new Array(); 
+            for(j=0; j < daily_aggregate.data.length; j++)
+            {
+                var _date = [new Date(daily_aggregate.data[j][0], daily_aggregate.data[j][1], daily_aggregate.data[j][2])];
+                _date = _date.concat(daily_aggregate.data[j].slice(3, daily_aggregate.data[j].length));
+                daily_data_arr[j] = _date; 
+            }
+            daily_data.addRows(daily_data_arr);
+
+            var daily_chart = new google.visualization.LineChart(daily_agg_div);
+            daily_chart.draw(daily_data, {title: 'Daily Report(for the last 30 days)', fontSize: '10', enableInteractivity: 'true', 'width': 1000});
+
+
+
+
             // Add the div to the document that contains our Aggregate_Table
             var agg_title = document.createElement("p");
             agg_title.innerHTML = "Aggregate Data for All Campaigns";
@@ -129,9 +182,11 @@
             document.body.appendChild(agg_div);
             document.body.appendChild(document.createElement('br'));
             var today_title = document.createElement("p");
-            today_title.innerHTML = "Data for All Campaigns for {{today}}";
+            today_title.innerHTML = "Data for All Campaigns for <b>{{today}}</b>";
             document.body.appendChild(today_title);
             document.body.appendChild(today_div);
+            document.body.appendChild(hourly_agg_div);
+            document.body.appendChild(daily_agg_div);
             document.body.appendChild(document.createElement('br'));
             document.body.appendChild(document.createElement('br'));
             document.body.appendChild(document.createElement('hr'));

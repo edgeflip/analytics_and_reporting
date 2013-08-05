@@ -7,12 +7,18 @@ from generate_data_for_export_original import tool
 from generate_report import encodeDES
 from flask import render_template
 from time import strftime
-
+from flask.ext.basicauth import BasicAuth
 
 application = flask.Flask(__name__)
 
+basic_auth = BasicAuth(application)
+
+application.config['BASIC_AUTH_USERNAME'] = 'targeted'
+application.config['BASIC_AUTH_PASSWORD'] = 'sharing'
+
 
 @application.route('/')
+@basic_auth.required
 def handle_request():
     client = request.args.get('client_id')
     client = client.replace('=','%3D')
@@ -28,6 +34,10 @@ def handle_request():
         aggregate = open('client_{0}_all_campaigns_aggregate.txt'.format(client_id),'r')
         aggregate_data = aggregate.read()
         aggregate.close()
+
+        hourly_aggregate = open('client_{0}_hourly_aggregate.txt'.format(client_id),'r').read()
+        daily_aggregate = open('client_{0}_daily_aggregate.txt'.format(client_id),'r').read()
+
         f1 = open('client_{0}_data_all.txt'.format(client_id),'r')
         all_data = f1.read()
         f1.close()
@@ -42,7 +52,7 @@ def handle_request():
         f4.close()
         today = strftime('%m') + '/' + strftime('%d') + '/' + strftime('%Y')
 
-        return render_template("layout2.html", today_data=_today_data, aggregate_data=aggregate_data, all_data=all_data, day_data=day_data, hourly_data=hourly_data, monthly_data=monthly_data, client_name=client_name, today=today) 
+        return render_template("layout2.html", today_data=_today_data, aggregate_data=aggregate_data, hourly_aggregate=hourly_aggregate, daily_aggregate=daily_aggregate, all_data=all_data, day_data=day_data, hourly_data=hourly_data, monthly_data=monthly_data, client_name=client_name, today=today) 
     except KeyError:
         error = "Hit an error"
         return render_template("layout2.html", error=error)

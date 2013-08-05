@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from generate_report import make_hour_by_hour_object
+from generate_report import make_day_by_day_object
 from generate_report import generate_report_for_endpoint_new
 from generate_report import new_query
 from generate_report import get_campaign_stuff_for_client
@@ -7,8 +9,10 @@ from generate_report import create_unix_time_for_each_day
 from generate_report import new_month_query
 from handle_ec2_time_difference import handle_time_difference
 import json
-import datetime
+import datetime, time
 from time import strftime
+
+
 
 """
     takes a client_id and gets all of the campaigns running for that client
@@ -35,6 +39,19 @@ def create_month_object(client_id):
         for day in not_accounted_days:
             to_append = [day] + [0 for i in range(9)]
             obj[campaign[1]].append(to_append)
+    # sort the stuff
+    # we are going to have to use the datetime, time, and strftime modules
+    for key in obj.keys():
+        for i in range(len(obj[key])):
+            for j in range(len(obj[key])-1):
+                first_parts = obj[key][j][0].split('-')
+                first = time.mktime(datetime.datetime(int(first_parts[0]), int(first_parts[1]), int(first_parts[2])).timetuple())
+                second_parts = obj[key][j+1][0].split('-')
+                second = time.mktime(datetime.datetime(int(second_parts[0]), int(second_parts[1]), int(second_parts[2])).timetuple())
+                if first > second:
+                    tmp = obj[key][j]
+                    obj[key][j] = obj[key][j+1]
+                    obj[key][j+1] = tmp
     return obj
 
 
@@ -48,7 +65,7 @@ def create_month_object(client_id):
     if we don't have data for that campaign we just substitute zeros for
     that campaign for each hour
 """
-def generate_hourly_object(client_id):
+def create_hour_object(client_id):
     current_hour = int(strftime('%H'))
     obj = {}
     mysql_stuff = new_hour_query()
@@ -59,6 +76,13 @@ def generate_hourly_object(client_id):
             if hour not in [w[0] for w in obj[campaign[1]]]:
                 new_list = [hour] + [0 for i in range(9)]
                 obj[campaign[1]].append(new_list)
+    for key in obj.keys():
+        for i in range(len(obj[key])):
+            for j in range(len(obj[key])-1):
+                if obj[key][j][0] > obj[key][j+1][0]:
+                    tmp = obj[key][j]
+                    obj[key][j] = obj[key][j+1]
+                    obj[key][j+1] = tmp
     return obj
 
 
@@ -102,11 +126,16 @@ def write_and_consume():
     all_clients = tool.query("select distinct client_id from campaigns")
     for each_client in all_clients:
         client = each_client[0]
+        # aggregate table data
         today_all_campaigns, aggregate_all_campaigns = generate_report_for_endpoint_new(client)
+        # aggregate line chart data
+        hourly_all_campaigns = make_hour_by_hour_object(client)
+        daily_all_campaigns = make_day_by_day_object(client)
+
         today_all_campaigns_json = json.dumps({"data": today_all_campaigns})
         aggregate_all_campaigns_json = json.dumps({"data": aggregate_all_campaigns})
         clients_data_all, clients_data_day = couple_data_with_info(client)
-        clients_hourly_data = generate_hourly_object(client)
+        clients_hourly_data = create_hour_object(client)
         clients_monthly_data = create_month_object(client)
         clients_data_all_str = json.dumps(clients_data_all)
         clients_data_day_str = json.dumps(clients_data_day)
@@ -114,6 +143,8 @@ def write_and_consume():
         clients_data_monthly_str = json.dumps(clients_monthly_data)
         today_all_campaigns = 'client_{0}_all_campaigns_day.txt'.format(client)
         aggregate_all_campaigns = 'client_{0}_all_campaigns_aggregate.txt'.format(client)
+        hour_by_hour_all_campaigns = 'client_{0}_hourly_aggregate.txt'.format(client)
+        day_by_day_all_campaigns = 'client_{0}_daily_aggregate.txt'.format(client)
         all_data_file = 'client_{0}_data_all.txt'.format(client)
         day_data_file = 'client_{0}_data_day.txt'.format(client)
         hourly_data_file = 'client_{0}_data_hourly.txt'.format(client)
@@ -124,6 +155,12 @@ def write_and_consume():
         _aggregate = open(aggregate_all_campaigns,'w')
         _aggregate.write(aggregate_all_campaigns_json)
         _aggregate.close()
+        hr_by_hr = open(hour_by_hour_all_campaigns, 'w')
+        hr_by_hr.write(json.dumps(hourly_all_campaigns))
+        hr_by_hr.close()
+        d_by_d = open(day_by_day_all_campaigns, 'w')
+        d_by_d.write(json.dumps(daily_all_campaigns))
+        d_by_d.close()
         f1 = open(all_data_file,'w')
         f1.write(clients_data_all_str)
         f1.close()

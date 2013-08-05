@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-# LOCAL VERSION
-# NEED TO UNCOMMENT THE SOCKET BINDS IN if __name__ == '__main__' FOR LIVE USE
 import csv
 import flask
 from flask import request
@@ -9,8 +7,6 @@ from time import strftime
 import socket
 import json
 from flask.ext.basicauth import BasicAuth
-
-#application.config['BASIC_AUTH_PASSWORD'] = 'password'
 
 
 application = flask.Flask(__name__)
@@ -27,21 +23,21 @@ def main_handler():
         try:
             client_id_hash = request.args.get('client_id')
             if client_id_hash == 'DXzVnCY4EZ0=':
-                hourly_data = {'data': []}
-                hour_reader = csv.reader(open('hourly_data_va.csv','r'))
+	        hourly_data = {'data': []}
+	        hour_reader = csv.reader(open('hourly_data_va.csv','r'))
                 try:
-                    while True:
-                        hourly_data['data'].append([int(i) for i in hour_reader.next()])
-                except StopIteration:
-                    pass
-                # read in daily_data
-                daily_data = {'data': []}
-                day_reader = csv.reader(open('daily_data_va.csv','r'))
-                try:
-                    while True:
-                        daily_data['data'].append([int(i) for i in day_reader.next()])
-                except StopIteration:
-                    pass
+		    while True:
+			hourly_data['data'].append([int(i) for i in hour_reader.next()])
+		except StopIteration:
+			pass
+		# read in daily_data
+		daily_data = {'data': []}
+		day_reader = csv.reader(open('daily_data_va.csv','r'))
+		try:
+		    while True:
+			daily_data['data'].append([int(i) for i in day_reader.next()])
+		except StopIteration:
+		    pass
 
                 csvfile = open('current_data_va.csv','r')
                 reader = csv.reader(csvfile,delimiter=',')
@@ -59,10 +55,14 @@ def main_handler():
         return "We don't handle those kinds of requests here"
 
 
+@application.route('/new_dashboard', methods=['GET','POST'])
+def second_app():
+	from report_server3 import handle_request
+	return handle_request()
+
 if __name__ == '__main__':
-    application.run()
-    #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #sock.bind(('0.0.0.0',80))
-    #port = sock.getsockname()[1]
-    #sock.close()
-    #application.run(host='0.0.0.0',port=port)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('0.0.0.0',80))
+    port = sock.getsockname()[1]
+    sock.close()
+    application.run(host='0.0.0.0',port=port)

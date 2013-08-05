@@ -221,9 +221,12 @@ def generate_report_for_endpoint_new(client_id):
     start_of_day = handle_time_difference()
     now = str(int(time.time()))
     results_today_now = tool.query(main_query.format(client_id,start_of_day,now))
-    results_today_now = [int(i) for i in results_today_now[0]]
+    # needed a lambda for if else, list comprehensions wouldn't work her
+    # takes a list like [Decimal(4L), None, None, Decimal(2L), Decimal(2L), None]
+    # and makes it [4, 0, 0, 2, 2, 0]
+    results_today_now = map(lambda x: int(x) if x != None else 0, results_today_now[0])
     results_aggregate_now = tool.query(main_query.format(client_id,0,now))
-    results_aggregate_now = [int(i) for i in results_aggregate_now[0]]
+    results_aggregate_now = map(lambda x: int(x) if x != None else 0, results_aggregate_now[0])
     return results_today_now, results_aggregate_now
     
 
@@ -252,6 +255,17 @@ def make_hour_by_hour_object(client_id):
         num_distinct_shared_with = int(each[8])
         clickbacks = int(each[9])
         obj['data'].append([hour, visits,clicks,auths,distinct_auths,num_shown,num_shared,num_shared_with,num_distinct_shared_with,clickbacks])
+    # sort the items in the object
+    #for i in range(len(obj['data'])):
+    #    for j in range(len(obj['data'])-1):
+            # use datetime
+    #        first = time.mktime(datetime.datetime(obj['data'][j][0], obj['data'][j][1], obj['data'][j][2]).timetuple())
+    #        second = time.mktime(datetime.datetime(obj['data'][j+1][0], obj['data'][j+1][1], obj['data'][j+1][2]).timetuple())
+    #        if first > second:
+    #            tmp = obj['data'][j]
+    #            obj['data'][j] = obj['data'][j+1]
+    #            obj['data'][j+1] = tmp
+
     return obj
 
 def get_day_by_day(client_id):
