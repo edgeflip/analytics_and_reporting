@@ -56,13 +56,16 @@ def main_handler():
 
 
 @application.route('/new_dashboard', methods=['GET','POST'])
+@basic_auth.required
 def second_app():
 	from report_server3 import handle_request
 	return handle_request()
 
 if __name__ == '__main__':
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('0.0.0.0',80))
-    port = sock.getsockname()[1]
-    sock.close()
-    application.run(host='0.0.0.0',port=port)
+    application.debug = True
+    application.run()
+    #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #sock.bind(('0.0.0.0',80))
+    #port = sock.getsockname()[1]
+    #sock.close()
+    #application.run(host='0.0.0.0',port=port)

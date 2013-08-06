@@ -20,7 +20,10 @@ def metrics(blob):
          posters = [blob['feed']['data'][e]['from']['id'] for e in range(len(blob['feed']['data'])) if 'from' in blob['feed']['data'][e].keys()]
          poster_counts = [(poster, posters.count(poster)) for poster in set(posters)]
          # like metrics including how many likes on average and those who like stuff and how often they do it   
-         average_likes = sum([blob['feed']['data'][e]['likes']['count'] for e in range(len(blob['feed']['data'])) if 'likes' in blob['feed']['data'][e].keys()])/num_posts
+         try:
+             average_likes = sum([blob['feed']['data'][e]['likes']['count'] for e in range(len(blob['feed']['data'])) if 'likes' in blob['feed']['data'][e].keys()])/num_posts
+         except ZeroDivisionError:
+             average_likes = 0
          likers_unfiltered = [e['id'] for w in [blob['feed']['data'][i]['likes']['data'] for i in range(len(blob['feed']['data'])) if 'likes' in blob['feed']['data'][i].keys()] for e in w]
          likes_counts = [(liker, likers_unfiltered.count(liker)) for liker in set(likers_unfiltered)]
          # the types of posts that are on our user's wall and how many of each kind there are
@@ -30,7 +33,10 @@ def metrics(blob):
          post_info = [(blob['feed']['data'][x]['type'], blob['feed']['data'][x]['status_type']) for x in range(len(blob['feed']['data'])) if 'type' in blob['feed']['data'][x].keys() and 'status_type' in blob['feed']['data'][x].keys()]
          # number of comments
          post_comments = [len(blob['feed']['data'][x]['comments']['data']) for x in range(len(blob['feed']['data'])) if 'comments' in blob['feed']['data'][x].keys()]
-         average_comments = sum(post_comments)/len(post_comments)
+         try:
+             average_comments = sum(post_comments)/len(post_comments)
+         except ZeroDivisionError:
+             average_comments = 0
          # get all of the ids of people who commented on statuses/posts
          comments = [blob['feed']['data'][x]['comments']['data'] for x in range(len(blob['feed']['data'])) if 'comments' in blob['feed']['data'][x].keys()]
          commenters_unfiltered = [comment_stack[w]['from']['id'] for comment_stack in comments for w in range(len(comment_stack))]

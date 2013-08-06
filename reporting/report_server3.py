@@ -13,7 +13,7 @@ application = flask.Flask(__name__)
 
 basic_auth = BasicAuth(application)
 
-application.config['BASIC_AUTH_USERNAME'] = 'targeted'
+application.config['BASIC_AUTH_USERNAME'] = 'virginia'
 application.config['BASIC_AUTH_PASSWORD'] = 'sharing'
 
 
