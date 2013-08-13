@@ -6,8 +6,16 @@ import MySQLdb as mysql
 # pass a new PySql object a cursor for instantiation
 
 class PySql(object):
-	def __init__(self, cur):
-		self._cur = cur
+	def __init__(self, hostname, user, password, dbname):
+		self._hostname = hostname
+		self._user = user
+		self._pw = password
+		self._dbname = dbname
+
+	def connect(self):
+		conn = mysql.connect(self._hostname, self._user, self._pw, self._dbname)
+		self._cur = conn.cursor()
+		
 		
 	def show_tables(self):
 		try:
@@ -43,14 +51,6 @@ class PySql(object):
 	
 	"""
 
-	# query all events in the campaign
-	# SELECT * FROM events WHERE campaign_id = 3;
-
-	# query pertinent information from users about the primary
-	# SELECT email, gender, birthday, city, state FROM users WHERE fbid=fbid_from_campaign_query
-
-	 
-
 	def json_ify(self,table,query_string):
 		data_object = {}
 		res = self.query(query_string)
@@ -64,7 +64,7 @@ class PySql(object):
 
 
 	# helper function for datetime stuff
-	def convert_string_to_datetime(string):
+	def convert_string_to_datetime(self,string):
 		_format = '%Y-%m-%d %H:%M%S'
 		result_datetime = datetime.strptime(string,_format)
 		return result_datetime  

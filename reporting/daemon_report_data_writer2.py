@@ -122,7 +122,10 @@ def couple_data_with_info(client_id):
 
 
 def write_and_consume():
-    from generate_data_for_export_original import tool
+    dir1, dir2 = "data1", "data2"
+    write_to = open("write_to.txt","r").read()
+    os.remove("write_to.txt")
+    from generate_data_for_export_original import tool 
     all_clients = tool.query("select distinct client_id from campaigns")
     for each_client in all_clients:
         client = each_client[0]
@@ -141,14 +144,14 @@ def write_and_consume():
         clients_data_day_str = json.dumps(clients_data_day)
         clients_data_hourly_str = json.dumps(clients_hourly_data)
         clients_data_monthly_str = json.dumps(clients_monthly_data)
-        today_all_campaigns = 'client_{0}_all_campaigns_day.txt'.format(client)
-        aggregate_all_campaigns = 'client_{0}_all_campaigns_aggregate.txt'.format(client)
-        hour_by_hour_all_campaigns = 'client_{0}_hourly_aggregate.txt'.format(client)
-        day_by_day_all_campaigns = 'client_{0}_daily_aggregate.txt'.format(client)
-        all_data_file = 'client_{0}_data_all.txt'.format(client)
-        day_data_file = 'client_{0}_data_day.txt'.format(client)
-        hourly_data_file = 'client_{0}_data_hourly.txt'.format(client)
-        monthly_data_file = 'client_{0}_data_monthly.txt'.format(client)
+        today_all_campaigns = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_all_campaigns_day.txt'.format(write_to,client)
+        aggregate_all_campaigns = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_all_campaigns_aggregate.txt'.format(write_to,client)
+        hour_by_hour_all_campaigns = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_hourly_aggregate.txt'.format(write_to,client)
+        day_by_day_all_campaigns = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_daily_aggregate.txt'.format(write_to,client)
+        all_data_file = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_data_all.txt'.format(write_to,client)
+        day_data_file = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_data_day.txt'.format(write_to,client)
+        hourly_data_file = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_data_hourly.txt'.format(write_to,client)
+        monthly_data_file = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_data_monthly.txt'.format(write_to,client)
         _today = open(today_all_campaigns,'w')
         _today.write(today_all_campaigns_json)
         _today.close()
@@ -173,6 +176,14 @@ def write_and_consume():
         f4 = open(monthly_data_file,'w')
         f4.write(clients_data_monthly_str)
         f4.close()
+    if write_to == dir1:
+	new = dir2
+    else:
+	new = dir1
+    directive_file = open("write_to.txt","w")
+    directive_file.write(new)
+    directive_file.close()
+    
     print "data written"
 
 
