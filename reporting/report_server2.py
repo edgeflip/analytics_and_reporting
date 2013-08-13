@@ -62,10 +62,8 @@ def second_app():
 	return handle_request()
 
 if __name__ == '__main__':
-    application.debug = True
-    application.run()
-    #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #sock.bind(('0.0.0.0',80))
-    #port = sock.getsockname()[1]
-    #sock.close()
-    #application.run(host='0.0.0.0',port=port)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('0.0.0.0',80))
+    port = sock.getsockname()[1]
+    sock.close()
+    application.run(host='0.0.0.0',port=port)

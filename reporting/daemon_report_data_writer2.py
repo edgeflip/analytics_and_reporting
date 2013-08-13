@@ -11,7 +11,7 @@ from handle_ec2_time_difference import handle_time_difference
 import json
 import datetime, time
 from time import strftime
-
+import os
 
 
 """
@@ -113,19 +113,16 @@ def couple_data_with_info(client_id):
         else:
             campaigns_day_ago_data["%s" % i[1]] = [0 for e in range(10)]
 
-
-    #campaigns_alltime_data = {"%s" % i[1]: [int(w) for w in [e for e in alltime_data if e[0] == i[0]][0]] for i in campaign_stuff}
-    #campaigns_day_ago_data = {"%s" % i[1]: [int(w) for w in [e for e in day_data if e[0] == i[0]][0]] for i in campaign_stuff if i[0] in [e[0] for e in day_data]}
     return campaigns_alltime_data, campaigns_day_ago_data
 
 
 
 
 def write_and_consume():
-    dir1, dir2 = "data1", "data2"
-    write_to = open("write_to.txt","r").read()
-    os.remove("write_to.txt")
-    from generate_data_for_export_original import tool 
+    dir1,dir2 = "data1", "data2"
+    write_to = open("/home/ubuntu/reporting_app/write_to.txt","r").read()
+    write_to = write_to.split('\n')[0]
+    from generate_data_for_export_original import tool
     all_clients = tool.query("select distinct client_id from campaigns")
     for each_client in all_clients:
         client = each_client[0]
@@ -144,14 +141,14 @@ def write_and_consume():
         clients_data_day_str = json.dumps(clients_data_day)
         clients_data_hourly_str = json.dumps(clients_hourly_data)
         clients_data_monthly_str = json.dumps(clients_monthly_data)
-        today_all_campaigns = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_all_campaigns_day.txt'.format(write_to,client)
-        aggregate_all_campaigns = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_all_campaigns_aggregate.txt'.format(write_to,client)
-        hour_by_hour_all_campaigns = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_hourly_aggregate.txt'.format(write_to,client)
-        day_by_day_all_campaigns = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_daily_aggregate.txt'.format(write_to,client)
-        all_data_file = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_data_all.txt'.format(write_to,client)
-        day_data_file = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_data_day.txt'.format(write_to,client)
-        hourly_data_file = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_data_hourly.txt'.format(write_to,client)
-        monthly_data_file = '/home/wes/Documents/analytics_and_reporting/reporting/{0}/client_{1}_data_monthly.txt'.format(write_to,client)
+	today_all_campaigns = '/home/ubuntu/reporting_app/{0}/client_{1}_all_campaigns_day.txt'.format(write_to,client)
+	aggregate_all_campaigns = '/home/ubuntu/reporting_app/{0}/client_{1}_all_campaigns_aggregate.txt'.format(write_to,client)
+	hour_by_hour_all_campaigns = '/home/ubuntu/reporting_app/{0}/client_{1}_hourly_aggregate.txt'.format(write_to,client)
+	day_by_day_all_campaigns = '/home/ubuntu/reporting_app/{0}/client_{1}_daily_aggregate.txt'.format(write_to,client)
+	all_data_file = '/home/ubuntu/reporting_app/{0}/client_{1}_data_all.txt'.format(write_to,client)
+	day_data_file = '/home/ubuntu/reporting_app/{0}/client_{1}_data_day.txt'.format(write_to,client)
+	hourly_data_file = '/home/ubuntu/reporting_app/{0}/client_{1}_data_hourly.txt'.format(write_to,client)
+	monthly_data_file = '/home/ubuntu/reporting_app/{0}/client_{1}_data_monthly.txt'.format(write_to,client)
         _today = open(today_all_campaigns,'w')
         _today.write(today_all_campaigns_json)
         _today.close()
@@ -177,13 +174,13 @@ def write_and_consume():
         f4.write(clients_data_monthly_str)
         f4.close()
     if write_to == dir1:
-	new = dir2
+	new_write = dir2
     else:
-	new = dir1
-    directive_file = open("write_to.txt","w")
-    directive_file.write(new)
-    directive_file.close()
-    
+	new_write = dir1
+    os.remove("/home/ubuntu/reporting_app/write_to.txt")
+    _new = open("/home/ubuntu/reporting_app/write_to.txt","w")
+    _new.write(new_write)
+    _new.close()
     print "data written"
 
 
