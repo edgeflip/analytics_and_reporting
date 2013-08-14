@@ -119,8 +119,8 @@ def couple_data_with_info(client_id):
 
 
 def write_and_consume():
-    dir1,dir2 = "data1", "data2"
-    write_to = open("/home/ubuntu/reporting_app/write_to.txt","r").read()
+    dir1,dir2 = "dash_data1", "dash_data2"
+    write_to = open("write_to.txt","r").read()
     write_to = write_to.split('\n')[0]
     from generate_data_for_export_original import tool
     all_clients = tool.query("select distinct client_id from campaigns")
@@ -141,14 +141,14 @@ def write_and_consume():
         clients_data_day_str = json.dumps(clients_data_day)
         clients_data_hourly_str = json.dumps(clients_hourly_data)
         clients_data_monthly_str = json.dumps(clients_monthly_data)
-	today_all_campaigns = '/home/ubuntu/reporting_app/{0}/client_{1}_all_campaigns_day.txt'.format(write_to,client)
-	aggregate_all_campaigns = '/home/ubuntu/reporting_app/{0}/client_{1}_all_campaigns_aggregate.txt'.format(write_to,client)
-	hour_by_hour_all_campaigns = '/home/ubuntu/reporting_app/{0}/client_{1}_hourly_aggregate.txt'.format(write_to,client)
-	day_by_day_all_campaigns = '/home/ubuntu/reporting_app/{0}/client_{1}_daily_aggregate.txt'.format(write_to,client)
-	all_data_file = '/home/ubuntu/reporting_app/{0}/client_{1}_data_all.txt'.format(write_to,client)
-	day_data_file = '/home/ubuntu/reporting_app/{0}/client_{1}_data_day.txt'.format(write_to,client)
-	hourly_data_file = '/home/ubuntu/reporting_app/{0}/client_{1}_data_hourly.txt'.format(write_to,client)
-	monthly_data_file = '/home/ubuntu/reporting_app/{0}/client_{1}_data_monthly.txt'.format(write_to,client)
+	today_all_campaigns = '{0}/client_{1}_all_campaigns_day.txt'.format(write_to,client)
+	aggregate_all_campaigns = '{0}/client_{1}_all_campaigns_aggregate.txt'.format(write_to,client)
+	hour_by_hour_all_campaigns = '{0}/client_{1}_hourly_aggregate.txt'.format(write_to,client)
+	day_by_day_all_campaigns = '{0}/client_{1}_daily_aggregate.txt'.format(write_to,client)
+	all_data_file = '{0}/client_{1}_data_all.txt'.format(write_to,client)
+	day_data_file = '{0}/client_{1}_data_day.txt'.format(write_to,client)
+	hourly_data_file = '{0}/client_{1}_data_hourly.txt'.format(write_to,client)
+	monthly_data_file = '{0}/client_{1}_data_monthly.txt'.format(write_to,client)
         _today = open(today_all_campaigns,'w')
         _today.write(today_all_campaigns_json)
         _today.close()
@@ -177,8 +177,8 @@ def write_and_consume():
 	new_write = dir2
     else:
 	new_write = dir1
-    os.remove("/home/ubuntu/reporting_app/write_to.txt")
-    _new = open("/home/ubuntu/reporting_app/write_to.txt","w")
+    os.remove("write_to.txt")
+    _new = open("write_to.txt","w")
     _new.write(new_write)
     _new.close()
     print "data written"
