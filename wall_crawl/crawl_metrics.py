@@ -1,8 +1,81 @@
 #!/usr/bin/env python
 
+"""
+    imetrics takes as parameter a json blob and a ownerid and returns an object with metrics around how connected
+    the person whom's blob we are crawling and the owernid are by selectively retrieving and utilizing the posts,tags, etc.
+    with the ownerid within that post somewhere whether it is in a "like" or a "comment" or a "post" that the ownerid
+    actually made to the fbid's (target user) page or it is just a post the ownerid can be found in
+"""
+
+
+def imetrics(resp, ownerid):
+    try:
+        # posts from the cared about user period
+        posts_from = [
+			i for i in resp['feed']['data'] 
+			if 'from' in i.keys() and ownerid == i['from']['id']
+		     ]
+
+        # generate a list of words from the message in each post that our cared user made 
+        words_from_post = []
+        for post in posts_from:
+            if 'message' in post.keys():
+                words_from_post.append(post['message'].split(' '))
+	    if 'description' in post.keys():
+		words_from_post.append(post['description'].split(' '))
+	    
+
+        # get all posts that the cared about user commented on
+        comments_from = [
+			    i for i in resp['feed']['data'] 
+			    if 'comments' in i.keys() and i not in posts_from 
+			    and ownerid in [
+						i['comments']['data'][j]['from']['id'] 
+						for j in range(len(i['comments']['data']))
+				           ]
+		        ]
+
+        # get all posts that the cared about user liked
+        likes_from = [
+			i for i in resp['feed']['data'] 
+			if 'likes' in i.keys() and i not in posts_from and i not in comments_from 
+			and ownerid in [
+						i['likes']['data'][j]['id'] 
+						# got a key error here
+						for j in range(len(i['likes']['data']))
+				       ]
+		     ]
+
+        # get all posts that the user is tagged in in a story
+        stories_with = [
+			i for i in resp['feed']['data'] 
+			if 'story_tags' in i.keys() and i not in likes_from and i not in comments_from and i not in posts_from
+			and ownerid in [
+						i['story_tags'][key][j]['id'] 
+						for key in i['story_tags'].keys() 
+						for j in range(len(i['story_tags'][key]))
+				       ]
+		       ]
+        # story tags post with the cared about user in it and analysis on it
+        story_words = []
+        for post in stories_with:
+            story_words += post['story'].split(' ')
+
+    
+        metric_object = {}
+        metric_object["posts_from"] = {"posts": posts_from, "words": words_from_post}
+        metric_object["comments_from"] = {"posts": comments_from, "words": words_from_comments}
+        metric_object["likes_from"] = {"posts": likes_from, "words": words_from_likes}
+        metric_object["stories_with"] = {"posts": stories_with, "words": words_from_stories}
+        return metric_object
+
+    except KeyError:
+	return {}
+
+
 
 """
-   metrics algorithm takes a json blob as a parameter and builds 4 criteria of metrics around it (posts, comments, likes, types)
+   gmetrics algorithm takes a json blob as a parameter and builds 4 criteria of metrics around it (posts, comments, likes, types)
    the posts metrics include a list of all users that have posted and then a list of tuples with (user, number_of_times_posted)
    the comments metrics include an average number of comments on posts and a list of tuples with (user, number_of_times_commented)
    the likes metrics include an average number of likes on posts and a list of tuples with (user, number_of_times_liked)
@@ -11,7 +84,7 @@
 
 
 
-def metrics(blob):
+def gmetrics(blob):
      if blob == '':
          return None
      else:
@@ -93,5 +166,7 @@ def metrics(blob):
          data_object['type_metrics'] = {'count': type_counts}
          data_object['comment_metrics'] = {'average': average_comments, 'commenter_count': commenter_count}
          return data_object
+
+
 
 

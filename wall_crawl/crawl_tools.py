@@ -8,7 +8,7 @@ from time import strftime
 import time
 import csv
 from boto.s3.connection import S3Connection
-from crawl_metrics import metrics
+from crawl_metrics import metrics,imetrics
 
 
 """
@@ -69,9 +69,6 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 	  
             try: 
                 response = crawl_feed(fbid,token)
-		return response, token, main_key
-		break
-		exit()
 	    except (urllib2.URLError, urllib2.HTTPError):
 		response = ''
 	    #except (urllib2.URLError, urllib2.HTTPError):
@@ -85,7 +82,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 
 	    # META DATA FOR POST IDS TO AVOID DUPLICATE POSTS IN THIS FEED
 	    # we need to call json.loads() on response twice
-	    try: 
+	    if response != '': 
 	        response = json.loads(response)
                 response = json.loads(response)
 	
@@ -103,7 +100,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 	        # there are times when this will return a TypeError or KeyError depending on what the response looks like
 		# that is passed to the metrics algorithm
 	        try:
-	            metric_object = metrics(response)
+	            metric_object = metrics(response,ownerid)
                     m_key = metric_bucket.new_key()
                     # key will be the same
                     m_key.key = main_key
@@ -113,7 +110,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 
 	    # if response=json.loads(response) above fails we will be thrown a ValueError because
 	    # the object that is passed to json.loads is not valid JSON in which case we just continue
-	    except (ValueError, KeyError):
+	    else:
 		pass
 
 	    k.set_contents_from_string(response)
