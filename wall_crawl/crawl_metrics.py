@@ -11,62 +11,34 @@
 def imetrics(resp, ownerid):
     try:
         # posts from the cared about user period
-        posts_from = [
-			i for i in resp['feed']['data'] 
-			if 'from' in i.keys() and ownerid == i['from']['id']
-		     ]
-
-        # generate a list of words from the message in each post that our cared user made 
-        words_from_post = []
-        for post in posts_from:
-            if 'message' in post.keys():
-                words_from_post.append(post['message'].split(' '))
-	    if 'description' in post.keys():
-		words_from_post.append(post['description'].split(' '))
-	    
+        posts_from = []
+        for i in resp['feed']['data']:
+            if 'from' in i.keys() and ownerid == i['from']['id']:
+                posts_from.append(i)
 
         # get all posts that the cared about user commented on
-        comments_from = [
-			    i for i in resp['feed']['data'] 
-			    if 'comments' in i.keys() and i not in posts_from 
-			    and ownerid in [
-						i['comments']['data'][j]['from']['id'] 
-						for j in range(len(i['comments']['data']))
-				           ]
-		        ]
+        comments_from = []
+        for i in resp['feed']['data']:
+            if 'comments' in i.keys() and i not in posts_from and ownerid in [i['comments']['data'][j]['id'] for j in range(len(i['comments']['data']))]:
+                comments_from.append(i)
 
         # get all posts that the cared about user liked
-        likes_from = [
-			i for i in resp['feed']['data'] 
-			if 'likes' in i.keys() and i not in posts_from and i not in comments_from 
-			and ownerid in [
-						i['likes']['data'][j]['id'] 
-						# got a key error here
-						for j in range(len(i['likes']['data']))
-				       ]
-		     ]
+        likes_from = []
+        for i in resp['feed']['data']:
+            if 'likes' in i.keys() and i not in posts_from and i not in comments_from and ownerid in [i['likes']['data'][j]['id'] for j in range(len(i['likes']['data']))]:
+                likes_from.append(i)
 
         # get all posts that the user is tagged in in a story
-        stories_with = [
-			i for i in resp['feed']['data'] 
-			if 'story_tags' in i.keys() and i not in likes_from and i not in comments_from and i not in posts_from
-			and ownerid in [
-						i['story_tags'][key][j]['id'] 
-						for key in i['story_tags'].keys() 
-						for j in range(len(i['story_tags'][key]))
-				       ]
-		       ]
-        # story tags post with the cared about user in it and analysis on it
-        story_words = []
-        for post in stories_with:
-            story_words += post['story'].split(' ')
-
-    
+        stories_with = []
+        for i in resp['feed']['data']:
+            if 'story_tags' in i.keys() and i not in likes_from and i not in comments_from and i not in posts_from and ownerid in [i['story_tags'][key][j]['id'] for key in i['story_tags'].keys() for j in range(len(i['story_tags'][key]))]:
+                stories_with.append(i)
+ 
         metric_object = {}
-        metric_object["posts_from"] = {"posts": posts_from, "words": words_from_post}
-        metric_object["comments_from"] = {"posts": comments_from, "words": words_from_comments}
-        metric_object["likes_from"] = {"posts": likes_from, "words": words_from_likes}
-        metric_object["stories_with"] = {"posts": stories_with, "words": words_from_stories}
+        metric_object["posts_from"] = posts_from
+        metric_object["comments_from"] = comments_from
+        metric_object["likes_from"] = likes_from
+        metric_object["stories_with"] = stories_with
         return metric_object
 
     except KeyError:

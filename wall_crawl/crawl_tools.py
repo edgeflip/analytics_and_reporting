@@ -8,7 +8,7 @@ from time import strftime
 import time
 import csv
 from boto.s3.connection import S3Connection
-from crawl_metrics import metrics,imetrics
+from crawl_metrics import gmetrics as metrics
 
 
 """
@@ -85,7 +85,10 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 	    if response != '': 
 	        response = json.loads(response)
                 response = json.loads(response)
-	
+
+		return response, ownerid, token
+		break
+		exit()	
 	        try:
 		    post_ids = list(set([each['id'] for each in response['feed']['data'] if 'id' in each.keys()]))
 	        except KeyError:
