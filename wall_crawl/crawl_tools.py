@@ -105,9 +105,6 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
                             else:
                                 cur_met_obj[fbid] = { key: cur_met_obj[fbid][key] + metric_obj[key] for key in cur_met_obj[fbid].keys() }
                         m_key.set_contents_from_string(json.dumps(cur_met_obj))
-                        return metric_obj
-                        break
-			exit(1)
                     else:
                         pass
 
@@ -295,8 +292,7 @@ def crawl_realtime_updates(tool):
                             try:
 				# if there actually isn't new stuff on the user's wall we will get
 				# {"id": fbid} returned
-				updated_stuff = json.loads(urllib2.urlopen(graph_api).read())
-				     
+				updated_stuff = json.loads(urllib2.urlopen(graph_api).read())				     
 			    except urllib2.HTTPError:
 				updated_stuff = None
 			    # DELETE REPEAT POSTS			
@@ -309,18 +305,14 @@ def crawl_realtime_updates(tool):
 			            pass
 			    else:
 				pass
-			        #except (TypeError, KeyError):
-				#    pass 
 
 			    if cur_data != None:
                                 try:
 				    # combine the list of posts into a new list that is ordered chronologically
-				    # by adding the old posts to the end of the new posts list
-				        
+				    # by adding the old posts to the end of the new posts list				        
                                     updated_stuff['feed']['data'] += cur_data['feed']['data']
 			        except KeyError:
-				    pass
-                                     
+				    pass 
                             else:
 			        pass
                                 # store the the data back where we got it with the new information added
@@ -353,7 +345,10 @@ def crawl_realtime_updates(tool):
 						else:
 						    cur_met_blob = {fbid: metric_object}
 					        
-					        m_key.set_contents_from_string(json.dumps(cur_met_blob)) 
+					        m_key.set_contents_from_string(json.dumps(cur_met_blob))
+						return cur_met_blob, ownerid
+						break
+						exit(1) 
                                             else:
  					       pass
 					except:
