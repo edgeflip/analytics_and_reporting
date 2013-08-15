@@ -205,17 +205,17 @@ beginning_day = "SELECT MIN(updated) FROM events e JOIN client_content c USING(c
 
 
 def get_start_of_campaign(client_id):
-	res = tool.query(beginning_day.format(client_id))[0][0]
-	res = time.mktime(res.timetuple())
-	return str(int(res))
+    res = tool.query(beginning_day.format(client_id))[0][0]
+    res = time.mktime(res.timetuple())
+    return str(int(res))
 
 def generate_report_for_endpoint(client_id):
-	from generate_data_for_export_original import tool
-	start_of_day = handle_time_difference()
-	now = str(int(time.time()))
-	results_today_now = tool.query(main_query.format(client_id, start_of_day, now))
-	results_aggregate_now = tool.query(main_query.format(client_id,0,now))
-	return results_today_now, results_aggregate_now
+    from generate_data_for_export_original import tool
+    start_of_day = handle_time_difference()
+    now = str(int(time.time()))
+    results_today_now = tool.query(main_query.format(client_id, start_of_day, now))
+    results_aggregate_now = tool.query(main_query.format(client_id,0,now))
+    return results_today_now, results_aggregate_now
 
 def generate_report_for_endpoint_new(client_id):
     start_of_day = handle_time_difference()

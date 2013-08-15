@@ -119,68 +119,88 @@ def couple_data_with_info(client_id):
 
 
 def write_and_consume():
-    dir1,dir2 = "dash_data1", "dash_data2"
-    write_to = open("write_to.txt","r").read()
-    write_to = write_to.split('\n')[0]
     from generate_data_for_export_original import tool
+    from con_s3 import connect_s3
+    conn = connect_s3()
+    dash = conn.get_bucket('edgeflip_dashboard')
+    dir1, dir2 = "1", "2"
+    write_key = dash.get_key('write_to')
+    write_to = write_key.get_contents_as_string()
     all_clients = tool.query("select distinct client_id from campaigns")
     for each_client in all_clients:
         client = each_client[0]
-        # aggregate table data
+
         today_all_campaigns, aggregate_all_campaigns = generate_report_for_endpoint_new(client)
-        # aggregate line chart data
+
         hourly_all_campaigns = make_hour_by_hour_object(client)
+
         daily_all_campaigns = make_day_by_day_object(client)
 
         today_all_campaigns_json = json.dumps({"data": today_all_campaigns})
+
         aggregate_all_campaigns_json = json.dumps({"data": aggregate_all_campaigns})
+
         clients_data_all, clients_data_day = couple_data_with_info(client)
+
         clients_hourly_data = create_hour_object(client)
+
         clients_monthly_data = create_month_object(client)
+
         clients_data_all_str = json.dumps(clients_data_all)
+
         clients_data_day_str = json.dumps(clients_data_day)
+
         clients_data_hourly_str = json.dumps(clients_hourly_data)
+
         clients_data_monthly_str = json.dumps(clients_monthly_data)
-	today_all_campaigns = '{0}/client_{1}_all_campaigns_day.txt'.format(write_to,client)
-	aggregate_all_campaigns = '{0}/client_{1}_all_campaigns_aggregate.txt'.format(write_to,client)
-	hour_by_hour_all_campaigns = '{0}/client_{1}_hourly_aggregate.txt'.format(write_to,client)
-	day_by_day_all_campaigns = '{0}/client_{1}_daily_aggregate.txt'.format(write_to,client)
-	all_data_file = '{0}/client_{1}_data_all.txt'.format(write_to,client)
-	day_data_file = '{0}/client_{1}_data_day.txt'.format(write_to,client)
-	hourly_data_file = '{0}/client_{1}_data_hourly.txt'.format(write_to,client)
-	monthly_data_file = '{0}/client_{1}_data_monthly.txt'.format(write_to,client)
-        _today = open(today_all_campaigns,'w')
-        _today.write(today_all_campaigns_json)
-        _today.close()
-        _aggregate = open(aggregate_all_campaigns,'w')
-        _aggregate.write(aggregate_all_campaigns_json)
-        _aggregate.close()
-        hr_by_hr = open(hour_by_hour_all_campaigns, 'w')
-        hr_by_hr.write(json.dumps(hourly_all_campaigns))
-        hr_by_hr.close()
-        d_by_d = open(day_by_day_all_campaigns, 'w')
-        d_by_d.write(json.dumps(daily_all_campaigns))
-        d_by_d.close()
-        f1 = open(all_data_file,'w')
-        f1.write(clients_data_all_str)
-        f1.close()
-        f2 = open(day_data_file,'w')
-        f2.write(clients_data_day_str)
-        f2.close()
-        f3 = open(hourly_data_file, 'w')
-        f3.write(clients_data_hourly_str)
-        f3.close()
-        f4 = open(monthly_data_file,'w')
-        f4.write(clients_data_monthly_str)
-        f4.close()
+
+        today_all_campaigns = '{0}_client_{1}_all_campaigns_day'.format(write_to, client)
+        aggregate_all_campaigns = '{0}_client_{1}_all_campaigns_aggregate'.format(write_to, client)
+        hour_by_hour_all_campaigns = '{0}_client_{1}_hourly_aggregate'.format(write_to, client)
+        day_by_day_all_campaigns = '{0}_client_{1}_daily_aggregate'.format(write_to, client)
+        all_data_file = '{0}_client_{1}_data_all'.format(write_to, client)
+        day_data_file = '{0}_client_{1}_data_day'.format(write_to, client)
+        hourly_data_file = '{0}_client_{1}_data_hourly'.format(write_to, client)
+        monthly_data_file = '{0}_client_{1}_data_monthly'.format(write_to, client)
+
+        _today = dash.new_key()
+        _today.key = today_all_campaigns
+        _today.set_contents_from_string(today_all_campaigns_json)
+
+        _aggregate.set_contents_from_string(aggregate_all_campaigns_json)
+        _aggregate = dash.new_key()
+        _aggregate.key = aggregate_all_campaigns
+
+        hr_by_hr = dash.new_key()
+        hr_by_hr.key = hour_by_hour_all_campaigns
+        hr_by_hr.set_contents_from_string(json.dumps(hourly_all_campaigns))
+
+        d_by_d = dash.new_key()
+        d_by_d.key = day_by_day_all_campaigns
+        d_by_d.set_contents_from_string(json.dumps(daily_all_campaigns))
+
+        f1 = dash.new_key()
+        f1.key = all_data_file
+        f1.set_contents_from_string(clients_data_all_str)
+
+        f2 = dash.new_key()
+        f2.key = day_data_file
+        f2.set_contents_from_string(clients_data_day_str)
+
+        f3 = dash.new_key()
+        f3.key = hourly_data_file
+        f3.set_contents_from_string(clients_data_hourly_str)
+
+        f4 = dash.new_key()
+        f4.key = monthly_data_file
+        f4.set_contents_from_string(clients_data_monthly_str)
+
     if write_to == dir1:
 	new_write = dir2
     else:
 	new_write = dir1
-    os.remove("write_to.txt")
-    _new = open("write_to.txt","w")
-    _new.write(new_write)
-    _new.close()
+
+    write_key.set_contents_from_string(new_write)
     print "data written"
 
 

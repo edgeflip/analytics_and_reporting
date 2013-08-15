@@ -19,7 +19,7 @@ def imetrics(resp, ownerid):
         # get all posts that the cared about user commented on
         comments_from = []
         for i in resp['feed']['data']:
-            if 'comments' in i.keys() and i not in posts_from and ownerid in [i['comments']['data'][j]['id'] for j in range(len(i['comments']['data']))]:
+            if 'comments' in i.keys() and i not in posts_from and ownerid in [i['comments']['data'][j]['from']['id'] for j in range(len(i['comments']['data']))]:
                 comments_from.append(i)
 
         # get all posts that the cared about user liked
@@ -42,7 +42,7 @@ def imetrics(resp, ownerid):
         return metric_object
 
     except KeyError:
-	return {}
+	return None
 
 
 
