@@ -45,7 +45,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
     realtime_bucket = conn.get_bucket('fbrealtime')
     metric_bucket = conn.get_bucket('metric_bucket')
     if not crawl_timestamp:
-        most_data = tool.query('select fbid,ownerid,token from tokens')
+        most_data = tool.query('select fbid,ownerid,token from tokens limit 5000')
     else:
         most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME(%s)' % crawl_timestamp)
     crawl_log = open('crawl_log.csv','wb')
@@ -77,7 +77,11 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 	    # we need to call json.loads() on response twice
 	    if response != '': 
 	        response = json.loads(response)
-                response = json.loads(response)
+                try:
+                    response = json.loads(response)
+                except TypeError:
+                    pass
+       
                 try:
 		    post_ids = list(set([each['id'] for each in response['feed']['data'] if 'id' in each.keys()]))
 	        except KeyError:
@@ -186,21 +190,15 @@ def crawl_realtime_updates(tool):
     _time = time.time()
     keys = []
     rs = realtime_bucket.list()
-        
-    n = 0
+       
     for key in rs:
-        if n < 300: 
-            keys.append(key)
-        else:
-            break
-    
+        keys.append(key)
     # keep track of which users we've crawled on this pass and make sure to not crawl
     # them twice or else we will have duplicate information in the database
     # users_crawled will also have pre-included fbids from the always_crawl_from_database algorithm
     # which generates a crawled log of fbids from it's execution in order to avoid duplicate crawling
     users_crawled = []
-    reader = csv.reader(open('crawl_log.csv','r'),delimiter=',')
-    
+    reader = csv.reader(open('crawl_log.csv','r'),delimiter=',') 
     # read all the fbids from our file and add them to users_crawled
     try:
         while True:
@@ -263,7 +261,10 @@ def crawl_realtime_updates(tool):
 			
 				    try:
 				        cur_data = json.loads(cur_data)
-				        cur_data = json.loads(cur_data)
+                                        try:
+				            cur_data = json.loads(cur_data)
+                                        except TypeError:
+                                            pass
 					
 				        if post_ids != None:
 					    post_ids = json.loads(post_ids)['data']
@@ -346,11 +347,9 @@ def crawl_realtime_updates(tool):
 						    cur_met_blob = {fbid: metric_object}
 					        
 					        m_key.set_contents_from_string(json.dumps(cur_met_blob))
-						return cur_met_blob, ownerid
-						break
-						exit(1) 
+                                             
                                             else:
- 					       pass
+ 					        pass
 					except:
 					    pass
 

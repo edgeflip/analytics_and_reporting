@@ -54,7 +54,6 @@ def create_month_object(client_id):
                     obj[key][j+1] = tmp
     return obj
 
-
 """
     takes a client_id and gets all the campaigns running for that client
     the mysql_stuff gets all the data from midnight of today until now 
@@ -65,6 +64,7 @@ def create_month_object(client_id):
     if we don't have data for that campaign we just substitute zeros for
     that campaign for each hour
 """
+
 def create_hour_object(client_id):
     current_hour = int(strftime('%H'))
     obj = {}
@@ -112,10 +112,7 @@ def couple_data_with_info(client_id):
             campaigns_day_ago_data["%s" % i[1]] = [int(w) for w in [e for e in day_data if e[0] == i[0]][0]]
         else:
             campaigns_day_ago_data["%s" % i[1]] = [0 for e in range(10)]
-
     return campaigns_alltime_data, campaigns_day_ago_data
-
-
 
 
 def write_and_consume():
@@ -167,10 +164,10 @@ def write_and_consume():
         _today.key = today_all_campaigns
         _today.set_contents_from_string(today_all_campaigns_json)
 
-        _aggregate.set_contents_from_string(aggregate_all_campaigns_json)
         _aggregate = dash.new_key()
         _aggregate.key = aggregate_all_campaigns
-
+        _aggregate.set_contents_from_string(aggregate_all_campaigns_json)
+    
         hr_by_hr = dash.new_key()
         hr_by_hr.key = hour_by_hour_all_campaigns
         hr_by_hr.set_contents_from_string(json.dumps(hourly_all_campaigns))

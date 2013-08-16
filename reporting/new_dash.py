@@ -54,9 +54,7 @@ def handle_request():
         hourly_data = f3.get_contents_as_string()
         f4 = dash.get_key('{0}_client_{1}_data_monthly'.format(read_from, client_id))
         monthly_data = f4.get_contents_as_string()
-
         today = strftime("%m/%d/%Y")
-
         return render_template("new_temp.html", today_data=_today_data, aggregate_data=aggregate_data, hourly_aggregate=hourly_aggregate, daily_aggregate=daily_aggregate, all_data=all_data, day_data=day_data, hourly_data=hourly_data, monthly_data=monthly_data, client_name=client_name, today=today) 
     except KeyError:
         error = "Hit an error"

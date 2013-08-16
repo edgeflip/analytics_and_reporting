@@ -155,6 +155,35 @@ main_query_day_by_day ="""SELECT
          WHERE t.updated > FROM_UNIXTIME({0}) 
          GROUP BY e4.campaign_id, YEAR(updated), MONTH(updated), DAY(updated);"""
 
+
+
+
+main_query_hour_by_hour_new ="""SELECT                                                         
+         e4.campaign_id,
+	 YEAR(t.updated),
+         MONTH(t.updated),
+	 DAY(t.updated),
+         HOUR(t.updated),
+         SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) as Visits,       
+         SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) as Clicks, 
+         SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) as Authorizations,
+         COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.fbid ELSE NULL END) as "Distinct Facebook Users Authorized",
+         COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.fbid ELSE NULL END) as "# Users Shown Friends",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.fbid ELSE NULL END) as "# Users Who Shared",
+         SUM(CASE WHEN t.type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) as "# Distinct Friends Shared",
+         COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_session_id ELSE NULL END) as "# Clickbacks"
+     FROM                                                                       
+         (SELECT e1.*,NULL as cb_session_id FROM events e1 WHERE type <> 'clickback'
+         UNION                                                                  
+         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared')
+     t                     
+         LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load')
+     e4                                                                         
+         USING (session_id)
+         WHERE t.updated > FROM_UNIXTIME({0}) 
+         GROUP BY e4.campaign_id, YEAR(t.updated), MONTH(t.updated), DAY(t.updated), HOUR(t.updated);"""
+
 def new_query(_time):
     res = tool.query(main_query_new.format(_time))
     return res
@@ -163,6 +192,12 @@ def new_hour_query():
     _time = str(int(handle_time_difference()))
     res = tool.query(main_query_hour_by_hour.format(_time))
     return res
+
+def all_hour_query():
+    month = month_ago()
+    res = tool.query(main_query_hour_by_hour_new.format(month))
+    return res
+
 
 def month_ago():
     one_month = 30 * 24 * 60 * 60
@@ -176,6 +211,35 @@ def new_month_query():
 def new_aggregate_query_by_day():
     res = tool.query(main_query_day_by_day.format(0))
     return res
+
+
+# new object builder for this second phase of dashboard features
+def make_all_object(client_id):
+    all_data = all_query_new()
+    our_object = {}
+    campaigns = get_campaigns_for_client(client_id)
+    for campaign in campaigns:
+        our_object[campaign[1]] = {}
+        our_object[campaign[1]]["days"] = {}
+        our_object[campaign[1]]["hours"] = {}
+        # get all data that is for this campaign
+        this_campaign_data = [_set for _set in all_data if _set[0] == campaign[0]]
+        days = list(set([str(datetime.datetime(int(e[1]), int(e[2]), int(e[3]))) for e in this_campaign_data]))
+        for day in days:
+            day_data = [e for e in [j[5:] for j in this_campaign_data if str(datetime.datetime(int(j[1]), int(j[2]), int(j[3]))) == day]]
+            day_data_new = []
+            for each in day_data:
+                day_data_new.append([int(j) for j in each])
+            sums = []
+            for i in range(len(day_data_new[0])):
+                sums.append( sum([x[i] for x in day_data_new]))
+            our_object[campaign[1]]["days"][day] = sums
+            hour_data = [e for e in [j[4:] for j in this_campaign_data if str(datetime.datetime(int(j[1]), int(j[2]), int(j[3]))) == day]]
+            hour_data_new = []
+            for each in hour_data:
+                hour_data_new.append([int(j) for j in each])
+            our_object[campaign[1]]["hours"][day] = hour_data_new
+    return our_object
 
 # for the month queries we are going to need something unique to handle the time stuff
 # we can pass this list to the our data Object for JavaScript to turn these timestamps
@@ -230,7 +294,6 @@ def generate_report_for_endpoint_new(client_id):
     return results_today_now, results_aggregate_now
     
 
-
 def get_hour_by_hour(client_id):
     from generate_data_for_export_original import tool
     d = strftime('%d')
@@ -255,17 +318,6 @@ def make_hour_by_hour_object(client_id):
         num_distinct_shared_with = int(each[8])
         clickbacks = int(each[9])
         obj['data'].append([hour, visits,clicks,auths,distinct_auths,num_shown,num_shared,num_shared_with,num_distinct_shared_with,clickbacks])
-    # sort the items in the object
-    #for i in range(len(obj['data'])):
-    #    for j in range(len(obj['data'])-1):
-            # use datetime
-    #        first = time.mktime(datetime.datetime(obj['data'][j][0], obj['data'][j][1], obj['data'][j][2]).timetuple())
-    #        second = time.mktime(datetime.datetime(obj['data'][j+1][0], obj['data'][j+1][1], obj['data'][j+1][2]).timetuple())
-    #        if first > second:
-    #            tmp = obj['data'][j]
-    #            obj['data'][j] = obj['data'][j+1]
-    #            obj['data'][j+1] = tmp
-
     return obj
 
 def get_day_by_day(client_id):
