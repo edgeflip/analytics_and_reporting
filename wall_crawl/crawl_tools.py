@@ -45,7 +45,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
     realtime_bucket = conn.get_bucket('fbrealtime')
     metric_bucket = conn.get_bucket('metric_bucket')
     if not crawl_timestamp:
-        most_data = tool.query('select fbid,ownerid,token from tokens limit 5000')
+        most_data = tool.query('select fbid,ownerid,token from tokens')
     else:
         most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME(%s)' % crawl_timestamp)
     crawl_log = open('crawl_log.csv','wb')
@@ -79,7 +79,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 	        response = json.loads(response)
                 try:
                     response = json.loads(response)
-                except TypeError:
+                except (ValueError, TypeError):
                     pass
        
                 try:
@@ -95,20 +95,23 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 	        # there are times when this will return a TypeError or KeyError depending on what the response looks like
 		# that is passed to the metrics algorithm
 	        try:
-	            metric_obj = imetrics(response,ownerid)
-                    if metric_obj != None:
-                        if not metric_bucket.lookup(ownerid):
-                            m_key = metric_bucket.new_key()
-                            m_key.key = ownerid
-                            cur_met_obj = {fbid: metric_obj}
-                        else:
-                            m_key = metric_bucket.get_key(ownerid)
-                            cur_met_obj = json.loads(m_key.get_contents_as_string())
-                            if fbid not in cur_met_obj.keys():
-                                cur_met_obj[fbid] = metric_obj
+                    if fbid != ownerid:
+	                metric_obj = imetrics(response,ownerid)
+                        if metric_obj != None:
+                            if not metric_bucket.lookup(ownerid):
+                                m_key = metric_bucket.new_key()
+                                m_key.key = ownerid
+                                cur_met_obj = {fbid: metric_obj}
                             else:
-                                cur_met_obj[fbid] = { key: cur_met_obj[fbid][key] + metric_obj[key] for key in cur_met_obj[fbid].keys() }
-                        m_key.set_contents_from_string(json.dumps(cur_met_obj))
+                                m_key = metric_bucket.get_key(ownerid)
+                                cur_met_obj = json.loads(m_key.get_contents_as_string())
+                                if fbid not in cur_met_obj.keys():
+                                    cur_met_obj[fbid] = metric_obj
+                                else:
+                                    cur_met_obj[fbid] = { key: cur_met_obj[fbid][key] + metric_obj[key] for key in cur_met_obj[fbid].keys() }
+                            m_key.set_contents_from_string(json.dumps(cur_met_obj))
+                        else:
+                            pass
                     else:
                         pass
 
@@ -329,27 +332,30 @@ def crawl_realtime_updates(tool):
                                     # run our metrics analysis on the new data and replace our old stuff
                                     if metric_bucket.lookup(ownerid):
 				        try:
-                                            metric_object = imetrics(updated_stuff, ownerid)
-                                            if metric_object != None:
-						# we will store these in the metric bucket by ownerid and have all fbids
-						# that are connections as keys in a json object
-                                                m_key = metric_bucket.get_key(ownerid)
-					        cur_met_blob = m_key.get_contents_as_string()
-						if cur_met_blob != None:
-					            cur_met_blob = json.loads(cur_met_blob)
-					            if fbid in cur_met_blob.keys():
-					                cur_fbid_metrics = cur_met_blob[fbid]
-						        cur_fbid_metrics = { key: cur_fbid_metrics[key] + metric_object[key] for key in cur_fbid_metrics.keys() }
-							cur_met_blob[fbid] = cur_fbid_metrics
-					            else:
-					                cur_met_blob[fbid] = metric_object
-						else:
-						    cur_met_blob = {fbid: metric_object}
+                                            if fbid != ownerid:
+                                                metric_object = imetrics(updated_stuff, ownerid)
+                                                if metric_object != None:
+						    # we will store these in the metric bucket by ownerid and have all fbids
+						    # that are connections as keys in a json object
+                                                    m_key = metric_bucket.get_key(ownerid)
+					            cur_met_blob = m_key.get_contents_as_string()
+						    if cur_met_blob != None:
+					                cur_met_blob = json.loads(cur_met_blob)
+					                if fbid in cur_met_blob.keys():
+					                    cur_fbid_metrics = cur_met_blob[fbid]
+						            cur_fbid_metrics = { key: cur_fbid_metrics[key] + metric_object[key] for key in cur_fbid_metrics.keys() }
+							    cur_met_blob[fbid] = cur_fbid_metrics
+					                else:
+					                    cur_met_blob[fbid] = metric_object
+						    else:
+						        cur_met_blob = {fbid: metric_object}
 					        
-					        m_key.set_contents_from_string(json.dumps(cur_met_blob))
+					            m_key.set_contents_from_string(json.dumps(cur_met_blob))
                                              
+                                                else:
+ 					            pass
                                             else:
- 					        pass
+                                                pass
 					except:
 					    pass
 
