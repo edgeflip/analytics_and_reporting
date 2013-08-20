@@ -2,8 +2,6 @@
 from con_s3 import connect_s3
 import json
 
-<<<<<<< HEAD
-=======
 """
     build_weighted connects to our metric_bucket and builds metrics around what we have already
     created during the main crawler systemized data collection process.  this algorithm will
@@ -11,7 +9,6 @@ import json
     therein
 """
 
->>>>>>> cbce881035d8fc81afb8b2390743c2b9feba106e
 def build_weighted():
     conn = connect_s3()
     mets = conn.get_bucket('metric_bucket')
@@ -38,8 +35,6 @@ def build_weighted():
         key.set_contents_from_string(json.dumps(cur_mets))
     	print "Connections of %s weighed" % str(ownerid)
 
-<<<<<<< HEAD
-=======
 
 """
    build_weighted_test runs a single requested metric_bucket key and creates the weighted
@@ -48,7 +43,6 @@ def build_weighted():
    based on the posts, likes, comments, stories tagged they have in common
 """
 
->>>>>>> cbce881035d8fc81afb8b2390743c2b9feba106e
 def build_weighted_test(ownerid):
     conn = connect_s3()
     metrics = conn.get_bucket('metric_bucket')
@@ -58,20 +52,46 @@ def build_weighted_test(ownerid):
         # get all the posts_ids 
         post_ids = []
         for fbid in cur_mets.keys():
-            for each in cur_mets[fbid].keys():
-                for post in cur_mets[fbid][each]:
-                    if post['id'] not in post_ids:
-                        post_ids.append(post['id'])
-                    else:
-                        pass
+            if fbid != 'weights':
+                for each in cur_mets[fbid].keys():
+                    for post in cur_mets[fbid][each]:
+                        if len(post) > 0:
+                            if post['id'] not in post_ids:
+                                post_ids.append(post['id'])
+                            else:
+                                pass
+                        else:
+                            pass
+            else:
+                pass
         divisor = float(len(post_ids))
         if "weights" not in cur_mets.keys():
-            cur_weights = { str(float(sum([len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys()]))/divisor) : fbid for fbid in cur_mets.keys() if fbid != ownerid }
-            cur_mets["weights"] = {}
-            cur_mets["weights"].update(cur_weights)
+            #cur_weights = { str(float(sum([len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys()]))/divisor) : fbid for fbid in cur_mets.keys() if fbid != ownerid }
+            #cur_mets["weights"] = {}
+            #cur_mets["weights"].update(cur_weights)
+            
+            cur_weights = {}
+            for fbid in cur_mets.keys():
+                if fbid != ownerid and fbid != 'weights':
+                    numerator = float( sum( [ len( cur_mets[fbid][k] ) for k in cur_mets[fbid].keys() ] ) )
+                    n = numerator / divisor
+                    cur_weights[str(n)] = fbid
+                else:
+                    pass
+            cur_mets["weights"] = cur_weights
+ 
         else:
-            cur_weights = { str(float(sum([len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys()]))/divisor) : fbid for fbid in cur_mets.keys() if fbid != ownerid }
-            cur_mets["weights"].updated(cur_weights)
+            #cur_weights = { str(float(sum([len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys()]))/divisor) : fbid for fbid in cur_mets.keys() if fbid != ownerid }
+            #cur_mets["weights"].updated(cur_weights)
+            cur_weights = {}
+            for fbid in cur_mets.keys():
+                 if fbid != ownerid and fbid != 'weights':
+                     numerator = float( sum( [ len( cur_mets[fbid][k] ) for k in cur_mets[fbid].keys() ] ) )
+                     n = numerator / divisor
+                     cur_weights[str(n)] = fbid
+            cur_mets["weights"].update(cur_weights)
+             
+
         key.set_contents_from_string(json.dumps(cur_mets))
         print "Connections of %s weighed" % str(ownerid)
     else:

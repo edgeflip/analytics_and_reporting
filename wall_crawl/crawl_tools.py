@@ -63,13 +63,9 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
             # on this pass of the code we are getting the entire feed
 	    # this will sometimes yield a urllib2.URLError so when it does
 	    # time.sleep() the program for just a couple of seconds and try again
-	  
-            try: 
-                response = crawl_feed(fbid,token)
-	    except (urllib2.URLError, urllib2.HTTPError):
-		response = ''
 	    
-	    k = main_bucket.new_key()
+            response = crawl_feed(fbid, token)
+            k = main_bucket.new_key()
             # set the bucket's key to be fbid,ownerid
             k.key = main_key
 
@@ -187,7 +183,6 @@ def crawl_realtime_updates(tool):
     token_bucket = conn.get_bucket('fbtokens')
     realtime_bucket = conn.get_bucket('fbrealtime')
     metric_bucket = conn.get_bucket('metric_bucket')
-    api = 'https://graph.facebook.com/{0}?fields=feed.since({1})&access_token={2}'
     # REALTIME STUFF FROM FACEBOOK
     # get all the realtime update keys so we can parse through them and grab the updates
     _time = time.time()
@@ -261,7 +256,7 @@ def crawl_realtime_updates(tool):
                                 # the data we already have
                                 if main_key != None:
 				    cur_data = main_key.get_contents_as_string()
-			
+		                    	
 				    try:
 				        cur_data = json.loads(cur_data)
                                         try:
@@ -288,18 +283,12 @@ def crawl_realtime_updates(tool):
 			    except AttributeError:	
 				pass                        
 				
-                            # the new data...we will add the old data to this for chronology purposes
-                            graph_api = api.format(fbid,update_time,token)
+                            # the new data...we will add the old data to this for persistent chronological order
 
-                            #try:
+			    # crawl_feed_since will handle any errors associated with the crawl
+                            updated_stuff = crawl_feed_since(fbid, update_time, token)
 
-                            try:
-				# if there actually isn't new stuff on the user's wall we will get
-				# {"id": fbid} returned
-				updated_stuff = json.loads(urllib2.urlopen(graph_api).read())				     
-			    except urllib2.HTTPError:
-				updated_stuff = None
-			    # DELETE REPEAT POSTS			
+                             # DELETE REPEAT POSTS			
 					
 			    if post_ids != None and updated_stuff != None:
 			        try:
@@ -440,17 +429,25 @@ def crawl_all_tokens(fbid, tokens, conn, update_time):
             
     
 def crawl_feed(fbid,access_token):
-    api = 'https://graph.facebook.com/{0}?fields=feed&access_token={1}'
+    #api = 'https://graph.facebook.com/{0}?fields=feed&access_token={1}'
+    api = 'https://graph.facebook.com/{0}?fields=feed.fields(id,from,message,type,link,source,name,status_type,application,story_tags,story,caption,created_time,updated_time,likes.fields(id).limit(100),comments.fields(id,from,message,like_count).limit(100))&access_token={1}'
     formatted = api.format(fbid,access_token)
-    response = urllib2.urlopen(formatted)
-    json_response = json.dumps(response.read())
+    try:
+        response = urllib2.urlopen(formatted)
+        json_response = json.dumps(response.read())
+    except (urllib2.URLError, urllib2.HTTPError):
+        json_response = ''
     return json_response
 
-def crawl_feed_since(fbid,since,access_token):
-    api = 'https://graph.facebook.com/{0}?fields=feed.since({1})&access_token={2}'
-    formatted = api.format(fbid,str(since),access_token)
-    response = urllib2.urlopen(formatted).read()
-    json_response = json.dumps(response)
+def crawl_feed_since(fbid, since, access_token):
+    #api = 'https://graph.facebook.com/{0}?fields=feed.since({1})&access_token={2}'
+    api = 'https://graph.facebook.com/{0}?fields=feed.fields(id,from,message,type,link,source,name,status_type,application,story_tags,story,caption,created_time,updated_time,likes.fields(id).limit(100),comments.fields(id,from,message,like_count).limit(100)).since({1})&access_token={2}'
+    formatted = api.format(fbid, str(since), access_token)
+    try:
+        response = urllib2.urlopen(formatted)
+        json_response = json.dumps(response.read())
+    except (urllib2.URLError, urllib2.HTTPError):
+        json_response = None
     return json_response
 
 
