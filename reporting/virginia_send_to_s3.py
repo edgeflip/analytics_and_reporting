@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 from boto.s3.connection import S3Connection
 from time import strftime
+from con_s3 import connect_s3
 
 # invoke this daily after the generate_data_for_export3 methods have done their work to send the files they
 # generate to our s3 bucket for access by virginia
 def send_to_s3():
-	conn = S3Connection('AKIAJDIWDVVGWXFOSPEQ', 'RpcwFl6tw2XtOqnwbhXK9PemhUQ8kK6UdCMJ5GaI', is_secure=False)
+	conn = connect_s3()
 	bucket = conn.get_bucket('virginia_bucket')
 	m = strftime('%m')
 	d = strftime('%d')

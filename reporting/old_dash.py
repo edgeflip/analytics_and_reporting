@@ -7,7 +7,7 @@ from time import strftime
 import socket
 import json
 from flask.ext.basicauth import BasicAuth
-
+from new_dash import handle_request
 
 application = flask.Flask(__name__)
 
@@ -58,10 +58,10 @@ def main_handler():
 @application.route('/new_dashboard', methods=['GET','POST'])
 @basic_auth.required
 def second_app():
-	from new_dash import handle_request
 	return handle_request()
 
 if __name__ == '__main__':
+    application.debug = True
     #application.run('0.0.0.0',port=80)
     application.run()
 

@@ -1,6 +1,7 @@
 <html>
 <head>
-    <script type="text/javascript" src="https://www.google.com/jsapi"></script>$
+    <title>Targeted Sharing Dashboard | {{client_name}}</title>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
     <script type="text/javascript">
         google.load("visualization", "1.0", {"packages": ["table", "corechart"]});
         google.setOnLoadCallback(drawStuff);
@@ -140,7 +141,7 @@
                 hourly_agg_arr[w+1] = hourly_aggregate.data[w];
             }
             var hr_agg_data = google.visualization.arrayToDataTable(hourly_agg_arr);
-            var hr_agg_options = {title: 'Hourly Report', fontSize: '10', enableInteractivity: 'true', 'width': 1000};
+            var hr_agg_options = {title: 'Hourly Report', fontSize: '8.5', enableInteractivity: 'true', 'width': 1000};
             var hr_agg_chart = new google.visualization.LineChart(hourly_agg_div);
             hr_agg_chart.draw(hr_agg_data, hr_agg_options);
 
@@ -163,14 +164,14 @@
             var daily_data_arr = new Array(); 
             for(j=0; j < daily_aggregate.data.length; j++)
             {
-                var _date = [new Date(daily_aggregate.data[j][0], daily_aggregate.data[j][1], daily_aggregate.data[j][2])];
+                var _date = [new Date(daily_aggregate.data[j][0], daily_aggregate.data[j][1]-1, daily_aggregate.data[j][2])];
                 _date = _date.concat(daily_aggregate.data[j].slice(3, daily_aggregate.data[j].length));
                 daily_data_arr[j] = _date; 
             }
             daily_data.addRows(daily_data_arr);
 
             var daily_chart = new google.visualization.LineChart(daily_agg_div);
-            daily_chart.draw(daily_data, {title: 'Daily Report(for the last 30 days)', fontSize: '10', enableInteractivity: 'true', 'width': 1000});
+            daily_chart.draw(daily_data, {title: 'Daily Report(for the last 30 days)', fontSize: '8.5', enableInteractivity: 'true', 'width': 1000});
 
 
 
@@ -265,7 +266,7 @@
                     line1_array[w+1] = hourly_json[all_keys[i]][w];
                 }
                 var line1_chart_data = google.visualization.arrayToDataTable(line1_array);
-                var line1_options = {title: 'Hourly Report', fontSize: '10', enableInteractivity: 'true', 'width': 1000};
+                var line1_options = {title: 'Hourly Report', fontSize: '8.5', enableInteractivity: 'true', 'width': 1000};
                 var line1 = new google.visualization.LineChart(new_div2);
                 line1.draw(line1_chart_data, line1_options);
 
@@ -295,7 +296,7 @@
                 }
 
                 line2.addRows(arr2);
-                var line2opt = {title: 'Daily Report(for last 30 days)', fontSize: '10', 'width': 1000};
+                var line2opt = {title: 'Daily Report(for last 30 days)', fontSize: '8.5', 'width': 1000};
                 var chart2 = new google.visualization.LineChart(new_div3);
                 chart2.draw(line2, line2opt);
                     

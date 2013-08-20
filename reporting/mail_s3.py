@@ -3,6 +3,7 @@ import smtplib
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
 from time import strftime
+from con_s3 import connect_s3
 
 def mail_to_s3():
 	to_send = ['wes@edgeflip.com','wesley7879@gmail.com']
@@ -13,7 +14,7 @@ def mail_to_s3():
 	files = ['events_file_{0}_{1}_{2}.csv'.format(m,d,y),'ref_table_{0}_{1}_{2}.csv'.format(m,d,y)]
 
 	msg = MIMEMultipart()
-	msg['From'] = 'wesleymadrigal_99@hotmail.com'
+	msg['From'] = 'wes@edgeflip.com.com'
 	mailserver = smtplib.SMTP('smtp.live.com',587)
 	mailserver.ehlo()
 	mailserver.starttls()
