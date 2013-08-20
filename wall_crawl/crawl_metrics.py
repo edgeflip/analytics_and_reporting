@@ -2,6 +2,16 @@
 from con_s3 import connect_s3
 import json
 
+<<<<<<< HEAD
+=======
+"""
+    build_weighted connects to our metric_bucket and builds metrics around what we have already
+    created during the main crawler systemized data collection process.  this algorithm will
+    leverage previously stored data and advance our understanding of the edges contained
+    therein
+"""
+
+>>>>>>> cbce881035d8fc81afb8b2390743c2b9feba106e
 def build_weighted():
     conn = connect_s3()
     mets = conn.get_bucket('metric_bucket')
@@ -28,6 +38,17 @@ def build_weighted():
         key.set_contents_from_string(json.dumps(cur_mets))
     	print "Connections of %s weighed" % str(ownerid)
 
+<<<<<<< HEAD
+=======
+
+"""
+   build_weighted_test runs a single requested metric_bucket key and creates the weighted
+   graph of that key within our metric_bucket (in more abstract words the build_weighted_test
+   algorithm advances our known edge relations between a primary and his/her secondaries
+   based on the posts, likes, comments, stories tagged they have in common
+"""
+
+>>>>>>> cbce881035d8fc81afb8b2390743c2b9feba106e
 def build_weighted_test(ownerid):
     conn = connect_s3()
     metrics = conn.get_bucket('metric_bucket')
