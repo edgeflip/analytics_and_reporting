@@ -18,22 +18,41 @@ def build_weighted():
         # get all the posts_ids 
         post_ids = []
         for fbid in cur_mets.keys():
-            for each in cur_mets[fbid].keys():
-                for post in cur_mets[fbid][each]:
-                    if post['id'] not in post_ids:
-                        post_ids.append(post['id'])
-                    else:
-                        pass 
+            if fbid != 'weights':
+                for each in cur_mets[fbid].keys():
+                    for post in cur_mets[fbid][each]:
+                        if len(post) > 0:
+                            if post['id'] not in post_ids:
+                                post_ids.append(post['id'])
+                            else:
+                                pass
+                        else:
+                           pass
+            else:
+                pass 
         divisor = float(len(post_ids))
         if "weights" not in cur_mets.keys():
-            cur_weights = { str(float(sum([len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys()]))/divisor) : fbid for fbid in cur_mets.keys() if fbid != ownerid}
-            cur_mets["weights"] = {}
-            cur_mets["weights"].update(cur_weights)
+	    cur_weights = {}
+            for fbid in cur_mets.keys():
+                if fbid != ownerid and fbid != 'weights':
+                    numerator = float( sum( [ len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys() ] ) )
+                    n = numerator / divisor
+                    cur_weights[str(n)] = fbid
+                else:
+                    pass
+            cur_mets["weights"] = cur_weights
         else:
-            cur_weights = { str(float(sum([len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys()]))/divisor) : fbid for fbid in cur_mets.keys() if fbid != ownerid}
-            cur_mets["weights"].updated(cur_weights)
+	    cur_weights = {}
+            for fbid in cur_mets.keys():
+                if fbid != ownerid and fbid != 'weights':
+                    numerator = float( sum ( [ len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys() ] ) )
+                    n = numerator / divisor
+                    cur_weights[str(n)] = fbid
+            cur_mets["weights"].update(cur_weights)
+
         key.set_contents_from_string(json.dumps(cur_mets))
     	print "Connections of %s weighed" % str(ownerid)
+    print "All connections weighed"
 
 
 """
@@ -91,7 +110,6 @@ def build_weighted_test(ownerid):
                      cur_weights[str(n)] = fbid
             cur_mets["weights"].update(cur_weights)
              
-
         key.set_contents_from_string(json.dumps(cur_mets))
         print "Connections of %s weighed" % str(ownerid)
     else:

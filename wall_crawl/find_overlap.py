@@ -1,12 +1,8 @@
 #!usr/bin/env python
-from navigate_db import PySql
-import MySQLdb as mysql
+from test_environ import orm
+
 
 def find_overlap():
-    conn = mysql.connect('edgeflip-db.efstaging.com','root','9uDTlOqFmTURJcb','edgeflip')
-    cur = conn.cursor()
-
-    orm = PySql(cur)
     # get every single connection and build the structure out of it
     _all = orm.query("SELECT fbid,ownerid FROM tokens")
 
