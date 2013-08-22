@@ -8,6 +8,8 @@ import socket
 import json
 from flask.ext.basicauth import BasicAuth
 from new_dash import handle_request
+from werkzeug.exceptions import InternalServerError
+
 
 application = flask.Flask(__name__)
 
@@ -58,7 +60,13 @@ def main_handler():
 @application.route('/new_dashboard', methods=['GET','POST'])
 @basic_auth.required
 def second_app():
-	return handle_request()
+        return InternalServerError
+	#return handle_request()
+
+
+@application.errorhandler(500)
+def internal_error(exception):
+    return "Exception raised and handled"
 
 if __name__ == '__main__':
     application.debug = True
