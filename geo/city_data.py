@@ -27,7 +27,7 @@ import time
 
 """
    gathers all of the data we want on state, city, and lat,lon coordinates and puts 
-   into a hash table in the form {state: {city: (lat, lon), city: (lat, lon), city: (lat, lon)}, state: {city: (lat, lon) .....} } ...
+   into a hash table in the form {state: {city: {'type': 'city', 'coords': (lat, lon)}, city: {'type': 'town', 'coords': (lat, lon)}, city: {'type': 'village', 'coords': (lat, lon)}}}
    this is then turned into json and stored in s3 where it is read from and utilized by 
    the python implementation of haversine to find spherical distances
 """
@@ -110,24 +110,6 @@ def find_closest(data, city, state, number=None):
         return closest[0:number]
     else:
         return closest[0:10]
-
-def find_closest_db(city, state, number=None):
-    coords = orm_staging.query("select distinct lat, lon from geo where state='%s' and city='%s'" % (state, city))
-    lat1, lon1 = coords[0][0], coords[0][1]
-    closest = []
-    all_cities = orm_staging.query("select distinct city, lat, lon from geo where state='%s' and city != '%s'" % (state, city))
-    return all_cities   
-    for each in all_cities:
-        cur_city = each[0]
-        lat2, lon2 = each[1], each[2]
-        hav = haversine(lat1, lon1, lat2, lon2)
-        distance_tuple = (cur_city, hav)
-        closest.append(distance_tuple)
-    closest = sort_cities(closest)
-    if number == None:
-        return closest[0:10]
-    else:
-        return closest[0:number]
 
 
 def euclidean(lat1, lon1, lat2, lon2):
