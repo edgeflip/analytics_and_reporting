@@ -9,7 +9,7 @@ import time
 import csv
 from boto.s3.connection import S3Connection
 from crawl_metrics import gmetrics as metrics
-from crawl_metrics import imetrics
+from crawl_metrics import imetrics, ometrics
 
 
 """
@@ -45,7 +45,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
     realtime_bucket = conn.get_bucket('fbrealtime')
     metric_bucket = conn.get_bucket('metric_bucket')
     if not crawl_timestamp:
-        most_data = tool.query('select fbid,ownerid,token from tokens')
+        most_data = tool.query('select fbid,ownerid,token from tokens limit 5000')
     else:
         most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME(%s)' % crawl_timestamp)
     crawl_log = open('crawl_log.csv','wb')
@@ -97,15 +97,24 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
                             if not metric_bucket.lookup(ownerid):
                                 m_key = metric_bucket.new_key()
                                 m_key.key = ownerid
-                                cur_met_obj = {fbid: metric_obj}
+                                cur_met_obj = {fbid: {"prim_to_sec": metric_obj } }
+                                omets = ometrics(fbid, ownerid, main_bucket) 
+                                if omets != None:
+				    cur_met_obj[fbid]["sec_to_prim"] = omets
+                                        
                             else:
                                 m_key = metric_bucket.get_key(ownerid)
                                 cur_met_obj = json.loads(m_key.get_contents_as_string())
-                                if fbid not in cur_met_obj.keys():
-                                    cur_met_obj[fbid] = metric_obj
-                                else:
-                                    cur_met_obj[fbid] = { key: cur_met_obj[fbid][key] + metric_obj[key] for key in cur_met_obj[fbid].keys() }
+             
+                                cur_met_obj[fbid] = {"prim_to_sec": metric_obj}
+                                omets = ometrics(ownerid, fbid, main_bucket)
+				if omets != None:
+                                     cur_met_obj[fbid]["sec_to_prim"] = omets
+                                else: 
+                                     pass
+
                             m_key.set_contents_from_string(json.dumps(cur_met_obj))
+			   
                         else:
                             pass
                     else:
@@ -222,14 +231,14 @@ def crawl_realtime_updates(tool):
                             token_iterable = token_stuff[fbid]
 			    # lets preserve the Consistency in ACID
 			    token_stuff = {"data": token_stuff[fbid]}
-		   
+		      
                     # if we don't have tokens for the user we get None back, 
                     # get tokens put them into s3 and use them
                     else:
                         fbid_tokens = tool.query("select ownerid, token from tokens where fbid='%s'" % str(fbid))
                         token_stuff = {"data": []}
                        	token_iterable = []
-                       
+                      
 			if len(fbid_tokens) > 0:
                             for each in fbid_tokens:
                                 # add (ownerid:token) to the struct
@@ -255,8 +264,7 @@ def crawl_realtime_updates(tool):
 			        post_ids = main_key.get_metadata('data')
                                 # the data we already have
                                 if main_key != None:
-				    cur_data = main_key.get_contents_as_string()
-		                    	
+				    cur_data = main_key.get_contents_as_string()	
 				    try:
 				        cur_data = json.loads(cur_data)
                                         try:
@@ -287,19 +295,23 @@ def crawl_realtime_updates(tool):
 
 			    # crawl_feed_since will handle any errors associated with the crawl
                             updated_stuff = crawl_feed_since(fbid, update_time, token)
-
-                             # DELETE REPEAT POSTS			
-					
+                            if updated_stuff != None:
+                                updated_stuff = json.loads(updated_stuff)
+                                try: 
+                                    updated_stuff = json.loads(updated_stuff)
+                                except:
+                                    pass
+                            # DELETE REPEAT POSTS					
 			    if post_ids != None and updated_stuff != None:
 			        try:
 			            repeats = [post for post in updated_stuff['feed']['data'] if post['id'] in post_ids and 'id' in post.keys() and 'feed' in updated_stuff.keys() and 'data' in updated_stuff['feed'].keys()]
-				    [updated_stuff['feed']['data'].remove(i) for i in repeats]
+				    [updated_stuff['feed']['data'][updated_stuff['feed']['data'].index(i)] for i in repeats]
 			        except KeyError:
 			            pass
 			    else:
 				pass
 
-			    if cur_data != None:
+			    if cur_data != None and updated_stuff != None:
                                 try:
 				    # combine the list of posts into a new list that is ordered chronologically
 				    # by adding the old posts to the end of the new posts list				        
@@ -329,19 +341,21 @@ def crawl_realtime_updates(tool):
                                                     m_key = metric_bucket.get_key(ownerid)
 					            cur_met_blob = m_key.get_contents_as_string()
 						    if cur_met_blob != None:
-					                cur_met_blob = json.loads(cur_met_blob)
-					                if fbid in cur_met_blob.keys():
-					                    cur_fbid_metrics = cur_met_blob[fbid]
-						            cur_fbid_metrics = { key: cur_fbid_metrics[key] + metric_object[key] for key in cur_fbid_metrics.keys() }
-							    cur_met_blob[fbid] = cur_fbid_metrics
-					                else:
-					                    cur_met_blob[fbid] = metric_object
+					                cur_met_blob = json.loads(cur_met_blob) 
+                                                        cur_met_blob[fbid] = {"prim_to_sec": metric_object}
+                                                        omets = ometrics(ownerid, fbid, main_bucket)
+					                if omets != None:
+                                                            cur_met_blob[fbid]["sec_to_prim"] = omets
+					           
 						    else:
-						        cur_met_blob = {fbid: metric_object}
+						        cur_met_blob = {fbid: {"prim_to_sec": metric_object } }
+							omets = ometrics(ownerid, fbid, main_bucket)
+                                                        if omets != None:
+							    cur_met_blob[fbid]["sec_to_prim"] = omets
 					        
 					            m_key.set_contents_from_string(json.dumps(cur_met_blob))
-                                             
-                                                else:
+                                
+	                                        else:
  					            pass
                                             else:
                                                 pass
@@ -353,7 +367,10 @@ def crawl_realtime_updates(tool):
 				        if metric_object != None:
 				            m_key = metric_bucket.new_key()
 				            m_key.key = ownerid
-				            cur_met_blob = {fbid: metric_object}
+				            cur_met_blob = {fbid: {"prim_to_sec": metric_object } }
+                                            omets = ometrics(ownerid, fbid, main_bucket)
+                                            if omets != None:
+                                                cur_met_blob[fbid]["sec_to_prim"] = omets
 				            m_key.set_contents_from_string(json.dumps(cur_met_blob))
 			                else:
 				            pass 
@@ -412,7 +429,10 @@ def add_tokens_to_bucket_then_return(fbid,friend_fbid,token,bucket):
 # tokens = [('ownerid', 'token'), ('ownerid2', 'token2'), ('ownerid3', 'token3')....]
 def get_tokens_for_user(fbid, bucket):
     fbid_tokens_data = bucket.get_key(fbid)
-    data = fbid_tokens_data.get_contents_as_string()
+    try:
+        data = fbid_tokens_data.get_contents_as_string()
+    except AttributeError:
+        data = None
     return data
 
 

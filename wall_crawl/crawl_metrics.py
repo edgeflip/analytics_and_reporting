@@ -19,36 +19,41 @@ def build_weighted():
         post_ids = []
         for fbid in cur_mets.keys():
             if fbid != 'weights':
-                for each in cur_mets[fbid].keys():
-                    for post in cur_mets[fbid][each]:
-                        if len(post) > 0:
-                            if post['id'] not in post_ids:
-                                post_ids.append(post['id'])
-                            else:
-                                pass
-                        else:
-                           pass
-            else:
-                pass 
-        divisor = float(len(post_ids))
-        if "weights" not in cur_mets.keys():
-	    cur_weights = {}
-            for fbid in cur_mets.keys():
-                if fbid != ownerid and fbid != 'weights':
-                    numerator = float( sum( [ len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys() ] ) )
-                    n = numerator / divisor
-                    cur_weights[str(n)] = fbid
+                if 'prim_to_sec' in cur_mets[fbid].keys():
+                    for each in cur_mets[fbid]['prim_to_sec'].keys():
+                        for post in cur_mets[fbid]['prim_to_sec'][each]:
+                            if isinstance(post, dict):
+                                if post['id'] not in post_ids:
+                                    post_ids.append(post['id'])
                 else:
-                    pass
-            cur_mets["weights"] = cur_weights
-        else:
-	    cur_weights = {}
-            for fbid in cur_mets.keys():
-                if fbid != ownerid and fbid != 'weights':
-                    numerator = float( sum ( [ len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys() ] ) )
-                    n = numerator / divisor
-                    cur_weights[str(n)] = fbid
-            cur_mets["weights"].update(cur_weights)
+                    for each in cur_mets[fbid].keys():
+                        for post in cur_mets[fbid][each]:
+                            if isinstance(post, dict):
+                                if post['id'] not in post_ids:
+                                    post_ids.append(post['id']) 
+            else:
+                pass
+       
+        divisor = float(len(post_ids))
+        cur_weights = {}
+        for fbid in cur_mets.keys():
+            if fbid != ownerid and fbid != 'weights':
+                if 'prim_to_sec' in cur_mets[fbid].keys():
+                    numerator = float( sum( [ len( cur_mets[fbid]['prim_to_sec'][k] ) for k in cur_mets[fbid]['prim_to_sec'].keys() ] ) )
+                    numerator = numerator / 2.0
+                    if 'sec_to_prim' in cur_mets[fbid].keys():
+                        numerator_2 = float( sum( [ len( cur_mets[fbid]['sec_to_prim'][k] ) for k in cur_mets[fbid]['sec_to_prim'].keys() ] ) )
+                        numerator_2 = numerator_2 / 2.0
+                        numerator += numerator_2
+                
+                else:
+                    numerator = float( sum( [ len( cur_mets[fbid][k] ) for k in cur_mets[fbid].keys() ] ) )
+                    numerator = numerator / 2.0
+                n = numerator / divisor
+                cur_weights[str(n)] = fbid
+            else:
+                pass
+        cur_mets["weights"] = cur_weights
 
         key.set_contents_from_string(json.dumps(cur_mets))
     	print "Connections of %s weighed" % str(ownerid)
@@ -72,43 +77,41 @@ def build_weighted_test(ownerid):
         post_ids = []
         for fbid in cur_mets.keys():
             if fbid != 'weights':
-                for each in cur_mets[fbid].keys():
-                    for post in cur_mets[fbid][each]:
-                        if len(post) > 0:
-                            if post['id'] not in post_ids:
-                                post_ids.append(post['id'])
-                            else:
-                                pass
-                        else:
-                            pass
+                if 'prim_to_sec' in cur_mets[fbid].keys():
+                    for each in cur_mets[fbid]['prim_to_sec'].keys():
+                        for post in cur_mets[fbid]['prim_to_sec'][each]:
+                            if isinstance(post, dict):
+                                if post['id'] not in post_ids:
+                                    post_ids.append(post['id'])
+                else:
+                    for each in cur_mets[fbid].keys():
+                        for post in cur_mets[fbid][each]:
+                            if isinstance(post, dict):
+                                if post['id'] not in post_ids:
+                                    post_ids.append(post['id']) 
             else:
                 pass
         divisor = float(len(post_ids))
-        if "weights" not in cur_mets.keys():
-            #cur_weights = { str(float(sum([len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys()]))/divisor) : fbid for fbid in cur_mets.keys() if fbid != ownerid }
-            #cur_mets["weights"] = {}
-            #cur_mets["weights"].update(cur_weights)
-            
-            cur_weights = {}
-            for fbid in cur_mets.keys():
-                if fbid != ownerid and fbid != 'weights':
-                    numerator = float( sum( [ len( cur_mets[fbid][k] ) for k in cur_mets[fbid].keys() ] ) )
-                    n = numerator / divisor
-                    cur_weights[str(n)] = fbid
+        cur_weights = {}
+        for fbid in cur_mets.keys():
+            if fbid != ownerid and fbid != 'weights':
+                if 'prim_to_sec' in cur_mets[fbid].keys():
+                    numerator = float( sum( [ len( cur_mets[fbid]['prim_to_sec'][k] ) for k in cur_mets[fbid]['prim_to_sec'].keys() ] ) )
+                    numerator = numerator / 2.0
+                    if 'sec_to_prim' in cur_mets[fbid].keys():
+                        numerator_2 = float( sum( [ len( cur_mets[fbid]['sec_to_prim'][k] ) for k in cur_mets[fbid]['sec_to_prim'].keys() ] ) )
+                        numerator_2 = numerator_2 / 2.0
+                        numerator += numerator_2
+                
                 else:
-                    pass
-            cur_mets["weights"] = cur_weights
+                    numerator = float( sum( [ len( cur_mets[fbid][k] ) for k in cur_mets[fbid].keys() ] ) )
+                    numerator = numerator / 2.0
+                n = numerator / divisor
+                cur_weights[str(n)] = fbid
+            else:
+                pass
+        cur_mets["weights"] = cur_weights
  
-        else:
-            #cur_weights = { str(float(sum([len(cur_mets[fbid][k]) for k in cur_mets[fbid].keys()]))/divisor) : fbid for fbid in cur_mets.keys() if fbid != ownerid }
-            #cur_mets["weights"].updated(cur_weights)
-            cur_weights = {}
-            for fbid in cur_mets.keys():
-                 if fbid != ownerid and fbid != 'weights':
-                     numerator = float( sum( [ len( cur_mets[fbid][k] ) for k in cur_mets[fbid].keys() ] ) )
-                     n = numerator / divisor
-                     cur_weights[str(n)] = fbid
-            cur_mets["weights"].update(cur_weights)
              
         key.set_contents_from_string(json.dumps(cur_mets))
         print "Connections of %s weighed" % str(ownerid)
@@ -127,7 +130,7 @@ def build_weighted_test(ownerid):
 """
 
 
-def imetrics(resp, ownerid, fbid):
+def imetrics(resp, ownerid):
     try:
         # posts from the cared about user period
         posts_from = []
@@ -158,12 +161,24 @@ def imetrics(resp, ownerid, fbid):
         metric_object["comments_from"] = comments_from
         metric_object["likes_from"] = likes_from
         metric_object["stories_with"] = stories_with
+	
         return metric_object
 
     except KeyError:
 	return None
 
 
+def ometrics(ownerid, fbid, bucket):
+    try:
+        wall = json.loads(bucket.get_key(ownerid + ',' + ownerid).get_contents_as_string())
+        try:
+            wall = json.loads(wall)
+        except TypeError:
+            pass
+        result = imetrics(wall, fbid)
+        return result
+    except (AttributeError, TypeError):
+        return None
 
 """
    gmetrics algorithm takes a json blob as a parameter and builds 4 criteria of metrics around it (posts, comments, likes, types)

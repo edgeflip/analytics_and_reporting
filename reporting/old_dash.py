@@ -60,13 +60,14 @@ def main_handler():
 @application.route('/new_dashboard', methods=['GET','POST'])
 @basic_auth.required
 def second_app():
-        return InternalServerError
-	#return handle_request()
+    raise 500
+    #return handle_request()
 
 
 @application.errorhandler(500)
 def internal_error(exception):
-    return "Exception raised and handled"
+    args = request.args.get('client_id')
+    return args
 
 if __name__ == '__main__':
     application.debug = True
