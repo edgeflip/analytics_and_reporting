@@ -264,8 +264,7 @@ def make_all_object(client_id):
                      hour_data_new.append([i] + [0 for j in range(9)])           
  
             #hour_data_new += [ [i] + [0 for j in range(9)] for i in range(24) if i not in [e[0] for e in hour_data_new] ] 
-            our_object[ campaign[1] ]["hours"][day] = hour_data_new
-	
+            our_object[ campaign[1] ]["hours"][day] = hour_data_new	
 	# for all the days over the past month that we don't have data for for the current iteration's campaign...
         for day in not_accounted_days:
             our_object[ campaign[1] ]["days"][day] = [ 0 for i in range(9) ] 

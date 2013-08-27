@@ -168,9 +168,9 @@ def imetrics(resp, ownerid):
 	return None
 
 
-def ometrics(ownerid, fbid, bucket):
+def ometrics(ownerid, fbid, conn):
     try:
-        wall = json.loads(bucket.get_key(ownerid + ',' + ownerid).get_contents_as_string())
+        wall = json.loads(conn.get_bucket('fbcrawl1').get_key(ownerid + ',' + ownerid).get_contents_as_string())
         try:
             wall = json.loads(wall)
         except TypeError:
