@@ -1,18 +1,15 @@
 #!/usr/bin/env python
 import datetime, time
 import json
-from navigate_db import PySql
 from time import strftime
+from models import get_campaign_stuff_for_client
+from models import tool
+from models import Client
+from models import CampaignSum
+from models import DaySum
 
 # should be able to just do
 # from models import CampaignSum, DaySum and use them
-
-f = open('dbcreds.txt', 'r')
-d = f.read().split('\n')
-f.close()
-
-tool = PySql(d[0], d[1], d[2], d[3])
-tool.connect()
 
 # this will rely on Django models CampaignSum and DaySum being accessible
 
@@ -103,33 +100,122 @@ def make_all_object():
     30 days of data for all campaigns and clients
 """
 
+# given the django models CampaignSum and DaySum.....
+# CampaignSum.objects.all()
+# DaySum.objects.all()
+
 def keep_updated():
+    import random
     this_month = create_unix_time_for_each_day()
     this_month = [ time.mktime(datetime.datetime(j.year, j.month, j.day).timetuple()) for j in [datetime.datetime.fromtimestamp(i) for i in this_month] ]
     cur_hour = strftime('%H')
     clients = tool.query("select client_id, name from clients")
-    query_since = 0
-    for client_id, name in clients: 
-        campaigns = get_campaign_stuff_for_client(client_id)
-        # call the Client class's retrieve_data method
-        cur_data = Client(client_id).retrieve_data()
-        # get the current month of days stored in the db
-        cur_month_stored = [ i for i in cur_data[campaigns[0][1]]['days'].keys() ]
+
+    # this will be useful later on as well....    
+    today = datetime.datetime.now()
+    current_day_key = str( datetime.datetime( today.year, today.month, today.day ) )
+
+    # get a random client and a random campaign from Django to look at
+    rand_id, rand_name = clients[ random.randint(0, len(clients)) ]
+    # get the campaigns for the randomly selected client and get the latest day/hr
+    campaigns = get_campaign_stuff_for_client( rand_id )
+    rand_camp = campaigns[ random.randint(0, len(campaigns)) ]
+    qset1 = DaySum.objects.get( campaign=rand_camp )
+    qset2 = CampaignSum.objects.get( campaign=rand_camp )
+    latest_hour = None
+    latest_day = None
+
+    # try getting the latest hour of today
+    try:
+        data = qset.filter( day=current_day_key ).data
+        data = json.loads(data)
+        latest_hour = max([ h[0] for h in data[ current_day_key ] ])
+
+    except:
+        data = json.loads(qset2.data)     
+        cur_month_stored = [ i for i in cur_data[random_camp]['days'].keys() ]
         cur_month_stored = [ time.strptime(i, "%Y-%m-%d %H:%M:%S") for i in cur_month_stored ]
         cur_month_stored = [ time.mktime(datetime.datetime(j.tm_year, j.tm_mon, j.tm_mday).timetuple()) for j in cur_month_stored ]
-        new_times = [i for i in this_month if i not in cur_month_stored]
+        new_times = [ i for i in this_month if i not in cur_month_stored ]
         latest_day = max(cur_month_stored)
-        latest_day = str(datetime.datetime.fromtimestamp(latest_day))
-        hours = [j[0] for j in cur_data[campaigns[0][1]]['hours'][latest_day]]
-        break
-    if hours == range(24):
-        pass
-    elif len(new_times) > 0:
-        new_times = min(new_times)
-    new_data = tool.query(main_query_hour_by_hour_new.format(new_times))
-    return new_data
+        latest_day = str( datetime.datetime.fromtimestamp( latest_day ) )
+        # if we have reached a new day and it isn't in the dataset...
 
+    if len(new_times) == 1:
+        # want to query the data
+        current_hour = int(strftime('%H'))
+        new_day = int(new_times[0])
+        new_day_key = str( datetime.datetime.fromtimestamp( new_day ) )
+        updated_data = tool.query( main_query_hour_by_hour_new.format( str(new_day) ) )
+         
+        # build out our data structure for each client and campaign
+        for client_id, name in clients:
+            this_client = get_campaign_stuff_for_client(client_id)
+            # need a way to get this clients data so that can be updated
+            for campaign_id, campaign_name in this_client:
+                # build hour stuff out and then sum to build day
+                # methods to add to Django models
+                cur_day_data = json.loads( CampaignSum.objects.get( campaign = campaign_name ).data )
+                cur_hour_data = json.loads( DaySum.objects.get( campaign = campaign_name ).data )
+                
+                hours = [ r[4:] for r in updated_data if r[0] == campaign_id ]
+                hours = [ [int(j) for j in i] for i in hours ]
+                # if the maximum hour we have here is bigger than current_hour replace current_hour
+                if len(hours) > 0:
+                    if max([ h[0] for h in hours ]) > current_hour:
+                        current_hour = max([ h[0] for h in hours ])
+                to_add = [ [y] + [ 0 for x in range(9) ] for y in range(current_hour) if y not in [ have[0] for have in hours ] ]
+                hours = hours + to_add
+                # add the data to our object and restore
+                cur_hour_data[new_day_key] = hours
 
+                H = DaySum( campaign=campaign_name, data=json.dumps(cur_hour_data), day=new_day_key)
+                H.save()
+                
+                day = []
+                for j in range(1, len(hours[0])):
+                    cur_val = sum([each[j] for each in hours])
+                    day.append(cur_val)    
+                # add data to our object
+                cur_day_data[new_day_key] = day
+                # put back in the database 
+                C = CampaignSum( campaign=campaign_name, data=json.dumps(cur_day_data) )
+                C.save()
+	        # updated the data and save
+    else:
+        # get the data from the newest hour forward
+        timestamp = time.mktime(datetime.datetime(today.year, today.month, today.day, latest_hour).timetuple() )
+        data = tool.query(main_query_hour_by_hour_new.format(timestamp))
+        for client_id, client_name in clients:
+            client_stuff = get_campaign_stuff_for_client(client_id)
+            for campaign_id, campaign_name in client_stuff:
+                cur_day_data = json.loads( CampaignSum.objects.get( campaign=campaign_name ).data )
+                cur_hour_data = DaySum.objects.get( campaign=campaign_name )
+                cur_hour_data = json.loads( cur_hour_data.filter( day=current_day ).data )
+                
+                hour_data = [ i[4:] for i in data if i[0] == campaign_id ]
+                # convert from longs to ints
+                hour_data = [ [int(j) for j in i] for i in hour_data ]
+                hrs_have = [ h[0] for h in hour_data ]
+                hrs_dont = [ h for h in range(latest_hour) if h not in hrs_have ]
+                new = [ [y] + [0 for x in range(9)] for y in hrs_dont ]
+                hour_data += new
+                # update todays hour data
+                cur_hour_data[ current_day_key ] = hour_data
+
+                H = DaySum( campaign=campaign_name, data=json.loads(cur_hour_data), day=current_day_key )
+                H.save()
+
+                day_data = []
+                for i in range(1,len(new[0])):
+                    day_data.append( sum( [ each[i] for each in new ] ) )
+                cur_day_data[ current_day_key ] = day_data
+
+                D = CampaignSum( campaign=campaign_name, data=json.loads(cur_day_data) )
+                D.save()
+    print "Data Updated"               
+                  
+                
 
 # SQL QUERIES
 
