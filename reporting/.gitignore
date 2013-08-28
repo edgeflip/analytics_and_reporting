@@ -3,4 +3,4 @@ schema.db
 schema.sql
 my_creds.txt
 dbcreds.txt
-.gitignore
+models.py

@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-import sqlite3
-from generate_report import create_unix_time_for_each_day
-from generate_report import get_campaign_stuff_for_client
 import datetime, time
 from generate_report import all_hour_query
 import json
@@ -18,81 +15,7 @@ f.close()
 tool = PySql(d[0], d[1], d[2], d[3])
 tool.connect()
 
-
-"""
-    Built test models in sqlite3
-"""
-
-class Client(object):
-    def __init__(self, client_id):
-        self.client_id = client_id
-        self.campaigns = []
-        for camp_name in tool.query("select name from campaigns where client_id='%s'" % str(client_id)):
-            self.campaigns.append(camp_name[0])
-        self._conn = sqlite3.connect('schema.db', check_same_thread=False)
-        self.c = self._conn.cursor()
-    
-    def get_campaigns(self):
-        return self.campaigns
-
-    # retrieve_data will get the data from the database for the pertinent client and build out the object
-    # we've seen before
-    # {"campaign": {"days": {"day": [visits, clicks, ...], "day": [visits, clicks...] }, "hours": {"day": [hour1, visits, clicks....], [hour2, visits, clicks...], .... [hour23, visits, clicks...] } } }
-    def retrieve_data(self):
-        data = {}
-        for campaign in self.campaigns:
-            #data[campaign] = {"days": {}, "hours": {}}
-             
-            results = self.c.execute("select data from campsum where campaign=?",(campaign,))
-            self._conn.commit()
-            results = results.fetchall()
-            if len(results) > 0:
-                data[campaign] = {"days": {}, "hours": {}}
-                data[campaign]["days"] = json.loads(results[0][0])
-        for campaign in data.keys():
-            for day in data[campaign]["days"].keys():
-                results = self.c.execute("select data from daysum where campaign=? and day=?", (campaign, day))
-                data[campaign]["hours"][day] = json.loads(results.fetchall()[0][0])
-        return data
-
-
-class CampaignSum(object):
-    def __init__(self):
-        self._conn = sqlite3.connect('schema.db', check_same_thread=False)
-        self.c = self._conn.cursor()
-
-    def build(self, campaign, data):
-        self._campaign = campaign
-        self._data = json.dumps(data)
-
-    def save(self):
-        try:
-            self.c.execute("insert into campsum values (?,?)", (self._campaign, self._data))
-            self._conn.commit()
-        except:
-            print "CampaignSum object not built"
-
-    def retrieve(self):
-        pass
-
-class DaySum(object):
-    def __init__(self):
-        self._conn = sqlite3.connect('schema.db', check_same_thread=False)
-        self.c = self._conn.cursor()	
-
-    def build(self, campaign, day, data):	
-        self._campaign = campaign
-        self._day = day
-        self._data = json.dumps(data)
-
-    def save(self):
-        try:
-            self.c.execute("insert into daysum values (?,?,?)", (self._campaign, self._day, self._data))
-            self._conn.commit()
-        except:
-            print "DaySum object not built"
-
-
+# this will rely on Django models CampaignSum and DaySum being accessible
 
 def make_all_object():
     all_campaigns = tool.query("select client_id, name from clients") 
@@ -153,7 +76,8 @@ def make_all_object():
                 hour_data = [ [j] + [0 for i in range(9)] for j in range(24) ]
                 our_object[ client_name ][ campaign[1] ]["hours"][day] = hour_data
     # port data to django models
-    #return our_object 
+    # return our_object
+    return our_object 
     for client in our_object.keys():
         for campaign in our_object[client].keys():
             ddata = our_object[client][campaign]["days"]
@@ -206,4 +130,61 @@ def keep_updated():
     elif len(new_times) > 0:
         new_times = min(new_times)
     new_data = tool.query(main_query_hour_by_hour_new.format(new_times))
-    return new_data 
+    return new_data
+
+
+
+# SQL QUERIES
+
+main_query_hour_by_hour_new ="""SELECT                                                         
+         e4.campaign_id,
+         YEAR(t.updated),
+         MONTH(t.updated),
+         DAY(t.updated),
+         HOUR(t.updated),
+         SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) as Visits,       
+         SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) as Clicks, 
+         SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) as Authorizations,
+         COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.fbid ELSE NULL END) as "Distinct Facebook Users Authorized",
+         COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.fbid ELSE NULL END) as "# Users Shown Friends",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.fbid ELSE NULL END) as "# Users Who Shared",
+         SUM(CASE WHEN t.type='shared' THEN 1 ELSE 0 END) as "# Friends Shared with",
+         COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) as "# Distinct Friends Shared",
+         COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_session_id ELSE NULL END) as "# Clickbacks"
+     FROM                                                                       
+         (SELECT e1.*,NULL as cb_session_id FROM events e1 WHERE type <> 'clickback'
+         UNION                                                                  
+         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared')
+     t                     
+         LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load')
+     e4                                                                         
+         USING (session_id)
+         WHERE t.updated > FROM_UNIXTIME({0}) 
+         GROUP BY e4.campaign_id, YEAR(t.updated), MONTH(t.updated), DAY(t.updated), HOUR(t.updated);"""
+
+def all_hour_query():
+    month = month_ago()
+    res = tool.query(main_query_hour_by_hour_new.format(month))
+    return res
+
+
+
+# HELPER FUNCTIONS
+
+def month_ago():
+    one_month = 30 * 24 * 60 * 60
+    return str(int(time.time())-one_month)
+
+def get_campaign_stuff_for_client(client_id):
+    res = tool.query("select campaign_id, name from campaigns where client_id='{0}' and campaign_id in (select distinct campaign_id from events where type='button_load')".format(client_id))
+    return res
+
+
+def create_unix_time_for_each_day():
+    start = int(month_ago())
+    days = []
+    for i in range(30):
+        start += 86400
+        days.append(start)
+    return days
+ 
