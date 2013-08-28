@@ -5,10 +5,18 @@ from generate_report import get_campaign_stuff_for_client
 import datetime, time
 from generate_report import all_hour_query
 import json
-from generate_data_for_export_original import tool
+from navigate_db import PySql
+from time import strftime
 
 # should be able to just do
 # from models import CampaignSum, DaySum and use them
+
+f = open('dbcreds.txt', 'r')
+d = f.read().split('\n')
+f.close()
+
+tool = PySql(d[0], d[1], d[2], d[3])
+tool.connect()
 
 
 """
@@ -144,7 +152,6 @@ def make_all_object():
                 our_object[ client_name ][ campaign[1] ]["days"][day] = [ 0 for i in range(9) ]
                 hour_data = [ [j] + [0 for i in range(9)] for j in range(24) ]
                 our_object[ client_name ][ campaign[1] ]["hours"][day] = hour_data
-    return our_object
     # port data to django models
     #return our_object 
     for client in our_object.keys():
@@ -155,7 +162,6 @@ def make_all_object():
         #            del ddata[k]
 
             C = CampaignSum()
-            C.build(campaign, ddata)
             C.save()
 
             for day in our_object[client][campaign]["hours"].keys():
@@ -165,6 +171,39 @@ def make_all_object():
             # d = datetime.strptime(d, "%Y-%m-%d %H:%M:%S")
 
                 D = DaySum()
-                D.build(campaign, day, hdata)
                 D.save()
     print "Data successfully ported to Django Models"
+
+
+
+"""
+    This will likely be the function that is called periodically via a cron after the initial
+    data scrape of all our clients and campaigns respectively.  A sort of moving window of 
+    30 days of data for all campaigns and clients
+"""
+
+def keep_updated():
+    this_month = create_unix_time_for_each_day()
+    this_month = [ time.mktime(datetime.datetime(j.year, j.month, j.day).timetuple()) for j in [datetime.datetime.fromtimestamp(i) for i in this_month] ]
+    cur_hour = strftime('%H')
+    clients = tool.query("select client_id, name from clients")
+    query_since = 0
+    for client_id, name in clients: 
+        campaigns = get_campaign_stuff_for_client(client_id)
+        # call the Client class's retrieve_data method
+        cur_data = Client(client_id).retrieve_data()
+        # get the current month of days stored in the db
+        cur_month_stored = [ i for i in cur_data[campaigns[0][1]]['days'].keys() ]
+        cur_month_stored = [ time.strptime(i, "%Y-%m-%d %H:%M:%S") for i in cur_month_stored ]
+        cur_month_stored = [ time.mktime(datetime.datetime(j.tm_year, j.tm_mon, j.tm_mday).timetuple()) for j in cur_month_stored ]
+        new_times = [i for i in this_month if i not in cur_month_stored]
+        latest_day = max(cur_month_stored)
+        latest_day = str(datetime.datetime.fromtimestamp(latest_day))
+        hours = [j[0] for j in cur_data[campaigns[0][1]]['hours'][latest_day]]
+        break
+    if hours == range(24):
+        pass
+    elif len(new_times) > 0:
+        new_times = min(new_times)
+    new_data = tool.query(main_query_hour_by_hour_new.format(new_times))
+    return new_data 
