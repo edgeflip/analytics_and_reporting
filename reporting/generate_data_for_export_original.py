@@ -7,7 +7,11 @@ import os
 import json
 import urllib2
 
-tool = PySql('edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com','root','YUUB2ctgkn8zfe','edgeflip')
+
+f = open('dbcreds.txt','r')
+d = f.read().split('\n')
+f.close()
+tool = PySql(d[0], d[1], d[2], d[3])
 tool.connect()
 
 
