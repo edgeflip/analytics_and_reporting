@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import datetime, time
-from generate_report import all_hour_query
 import json
 from navigate_db import PySql
 from time import strftime
@@ -83,7 +82,7 @@ def make_all_object():
         #        if sum(ddata[k]) == 0:
         #            del ddata[k]
 
-            C = CampaignSum()
+            C = CampaignSum( campaign=campaign, data=json.dumps(ddata) )
             C.save()
 
             for day in our_object[client][campaign]["hours"].keys():
@@ -92,7 +91,7 @@ def make_all_object():
             # if [sum(row) for row in hdata] == range(24): continue
             # d = datetime.strptime(d, "%Y-%m-%d %H:%M:%S")
 
-                D = DaySum()
+                D = DaySum( campaign=campaign, data=json.dumps(hdata), day=day )
                 D.save()
     print "Data successfully ported to Django Models"
 
