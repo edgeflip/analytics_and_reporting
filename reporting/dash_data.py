@@ -76,8 +76,6 @@ def make_all_object():
                 hour_data = [ [j] + [0 for i in range(9)] for j in range(24) ]
                 our_object[ client_name ][ campaign[1] ]["hours"][day] = hour_data
     # port data to django models
-    # return our_object
-    return our_object 
     for client in our_object.keys():
         for campaign in our_object[client].keys():
             ddata = our_object[client][campaign]["days"]
