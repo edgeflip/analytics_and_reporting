@@ -1,0 +1,53 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}EdgeFlip | Dashboard{% endblock %}
+
+
+{% block includes %}
+    <script src="//www.google.com/jsapi"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/mod_csrf.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/dashboard.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.min.css" />
+    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/auth.css" />
+    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/dash.css" />
+{% endblock %}
+
+
+{% block login %}
+    <div id="login">
+        <p>
+        Logged in as {{ user.username }} | <a href="/dashboard/logout/">Logout</a>
+        </p>
+    </div>
+{% endblock %}
+
+
+{% block body %}
+<div id="bounds">
+
+    <div id="campaignpicker">
+        <input type="checkbox" id="chart" /><label for="chart">View as: Tables</label>
+        <h2>Campaign:
+        <select onchange="getData();">
+            {% for campaign in campaigns %}
+            <option value="{{ campaign }}">{{ campaign }}</option>
+            {% endfor %}
+            <option value="aggregate">Summary</option>
+        </select>
+        </h2>
+    </div>
+
+    <div id="charts">
+        <div id="daily"></div>
+        <div id="datepicker"></div>
+
+        <div id="monthly"></div>
+        <input type="checkbox" id="logscale" /><label for="logscale">Logarithmic Scaling: Off</label>
+    </div>
+
+</div>
+
+{% endblock %}
