@@ -1,1 +1,1 @@
-web: python dashboard.py --port=8080
+web: python dashboard.py
