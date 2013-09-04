@@ -268,4 +268,13 @@ def create_unix_time_for_each_day():
         start += 86400
         days.append(start)
     return days
+
+
+def make_fake():
+    campaign = "Wes Madrigal for President"
+    days = create_unix_time_for_each_day()
+    days = [ datetime.datetime.fromtimestamp(j) for j in days ]
+    days = [ str( datetime.datetime( x.year, x.month, x.day ) ) for x in days ]
+    data = { campaign: { "days" : { day: [ random.randint(1,1000) for i in range(9) ] for day in days }, "hours": { day: [ [j] + [random.randint(1,10) for x in range(9)] for j in range(24) ] for day in days } } }
+    return data
  

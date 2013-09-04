@@ -9,8 +9,8 @@ class CampaignSum(models.Model):
     campaign = models.CharField(max_length=256, blank=True)
     data = models.TextField(max_length=500)  # and we jam our data in here as json
 
-    class Meta(object):
-        db_table = 'sum_campaign'
+    #class Meta(object):
+    #    db_table = 'sum_campaign'
 
     def mkGoog(self):
         """ mangle the data field into what Google is looking for on the front end"""
@@ -43,8 +43,8 @@ class DaySum(models.Model):
     day = models.DateField()
     data = models.TextField(max_length=500)  # ghetto json field .. fixed size, we could CharField here
 
-    class Meta(object):
-        db_table = 'sum_day'
+    #class Meta(object):
+    #    db_table = 'sum_day'
 
     def mkGoog(self):
         """ format the data into what Google charts is looking for, basically the same format as Months """

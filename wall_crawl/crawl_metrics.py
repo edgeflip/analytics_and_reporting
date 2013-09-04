@@ -16,24 +16,30 @@ def build_weighted():
         cur_mets = json.loads(key.get_contents_as_string())
         ownerid = key.key
         # get all the posts_ids 
-        post_ids = []
-        for fbid in cur_mets.keys():
-            if fbid != 'weights':
-                if 'prim_to_sec' in cur_mets[fbid].keys():
-                    for each in cur_mets[fbid]['prim_to_sec'].keys():
-                        for post in cur_mets[fbid]['prim_to_sec'][each]:
-                            if isinstance(post, dict):
-                                if post['id'] not in post_ids:
-                                    post_ids.append(post['id'])
+        
+        
+        if 'post_ids' not in cur_mets.keys():
+            post_ids = []
+            for fbid in cur_mets.keys():
+                if fbid != 'weights':
+                    if 'prim_to_sec' in cur_mets[fbid].keys():
+                        for each in cur_mets[fbid]['prim_to_sec'].keys():
+                            for post in cur_mets[fbid]['prim_to_sec'][each]:
+                                if isinstance(post, dict):
+                                    if post['id'] not in post_ids:
+                                        post_ids.append(post['id'])
+                    else:
+                        for each in cur_mets[fbid].keys():
+                            for post in cur_mets[fbid][each]:
+                                if isinstance(post, dict):
+                                    if post['id'] not in post_ids:
+                                        post_ids.append(post['id']) 
                 else:
-                    for each in cur_mets[fbid].keys():
-                        for post in cur_mets[fbid][each]:
-                            if isinstance(post, dict):
-                                if post['id'] not in post_ids:
-                                    post_ids.append(post['id']) 
-            else:
-                pass
-       
+                    pass 
+            cur_mets['post_ids'] = post_ids
+        else:
+            post_ids = cur_mets['post_ids']
+ 
         divisor = float(len(post_ids))
         cur_weights = {}
         for fbid in cur_mets.keys():
@@ -274,5 +280,12 @@ def gmetrics(blob):
          return data_object
 
 
+# from topic_module import classify_topic
 
+# takes a facebook feed as parameter and builds an iterable of each message in that post's topic then weights
+# the topics in the iterable to classify the topic as more to less relevant for the facebook user who's wall we are using
 
+def personal_topics(feed):
+    topics = [ classify_topic(post['message']) for post in feed['feed']['data'] if 'message' in post.keys() ]
+    # weights is an iterable of tuples with [ (topic, weight), (topic, weight), ..... ] built from the set of topics
+    weights = [ (t, float(topics.count(t))/float(len(topics))) for t in list(set(topics)) ]

@@ -40,12 +40,16 @@ from crawl_metrics import imetrics, ometrics
 def always_crawl_from_database(tool,crawl_timestamp = None):
     # connect to s3 database
     conn = S3Connection('AKIAJDIWDVVGWXFOSPEQ', 'RpcwFl6tw2XtOqnwbhXK9PemhUQ8kK6UdCMJ5GaI')
+    # bucket with all facebook edge feeds key = fbid,ownerid val = {facebook feed}
     main_bucket = conn.get_bucket('fbcrawl1')
+    # bucket with all of a fbid's tokens ( 1 of two solutions 1) create function to periodically keep this updated 2) forget it and just hit db every time )
     token_bucket = conn.get_bucket('fbtokens')
+    # bucket facebok realtime API hits with {fbid: update time, fbid: updated time }...
     realtime_bucket = conn.get_bucket('fbrealtime')
+    # each key is a primary's fbid with { secondary: metrics, secondary2: metrics, .... secondary_n: metrics }
     metric_bucket = conn.get_bucket('metric_bucket')
     if not crawl_timestamp:
-        most_data = tool.query('select fbid,ownerid,token from tokens limit 5000')
+        most_data = tool.query('select fbid,ownerid,token from tokens')
     else:
         most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME(%s)' % crawl_timestamp)
     crawl_log = open('crawl_log.csv','wb')
@@ -56,13 +60,12 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
         ownerid = str(item[1])
         token = item[2]
         main_key = str(fbid)+','+str(ownerid)
+        # if there is no key for this edge fbid,ownerid..
         if not main_bucket.lookup(main_key):
             # go ahead and write the fbid to the csv log file
             crawl_log_writer.writerow([fbid])
             # crawl_feed returns a json blob of the users feed
             # on this pass of the code we are getting the entire feed
-	    # this will sometimes yield a urllib2.URLError so when it does
-	    # time.sleep() the program for just a couple of seconds and try again
 	    
             response = crawl_feed(fbid, token)
             k = main_bucket.new_key()
@@ -70,7 +73,8 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
             k.key = main_key
 
 	    # META DATA FOR POST IDS TO AVOID DUPLICATE POSTS IN THIS FEED
-	    # we need to call json.loads() on response twice
+            # you MUST set metadata before setting the key's value otherwise the metadata won't be saved (weird s3 rule)
+	    # we need to call json.loads() on response twice depending on the encoding
 	    if response != '': 
 	        response = json.loads(response)
                 try:
@@ -92,6 +96,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 		# that is passed to the metrics algorithm
 	        try:
                     if fbid != ownerid:
+                        # find all posts in the fbid's wall that ownerid posted, liked, commented on, and tagged in
 	                metric_obj = imetrics(response,ownerid)
                         if metric_obj != None:
                             if not metric_bucket.lookup(ownerid):

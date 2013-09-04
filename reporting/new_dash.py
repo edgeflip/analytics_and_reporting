@@ -3,7 +3,7 @@ import flask
 import json
 import csv
 from flask import request
-from generate_data_for_export_original import tool
+#from generate_data_for_export_original import tool
 from generate_report import encodeDES
 from flask import render_template
 from time import strftime
@@ -32,12 +32,17 @@ def handle_request():
 	read_from = dir1
     client = request.args.get('client_id')
     client = client.replace('=','%3D')
-    all_clients = tool.query("select distinct client_id from campaigns")
+    #all_clients = tool.query("select distinct client_id from campaigns")
+    f = open("data.txt", "r")
+    d = json.loads(f.read())
+    f.close()
+    all_clients = [2]
     mappings = {encodeDES(int(i[0])): int(i[0]) for i in all_clients}
     try:
         client_id = mappings[client]
-        client_name = tool.query("select name from clients where client_id='{0}'".format(client_id))
-        client_name = client_name[0][0]
+        #client_name = tool.query("select name from clients where client_id='{0}'".format(client_id))
+        #client_name = client_name[0][0]
+        client_name = "Terry McAuliffe for Governor"
 	_today = dash.get_key('{0}_client_{1}_all_campaigns_day'.format(read_from, client_id))
 	_today_data = _today.get_contents_as_string()
         aggregate = dash.get_key('{0}_client_{1}_all_campaigns_aggregate'.format(read_from, client_id))
