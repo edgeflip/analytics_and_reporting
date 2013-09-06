@@ -8,7 +8,7 @@ from tornado.web import HTTPError
 class App( tornado.web.Application):
     def __init__(self):
         """
-        Settings for our application
+        Settings
         """
         settings = dict(
             cookie_secret="changemeplz",
@@ -32,8 +32,13 @@ class App( tornado.web.Application):
 
 class MainHandler( tornado.web.RequestHandler):
     def get(self):
-        return self.write('OK') 
-        self.render('main.html')
+
+        ctx = {
+            'STATIC_URL':'/static/',
+            'user':'nobody',
+        }
+
+        return self.render('dashboard.html', **ctx)
 
 
 def main():

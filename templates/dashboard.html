@@ -1,6 +1,6 @@
-{% extends 'dashboard/base.html' %}
+{% extends 'base.html' %}
 
-{% block title %}EdgeFlip | Dashboard{% endblock %}
+{% block title %}EdgeFlip | Dashboard{% end %}
 
 
 {% block includes %}
@@ -13,16 +13,16 @@
     <link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.min.css" />
     <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/auth.css" />
     <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/dash.css" />
-{% endblock %}
+{% end %}
 
 
 {% block login %}
     <div id="login">
         <p>
-        Logged in as {{ user.username }} | <a href="/dashboard/logout/">Logout</a>
+        Logged in as {{ user }} | <a href="/dashboard/logout/">Logout</a>
         </p>
     </div>
-{% endblock %}
+{% end %}
 
 
 {% block body %}
@@ -34,7 +34,7 @@
         <select onchange="getData();">
             {% for campaign in campaigns %}
             <option value="{{ campaign }}">{{ campaign }}</option>
-            {% endfor %}
+            {% end %}
             <option value="aggregate">Summary</option>
         </select>
         </h2>
@@ -50,4 +50,4 @@
 
 </div>
 
-{% endblock %}
+{% end %}

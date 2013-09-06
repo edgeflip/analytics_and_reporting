@@ -1,21 +1,21 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>{% block title %}{% endblock %}</title>
+        <title>{% block title %}{% end %}</title>
         <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1" />
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
         
         {% block includes %}
         <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/site.css" />
-        {% endblock %}
+        {% end %}
 
     </head>
     <body>
 
         {% block login %}
-        {% endblock %}
+        {% end %}
 
         {% block body %}
-        {% endblock %}
+        {% end %}
     </body>
 </html>
