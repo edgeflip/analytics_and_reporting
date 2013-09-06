@@ -47,7 +47,7 @@ def write2csv(table, cur):
 
 def up2s3(table): 
     s3conn = connect_s3()
-    red = s3conn.get_bucket('redxfer')
+    red = s3conn.get_bucket('redxfer') 
     k = red.new_key()
     k.key = table
     k.set_contents_from_filename('%s.csv' % table)
@@ -86,8 +86,6 @@ if __name__ == '__main__':
          
         csvtime = int( time.time() )
         runcsv = csvtime - start
-        #cur.execute("select count(*) from %s" % table)
-        #n = cur.fetchall()
 
         up2s3(table)
         ups3time = int( time.time() )
@@ -103,6 +101,7 @@ if __name__ == '__main__':
         except:
            # step through the csv we are about to copy over and change the encodings to work propely with redshift
            print "Rewriting file...."
+   
            with open('%s.csv' % table, 'r') as csvfile:
                reader = csv.reader(csvfile, delimiter='|')
                with open('%s2.csv' % table, 'wb') as csvfile2:
@@ -110,14 +109,18 @@ if __name__ == '__main__':
                    keep_going = True
                    while keep_going:
                        try:
-                           new = [ i.decode('latin-1').encode('utf-8') for i in reader.next() ]
+                           this = reader.next()
+                           new = [ i.decode('latin-1').encode('utf-8') for i in this ]
                            writer.writerow(new)
                        except StopIteration:
                            keep_going = False
+
            print "Rewrite complete"
            os.remove('%s.csv' % table)
            os.system("mv {0}2.csv {0}.csv".format(table))
            up2s3(table)
+           # atomicity insurance
+           time.sleep(10)
            redconn.execute("COPY {0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
        
         redtime = int( time.time() )
