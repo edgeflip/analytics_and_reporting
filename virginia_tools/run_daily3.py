@@ -26,13 +26,7 @@ if __name__ == '__main__':
 
 	send_to_s3()
 	mail_to_s3()
-	# make a new timestamp before the processes start so as to not lose data
-	#new_timestamp = str(int(time.time()))
 	# generate our report
 	generate_report_or_get_specific(2,begin)
 	mail_report()
-	#f = open('timestamp.txt','w')
-	#f.write(new_timestamp)
-	#f.close()
-	#_mail_master()
 	

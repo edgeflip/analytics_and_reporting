@@ -19,7 +19,7 @@ def mail_to_s3():
 	mailserver.ehlo()
 	mailserver.starttls()
 	mailserver.ehlo()
-	mailserver.login('wes@edgeflip.com','gipetto3')
+	mailserver.login('wes@edgeflip.com', open('my_creds.txt', 'r').read())
 	
 	for person in to_send:
 		msg['To'] = person
@@ -33,7 +33,7 @@ def mail_to_s3():
 				else:
 					message = 'https://s3.amazonaws.com/virginia_bucket/ref_table_{0}_{1}_{2}'.format(m,d,y)
 				msg.attach(MIMEText(message))
-				mailserver.sendmail('wesleymadrigal_99@hotmail.com',person,msg.as_string())
+				mailserver.sendmail('wes@edgeflip.com', person, msg.as_string())
 				print "%s sent to %s" % (files[i], person)
 			except IOError:
 				pass

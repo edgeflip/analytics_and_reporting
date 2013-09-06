@@ -61,12 +61,9 @@ def get_start_of_campaign(client_id):
 
 def beginning_of_day():
 	# we always start from the beginning of yesterday for these reports
-	m = strftime('%m')
-	d = str(int(strftime('%d'))-1)
-	y = strftime('%Y')
-	beginning_datetime = datetime.datetime(int(y),int(m),int(d),00,00,00)
-	beginning_of_day = str(int(time.mktime(beginning_datetime.timetuple())))
-	return beginning_of_day
+        d = datetime.datetime.fromtimestamp( (time.time() - 86400) )
+        d = str( int(time.mktime( datetime.datetime(d.year, d.month, d.day, 00, 00, 00) ) )  )
+	return d
 
 
 def mail_report():
