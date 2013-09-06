@@ -44,6 +44,10 @@ def build_weighted():
         cur_weights = {}
         for fbid in cur_mets.keys():
             if fbid != ownerid and fbid != 'weights':
+                # build out the topics portion for a fbid irrespective of prim_to_sec and sec_to_prim
+                # topic_weights = build_topics_object(fbid, ownerid, conn)
+                # if topic_weights != None:
+                #     cur_mets[fbid]["topic_weights"] = topic_weights
                 if 'prim_to_sec' in cur_mets[fbid].keys():
                     numerator = float( sum( [ len( cur_mets[fbid]['prim_to_sec'][k] ) for k in cur_mets[fbid]['prim_to_sec'].keys() ] ) )
                     numerator = numerator / 2.0
@@ -284,6 +288,26 @@ def gmetrics(blob):
 
 # takes a facebook feed as parameter and builds an iterable of each message in that post's topic then weights
 # the topics in the iterable to classify the topic as more to less relevant for the facebook user who's wall we are using
+
+def built_topics_object(fbid, ownerid, conn):
+    main = conn.get_bucket('fbcrawl1')
+    k = main.get_key(fbid + ',' + ownerid)
+    if k != None:
+        resp = k.get_contents_as_string()
+        if resp != None and resp != '':
+            resp = json.loads(resp)
+            try:
+                resp = json.loads(resp)
+            except TypeError:
+                pass
+            topic_weights = personal_topics(feed)
+            topic_weights = { topic: weight for topic, weight in topic_weights }
+        else:
+            topic_weights = None
+        return topic_weights
+    else:
+        return None
+        
 
 def personal_topics(feed):
     topics = [ classify_topic(post['message']) for post in feed['feed']['data'] if 'message' in post.keys() ]
