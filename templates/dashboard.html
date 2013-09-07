@@ -33,7 +33,7 @@
         <h2>Campaign:
         <select onchange="getData();">
             {% for campaign in campaigns %}
-            <option value="{{ campaign }}">{{ campaign }}</option>
+            <option value="{{ campaign['campaign_id'] }}">{{ campaign['name'] }}</option>
             {% end %}
             <option value="aggregate">Summary</option>
         </select>

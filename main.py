@@ -3,6 +3,8 @@ import tornado.httpserver
 import tornado.ioloop
 import tornado.options
 import tornado.web
+import psycopg2
+import psycopg2.extras
 from tornado.web import HTTPError
 
 class App( tornado.web.Application):
@@ -27,7 +29,15 @@ class App( tornado.web.Application):
             (r"/", MainHandler),
         ]
 
+        # build connections to redshift
+        self.connect()
+
         tornado.web.Application.__init__(self, handlers, **settings)
+
+    def connect(self):
+        self.pconn = psycopg2.connect(host='wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com',
+            user='edgeflip', database='edgeflip', port=5439, password='XzriGDp2FfVy9K')
+        self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
 
 class MainHandler( tornado.web.RequestHandler):
@@ -37,6 +47,11 @@ class MainHandler( tornado.web.RequestHandler):
             'STATIC_URL':'/static/',
             'user':'nobody',
         }
+
+        # look up campaigns in our ghetto
+        q = "SELECT campaign_id, name FROM campaigns WHERE client_id=2 AND NOT is_deleted"
+        self.application.pcur.execute(q)
+        ctx['campaigns'] = self.application.pcur.fetchall()
 
         return self.render('dashboard.html', **ctx)
 
