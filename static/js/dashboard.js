@@ -35,7 +35,7 @@ function getData() {
 
     var callback = campaign=='aggregate'? onAggData : onData
 
-    $.post('/dashboard/chartdata/', {'campaign':campaign, 'day':day}, callback);
+    $.post('/chartdata/', {'campaign':campaign, 'day':day}, callback);
     }
 
 

@@ -1,11 +1,15 @@
-from logging import info
+from logging import debug, info, warning
+import json
+
 import tornado.httpserver
 import tornado.ioloop
 import tornado.options
 import tornado.web
+
 import psycopg2
 import psycopg2.extras
 from tornado.web import HTTPError
+
 
 class App( tornado.web.Application):
     def __init__(self):
@@ -21,12 +25,12 @@ class App( tornado.web.Application):
             debug = True, #autoreloads on changes, among other things
         )
 
-
         """
         map URLs to Handlers, with regex patterns
         """
         handlers = [
             (r"/", MainHandler),
+            (r"/chartdata/", DataHandler),
         ]
 
         # build connections to redshift
@@ -40,7 +44,7 @@ class App( tornado.web.Application):
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
 
-class MainHandler( tornado.web.RequestHandler):
+class MainHandler(tornado.web.RequestHandler):
     def get(self):
 
         ctx = {
@@ -54,6 +58,18 @@ class MainHandler( tornado.web.RequestHandler):
         ctx['campaigns'] = self.application.pcur.fetchall()
 
         return self.render('dashboard.html', **ctx)
+
+class DataHandler(tornado.web.RequestHandler):
+    def post(self): 
+        # grab args and pass them into the django view
+        debug(self.request.arguments)
+        camp_id = int(self.request.arguments['campaign'][0])
+        day = self.request.arguments['day'][0]
+
+        from views import chartdata
+        data = chartdata(camp_id, day)
+
+        self.finish(data)
 
 
 def main():

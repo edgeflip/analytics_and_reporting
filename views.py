@@ -3,43 +3,15 @@ import logging
 from random import randint
 from datetime import datetime, timedelta
 
-from django.views.decorators.http import require_GET, require_POST
-from django.shortcuts import render, redirect
-from django.http import HttpResponse
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import logout
-
-from models import CampaignSum, DaySum
+#from models import CampaignSum, DaySum
 
 import psycopg2
 import psycopg2.extras
-
-def dashlogout(request):
-    logout(request)
-
-    return redirect('/dashboard/login/')
 
 
 def date2goog(dt):
     # make the date this goofy ass 0 based string
     return 'Date({},{},{})'.format(dt.year, dt.month-1, dt.day)
-
-@require_GET
-@login_required(login_url='/dashboard/login/')
-def dashboard(request):
-
-    # so normally.. look up campaigns available to this user.
-    # for now, we have only one client with data, so:
-    campaigns = [row.campaign for row in CampaignSum.objects.all()]
-
-
-    user = request.user  # really seems like this should automagically happen
-    context = {
-        'user': user,
-        'campaigns': campaigns,
-        }
-
-    return render(request, 'dashboard/dashboard.html', context)
 
 
 # google.visualization is looking for this as "cols", TODO: do we actually need an id?
@@ -132,7 +104,6 @@ from collections import defaultdict
 def pad_day(data, day):
     """ pull out the data for just this day, pad with zeros for the off hours """
     data = [r for r in data if (r[1]-day).days == 0]
-    logging.info(data)
 
     hours = defaultdict(lambda: [{'v':0} for j in range(8)])
     for row in data:
@@ -142,28 +113,20 @@ def pad_day(data, day):
     out = [[{'v':[i,0,0]},]+hours[i] for i in range(0,24)]  # grab the default and set the time at [0]
     out = [{'c':i} for i in out]
 
-    logging.info(out)
     return out
 
 
-def chartdata(request):
+def chartdata(camp_id, day=None):
 
     out = {}
 
     # check for an aggregate request
-    if ('campaign' in request.POST) and (request.POST['campaign'] == 'aggregate'):
-        return aggregate(request)
+    if camp_id == 'aggregate':
+        return aggregate()
 
     pconn = psycopg2.connect(host='wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com',
             user='edgeflip', database='edgeflip', port=5439, password='XzriGDp2FfVy9K')
     pcur = pconn.cursor(cursor_factory = psycopg2.extras.DictCursor)
-
-    # minor security hole/TODO: make sure the user is authorized to request stats for this campaign
-    camp_name = request.POST['campaign']  # and.. hope psycopg2 checking for sql injection
-  
-    # join, but really just send the campaign id from the client side 
-    pcur.execute("""SELECT campaign_id, client_id FROM campaigns WHERE name=%s""", (camp_name,)) 
-    camp_id = pcur.fetchone()[0]
     
     pcur.execute("""SELECT * FROM clientstats WHERE campaign_id=%s ORDER BY time ASC""",(camp_id,))
     data = [row for row in pcur.fetchall()]
@@ -179,9 +142,10 @@ def chartdata(request):
     out['maxday'] = maxday.strftime( '%m/%d/%y')
 
     # pick the day we're going to look up data for, by POST or default
-    if 'day' in request.POST and request.POST['day']:
+    logging.debug(day)
+    if day:
         #catch errors on this as malicious POSTs
-        d = datetime.strptime( request.POST['day'], '%m/%d/%Y')
+        d = datetime.strptime( day, '%m/%d/%Y')
        
         # we should do this but.. the day comes in as midnight, so the min/max comp fails 
         # if not minday <= d <= maxday:
@@ -196,56 +160,10 @@ def chartdata(request):
     out['monthly_cols'] = MONTHLY_METRICS
     out['daily_cols'] = DAILY_METRICS
 
-    return HttpResponse(json.dumps(out), content_type="application/json")
+    return out
 
 
-@require_POST
-@login_required(login_url='/dashboard/login/')
-def oldchartdata(request):
-
-    out = {}
-
-    # check for an aggregate request
-    if ('campaign' in request.POST) and (request.POST['campaign'] == 'aggregate'):
-        return aggregate(request)
-
-    # look for a campaign id, default is whatever order we load the template
-    monthly = CampaignSum.objects.get(campaign=request.POST['campaign'])
-    out['monthly'] = monthly.mkGoog()
-
-    # grab min and max dates, TODO: this should be in the summary table
-    monthdata = json.loads( monthly.data)
-    days = [datetime.strptime(day, "%Y-%m-%d %H:%M:%S") for day in monthdata.keys()]
-    minday,maxday = min(days), max(days)
-
-    # send min and max days to restrict selectable days in the jquery widget
-    out['minday'] = minday.strftime( '%m/%d/%y')
-    out['maxday'] = maxday.strftime( '%m/%d/%y')
-
-    """
-    sometimes there are gaps in the data, but jquery only lets us limit between one set
-    of dates!  so, if we don't have the Day object, just send back zeros
-    """
-    try:
-        daily = DaySum.objects.get(day=t, campaign=monthly.campaign)
-        out['daily'] = daily.mkGoog()
-        out['dailyday'] = daily.day.strftime( '%m/%d/%y')
-    except DaySum.DoesNotExist:
-        blah = []
-        for i in range(24):
-            r = [{'v':0} for i in range(10)]
-            r[0] = {'v':[i,0,0]}
-            blah.append(r)
-        out['daily'] = [{'c':blah}]
-        out['dailyday'] = t.strftime( '%m/%d/%y')
-
-    out['monthly_cols'] = MONTHLY_METRICS
-    out['daily_cols'] = DAILY_METRICS
-
-    return HttpResponse(json.dumps(out), content_type="application/json")
-
-
-def aggregate(request):
+def aggregate():
     aggdata = []
     for row in CampaignSum.objects.all():
         googdata = [{'v':row.campaign},] + [{'v':sum(i)} for i in zip(*json.loads(row.data).values())] 
@@ -262,7 +180,6 @@ def aggregate(request):
 
 def mkdata(request):
     """one off that should be a management command to dump wes's json into django"""
-
     from dash_data import make_all_object
     make_all_object()
 
