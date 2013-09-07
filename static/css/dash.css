@@ -1,0 +1,30 @@
+#bounds {
+    margin: 0 auto;
+    width: 800px;
+    }
+
+/*
+#charts {
+    border:1px solid red;
+    }
+*/
+
+#datepicker {
+    float:right;
+    margin: 10px 0 0 40px;
+    }
+
+#daily { float:left; }
+
+#monthly {clear:both;}
+
+label {float:right;}
+
+.google-visualization-table-table {
+    margin: 20px 0;
+    }
+
+/* something, somewhere, is overriding font-sizes */
+.ui-widget {
+    font-size: 10px;
+    }
