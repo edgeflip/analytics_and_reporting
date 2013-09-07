@@ -34,7 +34,7 @@ class App( tornado.web.Application):
         ]
 
         # build connections to redshift
-        # self.connect()
+        self.connect()
 
         tornado.web.Application.__init__(self, handlers, **settings)
 
