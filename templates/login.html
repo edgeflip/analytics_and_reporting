@@ -1,4 +1,4 @@
-{% extends "dashboard/base.html" %}
+{% extends "base.html" %}
 
 {% block body %}
 
@@ -44,27 +44,25 @@
 <div id="bounds">
     <img src="http://edgeflip.com/logo.png" width="443" height="120" id="logo" />
 
-    {% if form.errors %}
+    {% if errors %}
         <p id="errors">Your username and password didn't match. Please try again.</p>
-    {% endif %}
+    {% end %}
 
-    <form method="post" action="{% url 'django.contrib.auth.views.login' %}" id="loginform">
-        {% csrf_token %}
+    <form method="post" action="/login/" id="loginform">
         <table>
             <tr>
-                <td>{{ form.username.label_tag }}</td>
-                <td>{{ form.username }}</td>
+                <td>Login</td>
+                <td><input name="login"></input></td>
             </tr>
             <tr>
-                <td>{{ form.password.label_tag }}</td>
-                <td>{{ form.password }}</td>
+                <td>Password</td>
+                <td><input name="password" type="password"></input></td>
             </tr>
        </table>
 
        <input type="submit" value="LOGIN" />
-       <input type="hidden" name="next" value="/dashboard/" />
    </form>
 
 </div>
 
-{% endblock %}
+{% end %}

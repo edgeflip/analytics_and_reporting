@@ -10,15 +10,16 @@ import psycopg2
 import psycopg2.extras
 from tornado.web import HTTPError
 
+from auth import Login, Logout
 
-class App( tornado.web.Application):
+class App(tornado.web.Application):
     def __init__(self):
         """
         Settings
         """
         settings = dict(
             cookie_secret="changemeplz",
-            login_url="/login", 
+            login_url="/login/", 
             template_path= "templates",
             static_path= "static",
             xsrf_cookies= False,
@@ -31,6 +32,8 @@ class App( tornado.web.Application):
         handlers = [
             (r"/", MainHandler),
             (r"/chartdata/", DataHandler),
+            (r"/login/", Login),
+            (r"/logout/", Logout),
         ]
 
         # build connections to redshift
@@ -94,6 +97,5 @@ def main():
 
 
 if __name__ == "__main__":
-    info('Booting..')
     main()
 
