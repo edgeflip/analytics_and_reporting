@@ -60,13 +60,12 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
         ownerid = str(item[1])
         token = item[2]
         main_key = str(fbid)+','+str(ownerid)
-        # if there is no key for this edge fbid,ownerid..
+        # if there is no key for this edge fbid,ownerid then we'll crawl it
         if not main_bucket.lookup(main_key):
             # go ahead and write the fbid to the csv log file
             crawl_log_writer.writerow([fbid])
             # crawl_feed returns a json blob of the users feed
-            # on this pass of the code we are getting the entire feed
-	    
+            # on this pass of the code we are getting the entire feed    
             response = crawl_feed(fbid, token)
             k = main_bucket.new_key()
             # set the bucket's key to be fbid,ownerid
@@ -97,6 +96,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 	        try:
                     if fbid != ownerid:
                         # find all posts in the fbid's wall that ownerid posted, liked, commented on, and tagged in
+                        # returns a dict {"stories_with": [ posts ], "comments_from": [ posts ], "likes_from": [ posts ], "posts_from": [ posts ] }
 	                metric_obj = imetrics(response,ownerid)
                         if metric_obj != None:
                             if not metric_bucket.lookup(ownerid):
