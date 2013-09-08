@@ -120,7 +120,7 @@ main_query_hour_by_hour ="""SELECT
      FROM                                                                       
          (SELECT e1.*,NULL as cb_session_id FROM events e1 WHERE type <> 'clickback'
          UNION                                                                  
-         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id as cb_session_id,e2.updated FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared')
+         SELECT e3.session_id,e3.campaign_id, e2.content_id,e2.ip,e3.fbid,e3.friend_fbid,e2.type,e2.appid,e2.content,e2.activity_id, e2.session_id as cb_session_id,e2.updated,e2.event_id FROM events e2 LEFT JOIN events e3 USING (activity_id)  WHERE e2.type='clickback' AND e3.type='shared')
      t                     
          LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load')
      e4                                                                         

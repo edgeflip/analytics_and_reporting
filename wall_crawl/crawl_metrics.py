@@ -188,7 +188,20 @@ def ometrics(ownerid, fbid, conn):
         result = imetrics(wall, fbid)
         return result
     except (AttributeError, TypeError):
-        return None
+        # if we didn't get a wall returned for our ownerid...let's go get his/her wall from facebook
+        print "Wall for %s not in s3, retrieving from facebook" % ownerid
+        token = json.loads(conn.get_bucket('fbtokens').get_key(ownerid).get_contents_as_string())['data'][0][0]
+        resp = crawl_feed(ownerid, token)
+        # crawl_feed returns '' if our request to facebook was invalid
+        if resp != '':
+             resp = json.loads(resp)
+             try:
+                 resp = json.loads(resp)
+             except TypeError:
+                 pass
+             result = imetrics(resp, fbid)
+             return result
+       
 
 """
    gmetrics algorithm takes a json blob as a parameter and builds 4 criteria of metrics around it (posts, comments, likes, types)
