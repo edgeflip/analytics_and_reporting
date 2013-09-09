@@ -145,6 +145,8 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 		    for each_set in all_tokens:
 			cur_tokens.append((each_set[0], each_set[1]))
                 token_key_struct = {"data": cur_tokens}
+                # set the time crawled in the data structure so that we can use it in the future
+                token_key_struct["timestamp"] = int(time.time())
                 jsoned = json.dumps(token_key_struct)
                 token_key.set_contents_from_string(jsoned)
             else:
@@ -157,6 +159,7 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
                     if ownerid in [x for x,y in cur_tokens_blob[fbid]]:
                         # if the key is still fbid copy its contents and delete it
                         cur_tokens_blob["data"] = cur_tokens_blob[fbid]
+                       
                         del cur_tokens_blob[fbid]
 		    else:
 			cur_tokens_blob[fbid].append((ownerid,token))
@@ -167,6 +170,8 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
 			pass
 		    else:
 			cur_tokens_blob["data"].append((ownerid,token))
+                # keep our tokens blob updated
+                cur_tokens_blob = keep_tokens_updated(fbid, cur_tokens_blob, tool)
 	        # convert the current tokens blob back into a json string and put it back into the s3 fbtokens bucket
 	
                 cur_tokens_blob = json.dumps(cur_tokens_blob)
@@ -203,8 +208,8 @@ def crawl_realtime_updates(tool):
     keys = []
     rs = realtime_bucket.list()
        
-    for key in rs:
-        keys.append(key)
+    #for key in rs:
+    #    keys.append(key)
     # keep track of which users we've crawled on this pass and make sure to not crawl
     # them twice or else we will have duplicate information in the database
     # users_crawled will also have pre-included fbids from the always_crawl_from_database algorithm
@@ -217,7 +222,7 @@ def crawl_realtime_updates(tool):
             users_crawled.append(reader.next()[0])
     except StopIteration:
         pass
-    for key in keys:
+    for key in rs:
         k = key
 	try:
             info = json.loads(k.get_contents_as_string()) 
@@ -230,6 +235,8 @@ def crawl_realtime_updates(tool):
 		   
 		    if token_stuff != None:
 			token_stuff = json.loads(token_stuff)
+                        # make sure our token_stuff is up to date
+                        token_stuff = keep_tokens_updated(fbid, token_stuff, tool)
                         try:
                             token_iterable = token_stuff["data"]
                         except KeyError:
@@ -258,7 +265,7 @@ def crawl_realtime_updates(tool):
                     # for each pair of (ownerid,token) in the list of fbid's tokens...
                     # crawl his/her wall with each token and update the data in the main
                     # fbcrawl bucket
-		       
+		    
                     if len(token_iterable) > 0:
                         for ownerid, token in token_iterable: 
 			    try:	
@@ -266,12 +273,14 @@ def crawl_realtime_updates(tool):
                                 # fbcrawl1 so we can add the new update stuff to it
                                 main = str(fbid)+','+str(ownerid)
                                 main_key = main_bucket.get_key(main)
-			        post_ids = main_key.get_metadata('data')
                                 # the data we already have
-                                if main_key != None:
+                                if main_key != None: 
+                                    # get our post_ids so that we can remove avoid redundancy 
+			            post_ids = main_key.get_metadata('data') 
 				    cur_data = main_key.get_contents_as_string()	
 				    try:
 				        cur_data = json.loads(cur_data)
+                                        # depending on the encoding, we may have to call json.loads() twice
                                         try:
 				            cur_data = json.loads(cur_data)
                                         except TypeError:
@@ -302,6 +311,7 @@ def crawl_realtime_updates(tool):
                             updated_stuff = crawl_feed_since(fbid, update_time, token)
                             if updated_stuff != None:
                                 updated_stuff = json.loads(updated_stuff)
+                                # again ensuring we have a dict in-hand to work with instead of a unicode
                                 try: 
                                     updated_stuff = json.loads(updated_stuff)
                                 except:
@@ -310,7 +320,7 @@ def crawl_realtime_updates(tool):
 			    if post_ids != None and updated_stuff != None:
 			        try:
 			            repeats = [post for post in updated_stuff['feed']['data'] if post['id'] in post_ids and 'id' in post.keys() and 'feed' in updated_stuff.keys() and 'data' in updated_stuff['feed'].keys()]
-				    [updated_stuff['feed']['data'][updated_stuff['feed']['data'].index(i)] for i in repeats]
+				    [updated_stuff['feed']['data'].remove(i) for i in repeats]
 			        except KeyError:
 			            pass
 			    else:
@@ -330,7 +340,7 @@ def crawl_realtime_updates(tool):
 		 	    if updated_stuff != None and main_key != None:
 				try:
 				    post_ids = list(set([post['id'] for post in updated_stuff['feed']['data'] if 'id' in post.keys() and 'feed' in updated_stuff.keys()]))
-				    # remember to set_metadata before set_contents_from_string
+				    # remember to set_metadata before set_contents_from_string otherwise it won't stick (weird s3 rule)
 				    post_ids = {"data": post_ids}	
 				    main_key.set_metadata('data', json.dumps(post_ids)) 
                               	    main_key.set_contents_from_string(json.dumps(updated_stuff))
@@ -339,6 +349,7 @@ def crawl_realtime_updates(tool):
                                     if metric_bucket.lookup(ownerid):
 				        try:
                                             if fbid != ownerid:
+                                                # finds all of the relevant posts that the ownerid made/is in in this user's data
                                                 metric_object = imetrics(updated_stuff, ownerid)
                                                 if metric_object != None:
 						    # we will store these in the metric bucket by ownerid and have all fbids
@@ -346,14 +357,19 @@ def crawl_realtime_updates(tool):
                                                     m_key = metric_bucket.get_key(ownerid)
 					            cur_met_blob = m_key.get_contents_as_string()
 						    if cur_met_blob != None:
-					                cur_met_blob = json.loads(cur_met_blob) 
+					                cur_met_blob = json.loads(cur_met_blob)
+                                                        # the imetrics algorithm we ran gets the "primary to secondary" connectivity
+                                                        # we will need to run the ometrics algorithm to get "secondary to primary"
+                                                        # connectivity 
                                                         cur_met_blob[fbid] = {"prim_to_sec": metric_object}
                                                         omets = ometrics(ownerid, fbid, main_bucket)
 					                if omets != None:
                                                             cur_met_blob[fbid]["sec_to_prim"] = omets
 					           
 						    else:
-						        cur_met_blob = {fbid: {"prim_to_sec": metric_object } }
+                                                        # the metric_bucket didn't have an object for this ownerid...so we will
+                                                        # build and store that object with almost identical semantics
+						        cur_met_blob = {fbid: {"prim_to_sec": metric_object }}
 							omets = ometrics(ownerid, fbid, main_bucket)
                                                         if omets != None:
 							    cur_met_blob[fbid]["sec_to_prim"] = omets
@@ -485,6 +501,20 @@ def check_if_crawled(fbid,friend_fbid):
         return True
     return False
 
+# a method to call on our tokens blob to keep it updated
+def keep_tokens_updated(fbid, blob, tool):
+    if "timestamp" in blob.keys():
+        if blob["timestamp"] < (time.time() - 86400):
+           res = tool.query("select ownerid, token from tokens where fbid='%s'" % fbid)
+           if len(res) > 0:
+               for ownerid, token in res:
+                   if ownerid not in [ ownerid for ownerid, token in blob["data"] ]:
+                       blob["data"].append((ownerid, token))
+        else:
+           pass
+        return blob
+    else:
+        return blob 
 
 
 # not necessarily needed, but good for testing stuff with my own account and credentials
