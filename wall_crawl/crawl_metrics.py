@@ -151,13 +151,13 @@ def imetrics(resp, ownerid):
         # get all posts that the cared about user commented on
         comments_from = []
         for i in resp['feed']['data']:
-            if 'comments' in i.keys() and i not in posts_from and ownerid in [i['comments']['data'][j]['from']['id'] for j in range(len(i['comments']['data']))]:
+            if 'comments' in i.keys() and i not in posts_from and ownerid in [ comment['from']['id'] for comment in i['comments']['data'] ]:
                 comments_from.append(i)
 
         # get all posts that the cared about user liked
         likes_from = []
         for i in resp['feed']['data']:
-            if 'likes' in i.keys() and i not in posts_from and i not in comments_from and ownerid in [i['likes']['data'][j]['id'] for j in range(len(i['likes']['data']))]:
+            if 'likes' in i.keys() and i not in posts_from and i not in comments_from and ownerid in [ like['id'] for like in post['likes']['data'] ]:
                 likes_from.append(i)
 
         # get all posts that the user is tagged in in a story
@@ -187,7 +187,7 @@ def ometrics(ownerid, fbid, conn):
             pass
         result = imetrics(wall, fbid)
         return result
-    except (AttributeError, TypeError):
+    except (AttributeError, TypeError, ValueError):
         # if we didn't get a wall returned for our ownerid...let's go get his/her wall from facebook
         print "Wall for %s not in s3, retrieving from facebook" % ownerid
         token = json.loads(conn.get_bucket('fbtokens').get_key(ownerid).get_contents_as_string())['data'][0][0]
