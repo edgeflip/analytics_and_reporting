@@ -47,143 +47,155 @@ def always_crawl_from_database(tool,crawl_timestamp = None):
     # bucket facebok realtime API hits with {fbid: update time, fbid: updated time }...
     realtime_bucket = conn.get_bucket('fbrealtime')
     # each key is a primary's fbid with { secondary: metrics, secondary2: metrics, .... secondary_n: metrics }
-    metric_bucket = conn.get_bucket('metric_bucket')
+    metric_bucket = conn.get_bucket('metric_bucket') 
+    # bucket for crawl_log
+    crawl_log = conn.get_bucket('someobscenebucketname')
+    # we need to set a limit and offset so as to not eat up all our memory
+    # we will crawl in batches of 10000
+    l = 10000
+    o = 0
     if not crawl_timestamp:
-        most_data = tool.query('select fbid,ownerid,token from tokens')
+        most_data = tool.query('select fbid,ownerid,token from tokens limit {0} offset {1}'.format(l, o))
     else:
-        most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME(%s)' % crawl_timestamp)
-    crawl_log = open('crawl_log.csv','wb')
-    crawl_log_writer = csv.writer(crawl_log,delimiter=',')
-    new_count = 0
-    for item in most_data:
-        fbid = str(item[0])
-        ownerid = str(item[1])
-        token = item[2]
-        main_key = str(fbid)+','+str(ownerid)
-        # if there is no key for this edge fbid,ownerid then we'll crawl it
-        if not main_bucket.lookup(main_key):
-            # go ahead and write the fbid to the csv log file
-            crawl_log_writer.writerow([fbid])
-            # crawl_feed returns a json blob of the users feed
-            # on this pass of the code we are getting the entire feed    
-            response = crawl_feed(fbid, token)
-            k = main_bucket.new_key()
-            # set the bucket's key to be fbid,ownerid
-            k.key = main_key
+        most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME({0}) limit {1} offset {2}'.format(crawl_timestamp, limit, offset))
+    
+    while len(most_data) > 0: 
+        new_count = 0
+        for item in most_data:
+            fbid = str(item[0])
+            ownerid = str(item[1])
+            token = item[2]
+            main_key = str(fbid)+','+str(ownerid)
+            # if there is no key for this edge fbid,ownerid then we'll crawl it
+            if not main_bucket.lookup(main_key):
+                # go ahead and write the fbid to the someobscenebucketname bucket
+                cl = crawl_log.new_key()
+                cl.key = fbid
+                # crawl_feed returns a json blob of the users feed
+                # on this pass of the code we are getting the entire feed    
+                response = crawl_feed(fbid, token)
+                k = main_bucket.new_key()
+                # set the bucket's key to be fbid,ownerid
+                k.key = main_key
 
-	    # META DATA FOR POST IDS TO AVOID DUPLICATE POSTS IN THIS FEED
-            # you MUST set metadata before setting the key's value otherwise the metadata won't be saved (weird s3 rule)
-	    # we need to call json.loads() on response twice depending on the encoding
-	    if response != '': 
-	        response = json.loads(response)
-                try:
+    	        # META DATA FOR POST IDS TO AVOID DUPLICATE POSTS IN THIS FEED
+                # you MUST set metadata before setting the key's value otherwise the metadata won't be saved (weird s3 rule)
+                # we need to call json.loads() on response twice depending on the encoding
+                if response != '': 
                     response = json.loads(response)
-                except (ValueError, TypeError):
-                    pass
+                    try:
+                        response = json.loads(response)
+                    except (ValueError, TypeError):
+                        pass
        
-                try:
-		    post_ids = list(set([each['id'] for each in response['feed']['data'] if 'id' in each.keys()]))
-	        except KeyError:
-		    post_ids = []
-	        # SET THE META DATA
-		the_data = {'data': post_ids}
-	        k.set_metadata('data', json.dumps(the_data))
+                    try:
+		        post_ids = list(set([each['id'] for each in response['feed']['data'] if 'id' in each.keys()]))
+                    except KeyError:
+                        post_ids = []
+                    # SET THE META DATA
+                    the_data = {'data': post_ids}
+                    k.set_metadata('data', json.dumps(the_data))
 
-                # METRICS PORTION
+                    # METRICS PORTION
 	   
-	        # there are times when this will return a TypeError or KeyError depending on what the response looks like
-		# that is passed to the metrics algorithm
-	        try:
-                    if fbid != ownerid:
-                        # find all posts in the fbid's wall that ownerid posted, liked, commented on, and tagged in
-                        # returns a dict {"stories_with": [ posts ], "comments_from": [ posts ], "likes_from": [ posts ], "posts_from": [ posts ] }
-	                metric_obj = imetrics(response,ownerid)
-                        if metric_obj != None:
-                            if not metric_bucket.lookup(ownerid):
-                                m_key = metric_bucket.new_key()
-                                m_key.key = ownerid
-                                cur_met_obj = {fbid: {"prim_to_sec": metric_obj } }
-                                omets = ometrics(fbid, ownerid, main_bucket) 
-                                if omets != None:
-				    cur_met_obj[fbid]["sec_to_prim"] = omets
+                    # there are times when this will return a TypeError or KeyError depending on what the response looks like
+                    # that is passed to the metrics algorithm
+                    try:
+                        if fbid != ownerid:
+                            # find all posts in the fbid's wall that ownerid posted, liked, commented on, and tagged in
+                            # returns a dict {"stories_with": [ posts ], "comments_from": [ posts ], "likes_from": [ posts ], "posts_from": [ posts ] }
+                            metric_obj = imetrics(response,ownerid)
+                            if metric_obj != None:
+                                if not metric_bucket.lookup(ownerid):
+                                    m_key = metric_bucket.new_key()
+                                    m_key.key = ownerid
+                                    cur_met_obj = {fbid: {"prim_to_sec": metric_obj } }
+                                    omets = ometrics(fbid, ownerid, main_bucket) 
+                                    if omets != None:
+                                        cur_met_obj[fbid]["sec_to_prim"] = omets
                                         
-                            else:
-                                m_key = metric_bucket.get_key(ownerid)
-                                cur_met_obj = json.loads(m_key.get_contents_as_string())
+                                else:
+                                    m_key = metric_bucket.get_key(ownerid)
+                                    cur_met_obj = json.loads(m_key.get_contents_as_string())
              
-                                cur_met_obj[fbid] = {"prim_to_sec": metric_obj}
-                                omets = ometrics(ownerid, fbid, main_bucket)
-				if omets != None:
-                                     cur_met_obj[fbid]["sec_to_prim"] = omets
-                                else: 
-                                     pass
+                                    cur_met_obj[fbid] = {"prim_to_sec": metric_obj}
+                                    omets = ometrics(ownerid, fbid, main_bucket)
+                                    if omets != None:
+                                        cur_met_obj[fbid]["sec_to_prim"] = omets
+                                    else: 
+                                        pass
 
-                            m_key.set_contents_from_string(json.dumps(cur_met_obj))
+                                m_key.set_contents_from_string(json.dumps(cur_met_obj))
 			   
+                            else:
+                                pass
                         else:
                             pass
-                    else:
+
+               	    except (TypeError, KeyError):
                         pass
 
-               	except (TypeError, KeyError):
+                else:
 		    pass
 
-	    else:
-		pass
+                k.set_contents_from_string(response)
 
-	    k.set_contents_from_string(response)
-
-	    # TOKEN STUFF FOR EACH USER
-            # put the fbid,ownerid, and token in token_bucket
-            # there may already be a token bucket key for this user so check first
-            if not token_bucket.lookup(fbid):
-                token_key = token_bucket.new_key()
-                token_key.key = fbid
-		all_tokens = tool.query("select ownerid, token from tokens where fbid={0}".format(fbid))
-		cur_tokens = [(ownerid, token)]
-		if len(all_tokens) > 0:
-		    for each_set in all_tokens:
-			cur_tokens.append((each_set[0], each_set[1]))
-                token_key_struct = {"data": cur_tokens}
-                # set the time crawled in the data structure so that we can use it in the future
-                token_key_struct["timestamp"] = int(time.time())
-                jsoned = json.dumps(token_key_struct)
-                token_key.set_contents_from_string(jsoned)
-            else:
-                token_key = token_bucket.get_key(fbid)
-                # get the current tokens blob we have and convert it to a json object
-                cur_tokens_blob = json.loads(token_key.get_contents_as_string())
-                # check if this owner already has his/her token registered
-                # some of our cur_tokens_blobs have "data" as their key instead of fbids
-                try:
-                    if ownerid in [x for x,y in cur_tokens_blob[fbid]]:
-                        # if the key is still fbid copy its contents and delete it
-                        cur_tokens_blob["data"] = cur_tokens_blob[fbid]
+                # TOKEN STUFF FOR EACH USER
+                # put the fbid,ownerid, and token in token_bucket
+                # there may already be a token bucket key for this user so check first
+                if not token_bucket.lookup(fbid):
+                    token_key = token_bucket.new_key()
+                    token_key.key = fbid
+                    all_tokens = tool.query("select ownerid, token from tokens where fbid={0}".format(fbid))
+                    cur_tokens = [(ownerid, token)]
+                    if len(all_tokens) > 0:
+                        for each_set in all_tokens:
+                            cur_tokens.append((each_set[0], each_set[1]))
+                    token_key_struct = {"data": cur_tokens}
+                    # set the time crawled in the data structure so that we can use it in the future
+                    token_key_struct["timestamp"] = int(time.time())
+                    jsoned = json.dumps(token_key_struct)
+                    token_key.set_contents_from_string(jsoned)
+                else:
+                    token_key = token_bucket.get_key(fbid)
+                    # get the current tokens blob we have and convert it to a json object
+                    cur_tokens_blob = json.loads(token_key.get_contents_as_string())
+                    # check if this owner already has his/her token registered
+                    # some of our cur_tokens_blobs have "data" as their key instead of fbids
+                    try:
+                        if ownerid in [x for x,y in cur_tokens_blob[fbid]]:
+                            # if the key is still fbid copy its contents and delete it
+                            cur_tokens_blob["data"] = cur_tokens_blob[fbid]
                        
-                        del cur_tokens_blob[fbid]
-		    else:
-			cur_tokens_blob[fbid].append((ownerid,token))
-			cur_tokens_blob["data"] = cur_tokens_blob[fbid]
-			del cur_tokens_blob[fbid]
-                except KeyError:
-		    if ownerid in [x for x,y in cur_tokens_blob["data"]]:
-			pass
-		    else:
-			cur_tokens_blob["data"].append((ownerid,token))
-                # keep our tokens blob updated
-                cur_tokens_blob = keep_tokens_updated(fbid, cur_tokens_blob, tool)
-	        # convert the current tokens blob back into a json string and put it back into the s3 fbtokens bucket
+                            del cur_tokens_blob[fbid]
+                        else:
+                            cur_tokens_blob[fbid].append((ownerid,token))
+                            cur_tokens_blob["data"] = cur_tokens_blob[fbid]
+                            del cur_tokens_blob[fbid]
+                    except KeyError:
+                        if ownerid in [x for x,y in cur_tokens_blob["data"]]:
+                            pass
+                        else:
+                            cur_tokens_blob["data"].append((ownerid,token))
+                    # keep our tokens blob updated
+                    cur_tokens_blob = keep_tokens_updated(fbid, cur_tokens_blob, tool)
+                    # convert the current tokens blob back into a json string and put it back into the s3 fbtokens bucket
 	
-                cur_tokens_blob = json.dumps(cur_tokens_blob)
-                token_key.set_contents_from_string(cur_tokens_blob)
-            new_count += 1
-	    print "%s added to s3" % main_key
-        # otherwise we've already crawled our user and there should be information about
-        # him/her in our main_bucket and our token_bucket
+                    cur_tokens_blob = json.dumps(cur_tokens_blob)
+                    token_key.set_contents_from_string(cur_tokens_blob)
+                new_count += 1
+                print "%s added to s3" % main_key
+            # otherwise we've already crawled our user and there should be information about
+            # him/her in our main_bucket and our token_bucket
+            else:
+                # get everything from the subscribed updates with the next method's execution
+                print "%s already crawled" % main_key
+       
+        o += l	
+        if not crawl_timestamp:
+            most_data = tool.query('select fbid,ownerid,token from tokens limit {0} offset {1}'.format(l, o))
         else:
-            # get everything from the subscribed updates with the next method's execution
-            print "%s already crawled" % main_key
-	
+            most_data = tool.query('select fbid,ownerid,token from tokens where updated > FROM_UNIXTIME({0}) limit {1} offset {2}'.format(crawl_timestamp, limit, offset))
     return new_count
 
 
@@ -202,26 +214,13 @@ def crawl_realtime_updates(tool):
     token_bucket = conn.get_bucket('fbtokens')
     realtime_bucket = conn.get_bucket('fbrealtime')
     metric_bucket = conn.get_bucket('metric_bucket')
+    crawl_log = conn.get_bucket('someobscenebucketname')
     # REALTIME STUFF FROM FACEBOOK
     # get all the realtime update keys so we can parse through them and grab the updates
     _time = time.time()
     keys = []
     rs = realtime_bucket.list()
        
-    #for key in rs:
-    #    keys.append(key)
-    # keep track of which users we've crawled on this pass and make sure to not crawl
-    # them twice or else we will have duplicate information in the database
-    # users_crawled will also have pre-included fbids from the always_crawl_from_database algorithm
-    # which generates a crawled log of fbids from it's execution in order to avoid duplicate crawling
-    users_crawled = []
-    reader = csv.reader(open('crawl_log.csv','r'),delimiter=',') 
-    # read all the fbids from our file and add them to users_crawled
-    try:
-        while True:
-            users_crawled.append(reader.next()[0])
-    except StopIteration:
-        pass
     for key in rs:
         k = key
 	try:
@@ -229,7 +228,7 @@ def crawl_realtime_updates(tool):
             # iterate through the list of [(fbid, updated_time), (fbid, updated_time)] 
             for fbid, update_time in info['data']:
                 # if we haven't crawled this user yet on this pass....
-                if fbid not in users_crawled:
+                if not crawl_log.lookup(fbid)
 
                     token_stuff = get_tokens_for_user(fbid,token_bucket)
 		   
@@ -399,7 +398,6 @@ def crawl_realtime_updates(tool):
 				except (AttributeError, KeyError):
 			            pass 
 				        ############################################################
-
 			    else:
 				pass
 
@@ -409,6 +407,10 @@ def crawl_realtime_updates(tool):
                     print "User %s was already crawled" % str(fbid)
         except:
 	    print "User NOT updated"
+    # delete our crawl_log as it only pertains to the execution on this pass 
+    cl = crawl_log.list()
+    for key in cl:
+        crawl_log.delete_key(key)
     # delete all the obsolete keys that we've crawled that were created earlier than
     # this algorithm was invoked
     #realtime_bucket.delete_keys([key for key in realtime_bucket if int(key) < _time]) 
@@ -423,7 +425,9 @@ def delete_obsolete_keys(bucket,timestamp):
         if not key.key.isdigit():
             bucket.delete_key(key)
     try:
-        bucket.delete_keys([i for i in bucket.list() if int(i.key) < timestamp])
+        for i in bucket.list():
+            if int(i.key) < timestamp:
+                bucket.delete_key(i)
     except ValueError:
         delete_obsolete_keys(bucket,timestamp)
 # we have an s3 bucket specifically for tokens so that when we've received an update from facebook
