@@ -48,6 +48,8 @@ class App(tornado.web.Application):
 
 
 class MainHandler(tornado.web.RequestHandler):
+
+    @tornado.web.authenticated
     def get(self):
 
         ctx = {
