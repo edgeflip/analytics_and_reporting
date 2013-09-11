@@ -220,155 +220,143 @@ def crawl_realtime_updates(tool):
     # REALTIME STUFF FROM FACEBOOK
     # get all the realtime update keys so we can parse through them and grab the updates
     _time = time.time()
-    keys = []
-    rs = realtime_bucket.list()
-    pdb.set_trace()
-    for k in rs:
-        try:
-            info = json.loads(k.get_contents_as_string()) 
-            realtime_bucket.delete_key(k)
-            # iterate through the list of [(fbid, updated_time), (fbid, updated_time)] 
-            for fbid, update_time in info['data']:
-                # if we haven't crawled this user yet on this pass....
-                if not crawl_log.lookup(fbid):
-                    key = crawl_log.new_key()
-                    key.key = fbid
-                    key.set_contents_from_string('already crawled')
-                    token_stuff = get_tokens_for_user(fbid,token_bucket)
+    # iterates through all of our realtime updates and chooses the best to crawl
+    crawl_these = choose_best(conn)
+    for fbid, update_time in crawl_these:
+        # if we haven't crawled this user yet on this pass....
+        if not crawl_log.lookup(fbid):
+            key = crawl_log.new_key()
+            key.key = fbid
+            key.set_contents_from_string('already crawled')
+            token_stuff = get_tokens_for_user(fbid,token_bucket)
 		   
-                    if token_stuff != None:
-                        token_stuff = json.loads(token_stuff)
-                        # make sure our token_stuff is up to date
-                        token_stuff = keep_tokens_updated(fbid, token_stuff, tool)
-                        try:
-                            token_iterable = token_stuff["data"]
+            if token_stuff != None:
+                token_stuff = json.loads(token_stuff)
+                # make sure our token_stuff is up to date
+                token_stuff = keep_tokens_updated(fbid, token_stuff, tool)
+                try:
+                    token_iterable = token_stuff["data"]
                       
-                        except KeyError:
-                            token_iterable = token_stuff[fbid]
-                            # lets preserve the Consistency in ACID
-       	                    token_stuff = {"data": token_stuff[fbid]}
-                        # if we don't have a timestamp let's make one
-                        if "timestamp" not in token_stuff.keys():
-                            token_stuff["timestamp"] = time.time()
-		      
-                    # if we don't have tokens for the user we get None back, 
-                    # get tokens put them into s3 and use them
-                    else:
-                        fbid_tokens = tool.query("select ownerid, token from tokens where fbid='%s'" % str(fbid))
-                        token_stuff = {"data": []}
-                        token_stuff["timestamp"] = time.time()
-                       	token_iterable = []
+                except KeyError:
+                    token_iterable = token_stuff[fbid]
+                    # lets preserve the Consistency in ACID
+       	            token_stuff = {"data": token_stuff[fbid]}
+		     
+            # if we don't have tokens for the user we get None back, 
+            # get tokens put them into s3 and use them
+            else:
+                fbid_tokens = tool.query("select ownerid, token from tokens where fbid='%s'" % str(fbid))
+                token_stuff = {"data": []}
+                token_stuff["timestamp"] = time.time()
+                token_iterable = []
                       
-                    if len(fbid_tokens) > 0:
-                            for each in fbid_tokens:
-                                # add (ownerid:token) to the struct
-                                token_stuff["data"].append((each[0],each[1]))
-                                token_iterable.append((each[0],each[1]))
-                            k = token_bucket.new_key()
-                            k.key = fbid
-                            k.set_contents_from_string(json.dumps(token_stuff))
-                    else:
-                        pass
+                if len(fbid_tokens) > 0:
+                    for each in fbid_tokens:
+                        # add (ownerid:token) to the struct
+                        token_stuff["data"].append((each[0],each[1]))
+                        token_iterable.append((each[0],each[1]))
+                    k = token_bucket.new_key()
+                    k.key = fbid
+                    k.set_contents_from_string(json.dumps(token_stuff))
+                else:
+                    pass
  
-                    # for each pair of (ownerid,token) in the list of fbid's tokens...
-                    # crawl his/her wall with each token and update the data in the main
-                    # fbcrawl bucket
+                # for each pair of (ownerid,token) in the list of fbid's tokens...
+                # crawl his/her wall with each token and update the data in the main
+                # fbcrawl bucket
 		    
-                    if len(token_iterable) > 0:
-                        for ownerid, token in token_iterable: 
-                            try:	
-                                # first let's get what we have on the current pair fbid,ownerid out of
-                                # fbcrawl1 so we can add the new update stuff to it
-                                main = str(fbid)+','+str(ownerid)
-                                main_key = main_bucket.get_key(main)
-                                # the data we already have
-                                if main_key != None: 
-                                    # get our post_ids so that we can remove avoid redundancy 
-                                    post_ids = main_key.get_metadata('data') 
-                                    cur_data = main_key.get_contents_as_string()	
-                                    try:
-                                        cur_data = json.loads(cur_data)
-                                        # depending on the encoding, we may have to call json.loads() twice
-                                        try:
-                                            cur_data = json.loads(cur_data)
-                                        except TypeError:
-                                            pass
+            if len(token_iterable) > 0:
+                for ownerid, token in token_iterable: 
+                    try:	
+                        # first let's get what we have on the current pair fbid,ownerid out of
+                        # fbcrawl1 so we can add the new update stuff to it
+                        main = str(fbid)+','+str(ownerid)
+                        main_key = main_bucket.get_key(main)
+                        # the data we already have
+                        if main_key != None: 
+                            # get our post_ids so that we can remove avoid redundancy 
+                            post_ids = main_key.get_metadata('data') 
+                            cur_data = main_key.get_contents_as_string()	
+                            try:
+                                cur_data = json.loads(cur_data)
+                                # depending on the encoding, we may have to call json.loads() twice
+                                try:
+                                    cur_data = json.loads(cur_data)
+                                except TypeError:
+                                    pass
 					
-                                        if post_ids != None:
-                                            try:
-                                                post_ids = json.loads(post_ids)['data']
-                                            except (TypeError, ValueError, KeyError):
-                                                pass
-                                        else:
-                                            # we don't need to assign post_ids = None because post_ids already == None
-                                            pass
-                                    except (TypeError, ValueError):
-                                        cur_data = None	
+                                if post_ids != None:
+                                    try:
+                                        post_ids = json.loads(post_ids)['data']
+                                    except (TypeError, ValueError, KeyError):
+                                        pass
                                 else:
-                                    main_key = main_bucket.new_key()
-                                    main_key.key = main
-                                    cur_data = None
-                                    post_ids = None
-				
-			    # IF THEY KEY DOESN'T EXIST (main_key = main_bucket.get_key(main) RETURNS NONE...)
-			    # an AttributeError will be thrown by the execution of (cur_data = main_key.get_contents_as_string())
-			    # because A NoneType doesn't have attributes
-			    except AttributeError:	
-				pass                        
-				
-                            # the new data...we will add the old data to this for persistent chronological order
-
-			    # crawl_feed_since will handle any errors associated with the crawl
-                            if cur_data == None:
-                                updated_stuff = crawl_feed(fbid, token)
-                            else:
-                                updated_stuff = crawl_feed_since(fbid, update_time, token)
-                            if updated_stuff != None:
-                                updated_stuff = json.loads(updated_stuff)
-                                # again ensuring we have a dict in-hand to work with instead of a unicode
-                                try: 
-                                    updated_stuff = json.loads(updated_stuff)
-                                except:
+                                    # we don't need to assign post_ids = None because post_ids already == None
                                     pass
-                            # DELETE REPEAT POSTS					
-                            if post_ids != None and updated_stuff != None:
-                                try:
-                                    repeats = [post for post in updated_stuff['feed']['data'] if post['id'] in post_ids and 'id' in post.keys() and 'feed' in updated_stuff.keys() and 'data' in updated_stuff['feed'].keys()]
-                                    [updated_stuff['feed']['data'].remove(i) for i in repeats]
-                                except KeyError:
-                                    pass
-                            else:
-                                pass
-
-                            if cur_data != None and updated_stuff != None:
-                                try:
-                                    # combine the list of posts into a new list that is ordered chronologically
-                                    # by adding the old posts to the end of the new posts list				        
-                                    updated_stuff['feed']['data'] += cur_data['feed']['data']
-                                except KeyError:
-                                    pass 
-                            else:
-                                pass
-                                # store the the data back where we got it with the new information added
+                            except (TypeError, ValueError):
+                                cur_data = None	
+                        else:
+                            main_key = main_bucket.new_key()
+                            main_key.key = main
+                            cur_data = None
+                            post_ids = None
 				
-                            if updated_stuff != None and main_key != None:
-                                try:
-                                    post_ids = list(set([post['id'] for post in updated_stuff['feed']['data'] if 'id' in post.keys() and 'feed' in updated_stuff.keys()]))
-                                    # remember to set_metadata before set_contents_from_string otherwise it won't stick (weird s3 rule)
-                                    post_ids = {"data": post_ids}	
-                                    main_key.set_metadata('data', json.dumps(post_ids)) 
-                              	    main_key.set_contents_from_string(json.dumps(updated_stuff))
-											
-                                    # run our metrics analysis on the new data and replace our old stuff
-                                    if metric_bucket.lookup(ownerid):
-                                        try:
-                                            if fbid != ownerid:
-                                                # finds all of the relevant posts that the ownerid made/is in in this user's data
-                                                metric_object = imetrics(updated_stuff, ownerid)
-                                                if metric_object != None:
-                                                    # we will store these in the metric bucket by ownerid and have all fbids
-                                                    # that are connections as keys in a json object
-                                                    m_key = metric_bucket.get_key(ownerid)
+                    # IF THEY KEY DOESN'T EXIST (main_key = main_bucket.get_key(main) RETURNS NONE...)
+                    # an AttributeError will be thrown by the execution of (cur_data = main_key.get_contents_as_string())
+                    # because A NoneType doesn't have attributes
+                    except AttributeError:	
+                        pass                        
+				
+                    # the new data...we will add the old data to this for persistent chronological order
+                    # crawl_feed with a "since" parameter will handle any errors associated with the crawl
+                    if cur_data == None:
+                        updated_stuff = crawl_feed(fbid, token)
+                    else:
+                        updated_stuff = crawl_feed(fbid, token, since=update_time)
+
+                    if updated_stuff != None:
+                        updated_stuff = json.loads(updated_stuff)
+                        # again ensuring we have a dict in-hand to work with instead of a unicode
+                        try: 
+                            updated_stuff = json.loads(updated_stuff)
+                        except:
+                            pass
+                        # DELETE REPEAT POSTS					
+                        if post_ids != None and updated_stuff != None:
+                            updated_stuff = delete_repeats(updated_stuff)
+                        else:
+                            pass
+
+                        if cur_data != None and updated_stuff != None:
+                            try:
+                                # combine the list of posts into a new list that is ordered chronologically
+                                # by adding the old posts to the end of the new posts list				        
+                                updated_stuff['feed']['data'] += cur_data['feed']['data']
+                            except KeyError:
+                                pass 
+                        else:
+                            pass
+
+                        # store the the data back where we got it with the new information added
+                        if updated_stuff != None and main_key != None:
+                            try:
+                                post_ids = list(set([post['id'] for post in updated_stuff['feed']['data'] if 'id' in post.keys() and 'feed' in updated_stuff.keys()]))
+                                
+                                # remember to set_metadata before set_contents_from_string otherwise it won't stick (weird s3 rule)
+                                post_ids = {"data": post_ids}	
+                                main_key.set_metadata('data', json.dumps(post_ids)) 
+                              	main_key.set_contents_from_string(json.dumps(updated_stuff))							
+                                # run our metrics analysis on the new data and replace our old stuff
+                                if metric_bucket.lookup(ownerid):
+                                    try:
+                                        if fbid != ownerid:
+                                            # finds all of the relevant posts that the ownerid made/is in in this user's data
+                                            metric_object = imetrics(updated_stuff, ownerid)
+                                            if metric_object != None:
+                                                # we will store these in the metric bucket by ownerid and have all fbids
+                                                # that are connections as keys in a json object
+                                                m_key = metric_bucket.get_key(ownerid)
+                                                if m_key != None:
                                                     cur_met_blob = m_key.get_contents_as_string()
                                                     if cur_met_blob != None:
                                                         cur_met_blob = json.loads(cur_met_blob)
@@ -388,39 +376,38 @@ def crawl_realtime_updates(tool):
                                                         if omets != None:
                                                             cur_met_blob[fbid]["sec_to_prim"] = omets
 					        
-                                                        m_key.set_contents_from_string(json.dumps(cur_met_blob))
+                                                    m_key.set_contents_from_string(json.dumps(cur_met_blob))
                                 
                                                 else:
                                                     pass
                                             else:
                                                 pass
-                                        except:
-					    pass
+                                    except:
+                                        pass
 
+                                else:
+                                    metric_object = imetrics(updated_stuff, ownerid) 
+                                    if metric_object != None:
+				        m_key = metric_bucket.new_key()
+                                        m_key.key = ownerid
+                                        cur_met_blob = {fbid: {"prim_to_sec": metric_object } }
+                                        omets = ometrics(ownerid, fbid, main_bucket)
+                                        if omets != None:
+                                            cur_met_blob[fbid]["sec_to_prim"] = omets
+                                        m_key.set_contents_from_string(json.dumps(cur_met_blob))
                                     else:
-                                        metric_object = imetrics(updated_stuff, ownerid) 
-                                        if metric_object != None:
-				            m_key = metric_bucket.new_key()
-                                            m_key.key = ownerid
-                                            cur_met_blob = {fbid: {"prim_to_sec": metric_object } }
-                                            omets = ometrics(ownerid, fbid, main_bucket)
-                                            if omets != None:
-                                                cur_met_blob[fbid]["sec_to_prim"] = omets
-                                            m_key.set_contents_from_string(json.dumps(cur_met_blob))
-                                        else:
-                                            pass 
+                                        pass 
 
-                                except (AttributeError, KeyError):
-                                    pass 
+                            except (AttributeError, KeyError):
+                                pass 
 				        ############################################################
-                            else:
-                                pass
+                        else:
+                            pass
 
-                        print "User %s updated" % str(main)
-                else:
-                    print "User %s was already crawled" % str(fbid)
-        except:
-            print "User NOT updated"
+            print "User %s updated" % str(main)
+        else:
+            print "User %s was already crawled" % str(fbid)
+
     # delete our crawl_log as it only pertains to the execution on this pass 
     cl = crawl_log.list()
     for key in cl:
@@ -432,7 +419,14 @@ def crawl_realtime_updates(tool):
     print "Realtime updates added to s3"    
    
 
-    
+def delete_repeats(blob):
+     try:
+         repeats = [post for post in updated_stuff['feed']['data'] if post['id'] in post_ids and 'id' in post.keys() and 'feed' in updated_stuff.keys() and 'data' in updated_stuff['feed'].keys()]
+         [updated_stuff['feed']['data'].remove(i) for i in repeats]
+     except KeyError:
+         pass
+     return blob
+                   
 
 def delete_obsolete_keys(bucket,timestamp):
     for key in bucket:
@@ -444,53 +438,16 @@ def delete_obsolete_keys(bucket,timestamp):
                 bucket.delete_key(i)
     except ValueError:
         delete_obsolete_keys(bucket,timestamp)
-# we have an s3 bucket specifically for tokens so that when we've received an update from facebook
-# about a user we can a) call this function to make sure we've got the token added and then
-# b) call another function to use these tokens 
-
-# {"fbid": [("owner1": "token1"), ("owner2": "token2"), ("owner3": "token3")]}
-
-def add_tokens_to_bucket_then_return(fbid,friend_fbid,token,bucket):
-    key = Key(bucket)
-    k = key.get_key(fbid)
-    cur_keys = json.loads(k.get_content_as_string())
-    if len([i for i in cur_keys[fbid] if i.keys()[0] == friend_fbid]) == 0:
-        return
-    else:
-        data = {friend_fbid:token}
-        cur_keys[fbid].append(data)
-    new_key_data = json.dumps(cur_keys)
-    k.set_content_from_string(new_key_data)
-    # return the data structure
-    return cur_keys
-
-# takes a fbid and a connection and returns a list of tuples (ownerid,token) to parse
-# tokens = [('ownerid', 'token'), ('ownerid2', 'token2'), ('ownerid3', 'token3')....]
-def get_tokens_for_user(fbid, bucket):
-    fbid_tokens_data = bucket.get_key(fbid)
-    try:
-        data = fbid_tokens_data.get_contents_as_string()
-    except AttributeError:
-        data = None
-    return data
-
-
-# relies on get_tokens_for_user list and also the RealTime updates data because these functions
-# will be called immediately after an update is received upon the next crawl
-def crawl_all_tokens(fbid, tokens, conn, update_time):
-    crawl_data_bucket = conn.get_bucket('fbcrawl1')
-    api = 'https://graph.facebook.com/{0}?fields=feed.since(%s)&access_token={1}' % update_time
-    for ownerid,token in tokens:
-        cur_key = crawl_data_bucket.get_key(fbid + ',' + ownerid)
-        cur_key_data = json.loads(cur_key.get_contents_as_string())
-        formatted = api.format(fbid,token)
-        result = json.loads(urllib2.urlopen(formatted).read())
             
     
-def crawl_feed(fbid,access_token):
+def crawl_feed(fbid, access_token, since=None):
     #api = 'https://graph.facebook.com/{0}?fields=feed&access_token={1}'
     api = 'https://graph.facebook.com/{0}?fields=feed.fields(id,from,message,type,link,source,name,status_type,application,story_tags,story,caption,created_time,updated_time,likes.fields(id).limit(100),comments.fields(id,from,message,like_count).limit(100))&access_token={1}'
-    formatted = api.format(fbid,access_token)
+    since_api = 'https://graph.facebook.com/{0}?fields=feed.fields(id,from,message,type,link,source,name,status_type,application,story_tags,story,caption,created_time,updated_time,likes.fields(id).limit(100),comments.fields(id,from,message,like_count).limit(100)).since({1})&access_token={2}'
+    if since == None:
+        formatted = api.format(fbid,access_token)
+    else:
+        formatted = since_api.format(fbid, str(since), access_token)
     try:
         response = urllib2.urlopen(formatted)
         json_response = json.dumps(response.read())
@@ -498,41 +455,25 @@ def crawl_feed(fbid,access_token):
         json_response = ''
     return json_response
 
-def crawl_feed_since(fbid, since, access_token):
-    #api = 'https://graph.facebook.com/{0}?fields=feed.since({1})&access_token={2}'
-    api = 'https://graph.facebook.com/{0}?fields=feed.fields(id,from,message,type,link,source,name,status_type,application,story_tags,story,caption,created_time,updated_time,likes.fields(id).limit(100),comments.fields(id,from,message,like_count).limit(100)).since({1})&access_token={2}'
-    formatted = api.format(fbid, str(since), access_token)
-    try:
-        response = urllib2.urlopen(formatted)
-        json_response = json.dumps(response.read())
-    except (urllib2.URLError, urllib2.HTTPError):
-        json_response = None
-    return json_response
-
-
-def check_if_crawled(fbid,friend_fbid):
-    from boto.s3.connection import S3Connection
-    from boto.s3.key import Key
-    conn = S3Connection('AKIAJDIWDVVGWXFOSPEQ', 'RpcwFl6tw2XtOqnwbhXK9PemhUQ8kK6UdCMJ5GaI')
-    bucket = conn.get_bucket('fbcrawl1')
-    if bucket.lookup('{0},{1}'.format(fbid,friend_fbid)):
-        return True
-    return False
 
 # a method to call on our tokens blob to keep it updated
 def keep_tokens_updated(fbid, blob, tool):    
     if "timestamp" in blob.keys():
-        if blob["timestamp"] < (time.time() - 86400):
+        # if the last time updated was more than a week ago
+        if blob["timestamp"] < (time.time() - (86400*7)):
            res = tool.query("select ownerid, token from tokens where fbid='%s'" % fbid)
            if len(res) > 0:
-               for ownerid, token in res:
-                   if ownerid not in [ ownerid for ownerid, token in blob["data"] ]:
-                       blob["data"].append((ownerid, token))
+               blob["data"] = [ [ownerid, token] for ownerid, token in res ]
+               # we don't want this keyed by fbid so delete that key if it exists
+               if fbid in blob.keys():
+                   del blob[fbid]
+           blob["timestamp"] = int(time.time())
         else:
            pass
-        return blob
     else:
-        return blob 
+        blob["timestamp"] = int(time.time())
+    return blob
+    
 
 
 # not necessarily needed, but good for testing stuff with my own account and credentials
@@ -596,3 +537,22 @@ def choose_best(conn):
                 fbid_to_times[fbid].append(update_time)
     fbid_to_times = [ (fbid, max(fbid_to_times[fbid])) for fbid in fbid_to_times.keys() ]
     return fbid_to_times
+
+
+# takes a fbid and a connection and returns a list of tuples (ownerid,token) to parse
+# tokens = [('ownerid', 'token'), ('ownerid2', 'token2'), ('ownerid3', 'token3')....]
+def get_tokens_for_user(fbid, bucket):
+    fbid_tokens_data = bucket.get_key(fbid)
+    try:
+        data = fbid_tokens_data.get_contents_as_string()
+    except AttributeError:
+        data = None
+    return data
+
+
+def get_tokens(fbid, bucket):
+    k = bucket.get_key(fbid)
+    if k != None:
+        token_data = json.loads( k.get_contents_as_string() )
+        try:
+            
