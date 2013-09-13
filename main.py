@@ -41,6 +41,10 @@ class App(tornado.web.Application):
         # build connections to redshift, RDS
         self.connect()
 
+        #maintain connections, TCP keepalive doesn't seem to be working for redshift
+        P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
+        P.start()
+
         tornado.web.Application.__init__(self, handlers, **settings)
 
     def connect(self):
@@ -50,6 +54,8 @@ class App(tornado.web.Application):
         self.pconn = psycopg2.connect(host='wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com',
             user='edgeflip', database='edgeflip', port=5439, password='XzriGDp2FfVy9K')
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
+
+        # OperationalError: SSL SYSCALL error: EOF detected
 
         """
         debug('Connecting to RDS..')
