@@ -25,7 +25,7 @@ class App(tornado.web.Application):
             template_path= "templates",
             static_path= "static",
             xsrf_cookies= False,
-            debug = True, #autoreloads on changes, among other things
+            debug = False, #autoreloads on changes, among other things
         )
 
         """
@@ -43,6 +43,11 @@ class App(tornado.web.Application):
 
         #maintain connections, TCP keepalive doesn't seem to be working for redshift
         P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
+        P.start()
+
+        #keep our stats realtime
+        self.mkstats()
+        P = tornado.ioloop.PeriodicCallback(self.mkstats, 120000)
         P.start()
 
         tornado.web.Application.__init__(self, handlers, **settings)
@@ -64,6 +69,57 @@ class App(tornado.web.Application):
         """
         debug('Done.')
 
+    def mkstats(self):
+        debug('Building client stats..')
+        self.pcur.execute("DROP TABLE clientstats")
+
+        megaquery = """
+
+    CREATE TABLE clientstats AS
+    SELECT
+        e4.campaign_id,
+        date_trunc('hour', t.updated) as time,
+        SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) AS visits,
+        SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
+        SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) AS auths,
+        COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.fbid ELSE NULL END) AS uniq_auths,
+        COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.fbid ELSE NULL END) AS shown,
+        COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.fbid ELSE NULL END) AS shares,
+        COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) AS audience,
+        COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_session_id ELSE NULL END) AS clickbacks
+
+    FROM
+        (
+            SELECT e1.session_id, e1.campaign_id, e1.content_id, e1.ip, e1.fbid, e1.friend_fbid,
+                e1.type, e1.appid, e1.content, e1.activity_id, NULL AS cb_session_id, e1.updated
+            FROM events e1
+                WHERE type <> 'clickback'
+            UNION
+            SELECT e3.session_id,
+                e3.campaign_id,
+                e2.content_id,
+                e2.ip,
+                e3.fbid,
+                e3.friend_fbid,
+                e2.type,
+                e2.appid,
+                e2.content,
+                e2.activity_id,
+                e2.session_id AS cb_session_id,
+                e2.updated
+            FROM events e2 LEFT JOIN events e3 USING (activity_id)
+            WHERE e2.type='clickback' AND e3.type='shared'
+        ) t
+    LEFT JOIN (SELECT session_id,campaign_id FROM events WHERE type='button_load') e4
+        USING (session_id)
+    GROUP BY e4.campaign_id, date_trunc('hour', t.updated);
+        """
+
+        self.pcur.execute(megaquery)
+        self.pconn.commit()
+
+        debug('Done.')
+
 
 class MainHandler(AuthMixin, tornado.web.RequestHandler):
 
@@ -72,7 +128,7 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
 
         ctx = {
             'STATIC_URL':'/static/',
-            'user':'nobody',
+            'user': self.get_current_user(),
         }
 
         # look up campaigns in our ghetto
@@ -90,7 +146,6 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
 
     def post(self): 
         # grab args and pass them into the django view
-        debug(self.request.arguments)
         camp_id = self.get_argument('campaign')
 
         # magic case for the "aggregate" view
