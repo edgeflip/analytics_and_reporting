@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# testing receiving messages from the queue
 import pika
 
 

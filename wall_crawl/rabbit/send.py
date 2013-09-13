@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+
+# testing sending messages to a queue
 import pika
 import json
 

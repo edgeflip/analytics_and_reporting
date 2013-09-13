@@ -2,13 +2,15 @@
 import cookielib
 import json
 import MySQLdb as mysql
+from navigate_db import PySql
 import urllib2
 from time import strftime
 import time
 import csv
+from boto.s3.connection import S3Connection
 from crawl_metrics import gmetrics as metrics
 from crawl_metrics import imetrics, ometrics
-from test_environ import orm as tool
+
 
 """
     using the imetrics algorithm from crawl_metrics.py we will build metrics for our users in a paralell
