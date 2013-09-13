@@ -131,10 +131,11 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
             'user': self.get_current_user(),
         }
 
-        # look up campaigns in our ghetto
+        # look up campaigns
         q = """
             SELECT campaign_id, name FROM campaigns WHERE client_id=2 AND campaign_id IN
                 (SELECT DISTINCT(campaign_id) FROM events WHERE type='button_load')
+            ORDER BY campaign_id DESC
             """
         self.application.pcur.execute(q)
         ctx['campaigns'] = self.application.pcur.fetchall()
@@ -169,7 +170,7 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
         FROM
             (SELECT campaign_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,
                     SUM(uniq_auths) AS uniq_auths, SUM(shown) AS shown, SUM(shares) AS shares,
-                    SUM(audience) AS audience, SUM(clickbacks) AS clickbacks, MAX(time) AS max_time
+                    SUM(audience) AS audience, SUM(clickbacks) AS clickbacks
                 FROM clientstats
                 GROUP BY campaign_id
             ) AS stats,
@@ -177,7 +178,7 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
             (SELECT campaign_id, name FROM campaigns WHERE client_id=2) AS meta
 
         WHERE stats.campaign_id=meta.campaign_id
-        ORDER BY stats.max_time DESC;
+        ORDER BY meta.campaign_id DESC;
         """
 
         self.application.pcur.execute(q)
