@@ -1,6 +1,7 @@
 from logging import debug, info, warning
 import json
 import MySQLdb
+from time import strftime
 
 import tornado.httpserver
 import tornado.ioloop
@@ -118,6 +119,8 @@ class App(tornado.web.Application):
         self.pcur.execute(megaquery)
         self.pconn.commit()
 
+        self.updated = strftime('%x %X')
+
         debug('Done.')
 
 
@@ -129,6 +132,7 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
         ctx = {
             'STATIC_URL':'/static/',
             'user': self.get_current_user(),
+            'updated': self.application.updated,
         }
 
         # look up campaigns
