@@ -16,7 +16,7 @@ from auth import Login, Logout, AuthMixin
 
 class App(tornado.web.Application):
 
-    def __init__(self):
+    def __init__(self, debug):
         """
         Settings
         """
@@ -26,7 +26,7 @@ class App(tornado.web.Application):
             template_path= "templates",
             static_path= "static",
             xsrf_cookies= False,
-            debug = False, #autoreloads on changes, among other things
+            debug = debug, #autoreloads on changes, among other things
         )
 
         """
@@ -204,19 +204,11 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
 def main():
     from tornado.options import define, options
     define("port", default=8001, help="run on the given port", type=int)
-    define("runtests", default=False, help="run tests", type=bool)
+    define("debug", default=False, help="debug mode", type=bool)
 
     tornado.options.parse_command_line()
 
-    if options.runtests:
-        #put tests in the tests folder
-        import tests, unittest
-        import sys
-        sys.argv = ['main.py',] #unittest goes digging in argv
-        unittest.main( 'tests')
-        return
-
-    http_server = tornado.httpserver.HTTPServer( App() )
+    http_server = tornado.httpserver.HTTPServer( App(options.debug) )
     http_server.listen(options.port)
     info( 'Serving on port %d' % options.port )
     tornado.ioloop.IOLoop.instance().start()
