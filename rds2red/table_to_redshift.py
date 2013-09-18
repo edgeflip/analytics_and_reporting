@@ -34,20 +34,6 @@ def _map(val):
 
     return redshift_vals[val.split('(')[0]]
 
-    """
-    try:
-        starts = val[0:3]
-    except IndexError:
-        starts = val[0:2]
-    result = [ i for i in redshift_vals if i.startswith(starts) ]
-    if not result:
-        # this grabs... mediumint
-        result = ['bigint',]
-    if val == 'datetime':
-        result = ['timestamp',]
-    return result[0]
-    """
-
 
 def create_query(d):
     q = ','.join([ ' '.join([ each[0], _map(each[1]) ]) for each in d ])
@@ -89,11 +75,9 @@ def main(table):
     engine = create_engine('postgresql+psycopg2://', creator=create_conn)
     redconn = engine.connect()
     columns = create_query(description)
-
     
     redshiftconn = create_conn()
     redconn = redshiftconn.cursor()
-    
  
     try:
         redconn.execute("create table {0}({1})".format(table, columns))
