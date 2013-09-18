@@ -16,7 +16,25 @@ def create_conn():
 
 
 def _map(val):
-    redshift_vals = ['integer', 'bigint', 'decimal', 'real', 'double precision', 'boolean', 'char', 'varchar', 'date', 'timestamp']
+    #redshift_vals = ['integer', 'bigint', 'decimal', 'real', 'double precision', 'boolean', 'char', 'varchar', 'date', 'timestamp']
+    redshift_vals = {
+        'int' : 'integer', 
+        'mediumint': 'bigint',
+        'bigint' : 'bigint', 
+        'decimal' : 'decimal', 
+        'real' : 'real', 
+        'double precision' : 'double precision', 
+        'boolean' : 'boolean', 
+        'char' : 'char', 
+        'varchar' : 'varchar', 
+        'date' : 'date', 
+        'timestamp': 'timestamp',
+        'datetime': 'timestamp',  # kinda magic
+        }
+
+    return redshift_vals[val.split('(')[0]]
+
+    """
     try:
         starts = val[0:3]
     except IndexError:
@@ -28,6 +46,7 @@ def _map(val):
     if val == 'datetime':
         result = ['timestamp',]
     return result[0]
+    """
 
 
 def create_query(d):
@@ -70,6 +89,11 @@ def main(table):
     engine = create_engine('postgresql+psycopg2://', creator=create_conn)
     redconn = engine.connect()
     columns = create_query(description)
+
+    
+    redshiftconn = create_conn()
+    redconn = redshiftconn.cursor()
+    
  
     try:
         redconn.execute("create table {0}({1})".format(table, columns))
@@ -123,6 +147,8 @@ def main(table):
        # atomicity insurance
        time.sleep(10)
        redconn.execute("COPY {0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
+
+    redshiftconn.commit()
    
     redtime = int( time.time() )
     redrun = redtime - ups3time
