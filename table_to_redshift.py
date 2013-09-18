@@ -2,11 +2,12 @@
 import psycopg2
 import sys
 import MySQLdb as mysql
+from boto.s3.connection import S3Connection
 import csv, os, time
+import logging
 
 
 def connect_s3():
-    from boto.s3.connection import S3Connection
     f = open('creds/s3creds.txt', 'r')
     f1 = f.read().split('\n')
     f.close()
@@ -70,10 +71,10 @@ def up2s3(table):
     red = s3conn.get_bucket('redxfer') 
     k = red.new_key(table)
     k.set_contents_from_filename('%s.csv' % table)
-    print "Uploaded %s to s3" % table        
+    logging.info("Uploaded %s to s3" % table)
 
 
-def main(table):
+def main(table, redconn=None):
     start = time.time()
     dbcreds = open('creds/dbcreds.txt', 'r').read().split('\n')
     dbconn = mysql.connect(dbcreds[0], dbcreds[1], dbcreds[2], dbcreds[3])
@@ -83,14 +84,15 @@ def main(table):
     cur.execute("describe %s" % table)
     description = cur.fetchall()
     columns = create_query(description)
-    
+
     redshiftconn = create_conn()
     redconn = redshiftconn.cursor()
- 
+
     # connect to redshift and copy the file that we just uploaded to s3 to redshift
     try:
         redconn.execute("create table {0}({1})".format(table, columns))
-    except:
+    except Exception as e:
+        logging.debug(e.pgerror)  # basically, "table already exists"
         redconn.execute("drop table %s" % table)
         time.sleep(1)
         redconn.execute("create table {0}({1})".format(table, columns))
@@ -113,8 +115,8 @@ def main(table):
         redconn.execute("COPY {0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
     except:
         # step through the csv we are about to copy over and change the encodings to work propely with redshift
-        print "Rewriting file...."
-       
+        logging.info("Error copying, assuming encoding errors and rewriting CSV...")
+ 
         with open('%s.csv' % table, 'r') as csvfile:
             reader = csv.reader(csvfile, delimiter='|')
             with open('%s2.csv' % table, 'wb') as csvfile2:
@@ -128,7 +130,7 @@ def main(table):
                     except StopIteration:
                         keep_going = False
  
-        print "Rewrite complete"
+        logging.info("Rewrite complete")
         os.remove('%s.csv' % table)
         os.system("mv {0}2.csv {0}.csv".format(table))
         up2s3(table)
@@ -141,8 +143,8 @@ def main(table):
     redtime = int( time.time() )
     redrun = redtime - ups3time
     totalrun = redtime - start       
-    print "Successfully copied %s from RDS to S3 to Redshift\n\n" % table
-    print "Metrics:\n\t{0} seconds to write csv\n\t{1} seconds to write to s3\n\t{2} seconds to copy from s3 to redshift\n\t{3} seconds to complete entire process".format( str(runcsv), str(runs3), str(redrun), str(totalrun) )
+    logging.info( "Successfully copied %s from RDS to S3 to Redshift" % table)
+    logging.info( "{0} seconds to write csv | {1} seconds to write to s3 | {2} seconds to copy from s3 to redshift | {3} seconds to complete entire process".format( str(runcsv), str(runs3), str(redrun), str(totalrun) ))
 
 
 if __name__ == '__main__':
