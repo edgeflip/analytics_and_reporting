@@ -22,6 +22,11 @@ def _map(val):
     except IndexError:
         starts = val[0:2]
     result = [ i for i in redshift_vals if i.startswith(starts) ]
+    if not result:
+        # this grabs... mediumint
+        result = ['bigint',]
+    if val == 'datetime':
+        result = ['timestamp',]
     return result[0]
 
 
@@ -48,8 +53,7 @@ def write2csv(table, cur):
 def up2s3(table): 
     s3conn = connect_s3()
     red = s3conn.get_bucket('redxfer') 
-    k = red.new_key()
-    k.key = table
+    k = red.new_key(table)
     k.set_contents_from_filename('%s.csv' % table)
     print "Uploaded %s to s3" % table        
 
