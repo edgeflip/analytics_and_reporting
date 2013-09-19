@@ -31,6 +31,7 @@ def _map(val):
     redshift_vals = {
         'int' : 'integer', 
         'mediumint': 'bigint',
+        'tinyint': 'integer',
         'bigint' : 'bigint', 
         'decimal' : 'decimal', 
         'real' : 'real', 
@@ -41,6 +42,7 @@ def _map(val):
         'date' : 'date', 
         'timestamp': 'timestamp',
         'datetime': 'timestamp',  # kinda magic
+        'longtext': 'varchar',  # .. really magic
         }
 
     return redshift_vals[val.split('(')[0]]
@@ -52,6 +54,7 @@ def create_query(d):
 
 
 def write2csv(table, cur):
+    logging.debug('Creating CSV for {}'.format(table))
     l = 10000
     o = 0 
     cur.execute("select * from {0} limit {1} offset {2}".format(table, l, o))
@@ -90,6 +93,7 @@ def main(table, redconn=None):
 
     # connect to redshift and copy the file that we just uploaded to s3 to redshift
     try:
+        logging.debug('Creating table {}'.format(table))
         redconn.execute("create table {0}({1})".format(table, columns))
     except Exception as e:
         logging.debug(e.pgerror)  # basically, "table already exists"
@@ -151,6 +155,19 @@ if __name__ == '__main__':
     if len(sys.argv) != 2:
         print "Supply a table argument"
     else:
+        import sys
+        
+        root = logging.getLogger()
+
+        # eh, uncomment to get logging to stdout
+        # root.setLevel(logging.DEBUG)
+        
+        ch = logging.StreamHandler(sys.stdout)
+        ch.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+        root.addHandler(ch)
+
         table = sys.argv[1]
         main(table)
  
