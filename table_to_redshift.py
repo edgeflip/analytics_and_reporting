@@ -37,7 +37,7 @@ def _map(val):
         'real' : 'real', 
         'double precision' : 'double precision', 
         'boolean' : 'boolean', 
-        'char' : 'char', 
+        'char' : 'char(50)',  # ehhh.. this is usually ips
         'varchar' : 'varchar', 
         'date' : 'date', 
         'timestamp': 'timestamp',
@@ -45,7 +45,10 @@ def _map(val):
         'longtext': 'varchar',  # .. really magic
         }
 
-    return redshift_vals[val.split('(')[0]]
+
+    out = redshift_vals[val.split('(')[0]]
+    logging.info('{} -> {}'.format( val,out))
+    return out
 
 
 def create_query(d):
@@ -96,6 +99,7 @@ def main(table, redconn=None):
         logging.debug('Creating table {}'.format(table))
         redconn.execute("CREATE TABLE {0}({1})".format(table, columns))
     except Exception as e:
+        redshiftconn.rollback()
         logging.debug(e.pgerror)  # basically, "table already exists"
         redconn.execute("DROP TABLE %s" % table)
         time.sleep(1)
@@ -118,6 +122,8 @@ def main(table, redconn=None):
     try:
         redconn.execute("COPY {0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
     except:
+        # redshiftconn.commit()  # eh but really we want to rollback and redo the CREATE TABLE
+
         # step through the csv we are about to copy over and change the encodings to work propely with redshift
         logging.info("Error copying, assuming encoding errors and rewriting CSV...")
  
@@ -160,7 +166,7 @@ if __name__ == '__main__':
         root = logging.getLogger()
 
         # eh, uncomment to get logging to stdout
-        # root.setLevel(logging.DEBUG)
+        root.setLevel(logging.DEBUG)
         
         ch = logging.StreamHandler(sys.stdout)
         ch.setLevel(logging.DEBUG)
