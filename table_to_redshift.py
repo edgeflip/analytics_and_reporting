@@ -94,12 +94,12 @@ def main(table, redconn=None):
     # connect to redshift and copy the file that we just uploaded to s3 to redshift
     try:
         logging.debug('Creating table {}'.format(table))
-        redconn.execute("create table {0}({1})".format(table, columns))
+        redconn.execute("CREATE TABLE {0}({1})".format(table, columns))
     except Exception as e:
         logging.debug(e.pgerror)  # basically, "table already exists"
-        redconn.execute("drop table %s" % table)
+        redconn.execute("DROP TABLE %s" % table)
         time.sleep(1)
-        redconn.execute("create table {0}({1})".format(table, columns))
+        redconn.execute("CREATE TABLE {0}({1})".format(table, columns))
     
     write2csv(table, cur)
      

@@ -171,7 +171,7 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
         day = self.request.arguments['day'][0]
 
         from views import chartdata
-        data = chartdata(camp_id, day)
+        data = chartdata(camp_id, self.application.pcur, day)
 
         self.finish(data)
 

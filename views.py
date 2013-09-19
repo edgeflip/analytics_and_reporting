@@ -116,7 +116,7 @@ def pad_day(data, day):
     return out
 
 
-def chartdata(camp_id, day=None):
+def chartdata(camp_id, cursor, day=None):
 
     out = {}
 
@@ -124,9 +124,12 @@ def chartdata(camp_id, day=None):
     if camp_id == 'aggregate':
         return aggregate()
 
+    """
     pconn = psycopg2.connect(host='wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com',
             user='edgeflip', database='edgeflip', port=5439, password='XzriGDp2FfVy9K')
     pcur = pconn.cursor(cursor_factory = psycopg2.extras.DictCursor)
+    """
+    pcur = cursor
     
     pcur.execute("""SELECT * FROM clientstats WHERE campaign_id=%s ORDER BY time ASC""",(camp_id,))
     data = [row for row in pcur.fetchall()]
