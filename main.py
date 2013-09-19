@@ -72,9 +72,14 @@ class App(tornado.web.Application):
 
     def mkstats(self):
 
+        """
         debug('Uploading events..')
         from table_to_redshift import main
         main('events', self.pcur)
+
+        debug('Uploading campaigns..')
+        main('campaigns', self.pcur)
+        """
 
         debug('Building client stats..')
         self.pcur.execute("DROP TABLE clientstats")
