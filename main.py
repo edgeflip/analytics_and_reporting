@@ -89,7 +89,7 @@ class App(tornado.web.Application):
     CREATE TABLE clientstats AS
     SELECT
         t.campaign_id,
-        date_trunc('hour', t.updated) as time,
+        date_trunc('hour', t.updated) as hour,
         SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) AS visits,
         SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
         SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) AS auths,
@@ -132,7 +132,7 @@ class App(tornado.web.Application):
         USING (visit_id)
     INNER JOIN (SELECT fbid, visit_id FROM visits) v
         USING (visit_id)
-    GROUP BY t.campaign_id, time
+    GROUP BY t.campaign_id, hour
         """
 
         self.pcur.execute(megaquery)

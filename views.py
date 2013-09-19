@@ -130,8 +130,11 @@ def chartdata(camp_id, cursor, day=None):
     pcur = pconn.cursor(cursor_factory = psycopg2.extras.DictCursor)
     """
     pcur = cursor
+
     
-    pcur.execute("""SELECT * FROM clientstats WHERE campaign_id=%s ORDER BY time ASC""",(camp_id,))
+    pcur.execute("""SELECT campaign_id, hour, visits, clicks,
+                    auths,uniq_auths,shown,shares,audience,
+                    clickbacks FROM clientstats WHERE campaign_id=%s ORDER BY hour ASC""",(camp_id,))
     data = [row for row in pcur.fetchall()]
 
     days = [row[1] for row in data]
@@ -164,25 +167,4 @@ def chartdata(camp_id, cursor, day=None):
     out['daily_cols'] = DAILY_METRICS
 
     return out
-
-
-def aggregate():
-    aggdata = []
-    for row in CampaignSum.objects.all():
-        googdata = [{'v':row.campaign},] + [{'v':sum(i)} for i in zip(*json.loads(row.data).values())] 
-        if len(googdata) == 10:
-            aggdata.append( {'c':googdata} )
-
-    metrics = MONTHLY_METRICS[:]
-    metrics[0] = {'type':'string', 'id':'campname', 'label':'Campaign Name'}
-
-    out = {'cols': metrics, 'rows': aggdata}
-
-    return HttpResponse(json.dumps(out), content_type="application/json")
-
-
-def mkdata(request):
-    """one off that should be a management command to dump wes's json into django"""
-    from dash_data import make_all_object
-    make_all_object()
 
