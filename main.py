@@ -42,14 +42,13 @@ class App(tornado.web.Application):
         # build connections to redshift, RDS
         self.connect()
 
-        #maintain connections, TCP keepalive doesn't seem to be working for redshift
+        # bandaid to maintain connections
         P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
         P.start()
 
-        #keep our stats realtime
-        self.mkstats()
-        P = tornado.ioloop.PeriodicCallback(self.mkstats, 120000)
-        P.start()
+        # lol
+        self.update()
+        P = tornado.ioloop.PeriodicCallback(self.update, 150000)
 
         tornado.web.Application.__init__(self, handlers, **settings)
 
@@ -57,11 +56,11 @@ class App(tornado.web.Application):
         """make db connections, would be cool to time this out"""
 
         debug('Connecting to redshift..')
-        self.pconn = psycopg2.connect(host='wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com',
-            user='edgeflip', database='edgeflip', port=5439, password='XzriGDp2FfVy9K')
-        self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
+        from keys import redshift
+        self.pconn = psycopg2.connect( **redshift)
 
-        # OperationalError: SSL SYSCALL error: EOF detected
+        # TODO flip autocommit on in this cursor, dodge hanging transactions
+        self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
         """
         debug('Connecting to RDS..')
@@ -70,77 +69,9 @@ class App(tornado.web.Application):
         """
         debug('Done.')
 
-    def mkstats(self):
-
-        """
-        debug('Uploading events..')
-        from table_to_redshift import main
-        main('events', self.pcur)
-
-        debug('Uploading campaigns..')
-        main('campaigns', self.pcur)
-        """
-
-        debug('Building client stats..')
-        self.pcur.execute("DROP TABLE clientstats")
-
-        megaquery = """
-
-    CREATE TABLE clientstats AS
-    SELECT
-        t.campaign_id,
-        date_trunc('hour', t.updated) as hour,
-        SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) AS visits,
-        SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
-        SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) AS auths,
-        COUNT(DISTINCT CASE WHEN t.type='authorized' THEN fbid ELSE NULL END) AS uniq_auths,
-        COUNT(DISTINCT CASE WHEN t.type='shown' THEN fbid ELSE NULL END) AS shown,
-        COUNT(DISTINCT CASE WHEN t.type='shared' THEN fbid ELSE NULL END) AS shares,
-        COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) AS audience,
-        COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_visit_id ELSE NULL END) AS clickbacks
-
-    FROM
-        (
-            SELECT e1.visit_id, 
-                e1.campaign_id, 
-                e1.content_id, 
-                e1.friend_fbid,
-                e1.type, 
-                e1.content, 
-                e1.activity_id, 
-                NULL AS cb_visit_id, 
-                e1.updated
-            FROM events e1
-                WHERE type <> 'clickback'
-            UNION
-            SELECT e3.visit_id,
-                e3.campaign_id,
-                e2.content_id,
-                e3.friend_fbid,
-                e2.type,
-                e2.content,
-                e2.activity_id,
-                e2.visit_id AS cb_visit_id,
-                e2.updated
-            FROM events e2 
-            LEFT JOIN events e3 USING (activity_id)
-                WHERE e2.type='clickback' AND e3.type='shared'
-        ) t
-
-
-    LEFT JOIN (SELECT visit_id,campaign_id FROM events WHERE type='button_load') e4
-        USING (visit_id)
-    INNER JOIN (SELECT fbid, visit_id FROM visits) v
-        USING (visit_id)
-    GROUP BY t.campaign_id, hour
-        """
-
-        self.pcur.execute(megaquery)
-        self.pconn.commit()
-
+    def update(self):
+        """ Someday, sync this with the data moving, somehow """
         self.updated = strftime('%x %X')
-
-        debug('Done.')
 
 
 class MainHandler(AuthMixin, tornado.web.RequestHandler):
