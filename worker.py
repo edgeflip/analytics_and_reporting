@@ -62,11 +62,10 @@ class App(tornado.web.Application):
         self.pconn = psycopg2.connect( **redshift)
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
-
         """
         debug('Connecting to RDS..')
-        self.mconn = MySQLdb.connect(host='edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com',
-            user='root', passwd='YUUB2ctgkn8zfe', db='edgeflip')
+        from keys import rds
+        self.mconn = MySQLdb.connect( **rds)
         """
         debug('Done.')
 

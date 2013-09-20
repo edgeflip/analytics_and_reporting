@@ -62,11 +62,6 @@ class App(tornado.web.Application):
         # TODO flip autocommit on in this cursor, dodge hanging transactions
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
-        """
-        debug('Connecting to RDS..')
-        self.mconn = MySQLdb.connect(host='edgeflip-production-a-read1.cwvoczji8mgi.us-east-1.rds.amazonaws.com',
-            user='root', passwd='YUUB2ctgkn8zfe', db='edgeflip')
-        """
         debug('Done.')
 
     def update(self):
