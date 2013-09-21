@@ -1,1 +1,4 @@
-consume.py
+*.py[cod]
+*.swp
+*.csv
+env*
