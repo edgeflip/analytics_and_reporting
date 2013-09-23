@@ -12,3 +12,8 @@ rds = dict(
     passwd='YUUB2ctgkn8zfe',
     db='edgeflip'
 )
+
+aws = dict(
+    aws_access_key_id='AKIAIQOKJC2POKATFP5Q',
+    aws_secret_access_key='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'
+)

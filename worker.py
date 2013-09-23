@@ -50,12 +50,20 @@ class App(tornado.web.Application):
 
         tornado.web.Application.__init__(self, handlers, **settings)
 
+
+    def dyndump(self):
+        debug('starting dynamo dump')
+        self.pcur.execute("""COPY dynamousers FROM 'dynamodb://staging.users' credentials 'aws_access_key_id=AKIAIQOKJC2POKATFP5Q;aws_secret_access_key=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' readratio 100;""")
+        debug('fin')
+
+
     def connect(self):
         """make db connections, would be cool to time this out"""
 
         """
         I think that long running transactions cause:
         # OperationalError: SSL SYSCALL error: EOF detected
+        eg, we should rebuild this cursor more often, or commit() every so often
         """
         debug('Connecting to redshift..')
         from keys import redshift
@@ -67,6 +75,11 @@ class App(tornado.web.Application):
         from keys import rds
         self.mconn = MySQLdb.connect( **rds)
         """
+
+        import boto.dynamodb
+        from keys import aws
+        self.dconn = boto.dynamodb.connect_to_region('us-east-1', **aws)
+ 
         debug('Done.')
 
     def mkstats(self):
