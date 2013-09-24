@@ -52,9 +52,6 @@ class App(tornado.web.Application):
 
         tornado.web.Application.__init__(self, handlers, **settings)
 
-    @property
-    def pcur(self):
-        return self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor)
 
     def connect(self):
         """make db connections, would be cool to time this out"""
@@ -64,7 +61,7 @@ class App(tornado.web.Application):
         self.pconn = psycopg2.connect( **redshift)
 
         # TODO flip autocommit on in this cursor, dodge hanging transactions
-        # self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
+        self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
         debug('Done.')
 
