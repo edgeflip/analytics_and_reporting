@@ -45,7 +45,7 @@ class App(tornado.web.Application):
 
         #keep our stats realtime
         self.mkstats()
-        P = tornado.ioloop.PeriodicCallback(self.mkstats, 120000)
+        P = tornado.ioloop.PeriodicCallback(self.mkstats, 1000 * 60 * 30)
         P.start()
 
         tornado.web.Application.__init__(self, handlers, **settings)
@@ -97,8 +97,13 @@ class App(tornado.web.Application):
         from table_to_redshift import main as rds2rs
 
         debug('Dropping tables')
-        self.pcur.execute( "DROP TABLE _visits, _campaigns, _events, _clientstats")
-        self.pconn.commit()
+        for table in ['_visits', '_campaigns', '_events', '_clientstats']:
+            try:
+                self.pcur.execute( "DROP TABLE {}".format(table))
+                self.pconn.commit()
+            except Exception as e:
+                debug( '{}'.format(e))
+                self.pconn.rollback()
 
         debug('Uploading visits..')
         rds2rs('visits', self.pcur)
