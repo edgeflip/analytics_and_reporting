@@ -1,7 +1,7 @@
 from logging import debug, info, warning
 import json
 import MySQLdb
-from time import strftime
+from time import strftime, time
 
 import tornado.httpserver
 import tornado.ioloop
@@ -52,10 +52,21 @@ class App(tornado.web.Application):
 
 
     def dyndump(self):
-        debug('starting dynamo dump')
-        self.pcur.execute("""COPY dynamousers FROM 'dynamodb://staging.users' credentials 'aws_access_key_id=AKIAIQOKJC2POKATFP5Q;aws_secret_access_key=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' readratio 100;""")
-        debug('fin')
+        #debug('starting dynamo dump')
+        #self.pcur.execute("""COPY dynamousers FROM 'dynamodb://staging.users' credentials 'aws_access_key_id=AKIAIQOKJC2POKATFP5Q;aws_secret_access_key=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' readratio 100;""")
+        #debug('fin')
+        t = time()
 
+        table = self.dconn.get_table('staging.users')
+        result = table.scan()
+        response = result.response
+        
+        while response['ScannedCount'] < table.item_count:
+            info( 'Scan Count: {}'.format(result.scanned_count))
+            response = result.next_response()
+            
+
+        info( 'Completed in {}'.format(time()-t))
 
     def connect(self):
         """make db connections, would be cool to time this out"""
@@ -90,7 +101,7 @@ class App(tornado.web.Application):
         rds2rs('events', self.pcur)
 
         debug('Uploading visits..')
-        rds2rs('events', self.pcur)
+        rds2rs('visits', self.pcur)
 
         debug('Uploading campaigns..')
         rds2rs('campaigns', self.pcur)
