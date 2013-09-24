@@ -96,13 +96,13 @@ def main(table, redconn=None):
     # connect to redshift and copy the file that we just uploaded to s3 to redshift
     try:
         logging.debug('Creating table {}'.format(table))
-        redconn.execute("CREATE TABLE {0}({1})".format(table, columns))
+        redconn.execute("CREATE TABLE _{0} ({1})".format(table, columns))
     except Exception as e:
         redshiftconn.rollback()
         logging.debug(e.pgerror)  # basically, "table already exists"
-        redconn.execute("DROP TABLE %s" % table)
+        # redconn.execute("DROP TABLE %s" % table)
+        redconn.execute("CREATE TABLE _{0} ({1})".format(table, columns))
         time.sleep(1)
-        redconn.execute("CREATE TABLE {0}({1})".format(table, columns))
     
     write2csv(table, cur)
      
@@ -119,7 +119,7 @@ def main(table, redconn=None):
     access_key = s3creds[0]
     secret_key = s3creds[1]
     try:
-        redconn.execute("COPY {0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
+        redconn.execute("COPY _{0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
     except:
         # redshiftconn.commit()  # eh but really we want to rollback and redo the CREATE TABLE
 
@@ -145,7 +145,7 @@ def main(table, redconn=None):
         up2s3(table)
         # atomicity insurance
         time.sleep(10)
-        redconn.execute("COPY {0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
+        redconn.execute("COPY _{0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
  
     redshiftconn.commit()
    

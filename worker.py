@@ -94,25 +94,39 @@ class App(tornado.web.Application):
         debug('Done.')
 
     def mkstats(self):
-
-        # get tables out of RDS and into redshift
         from table_to_redshift import main as rds2rs
-        debug('Uploading events..')
-        rds2rs('events', self.pcur)
+
+        debug('Dropping tables')
+        self.pcur.execute( "DROP TABLE _visits, _campaigns, _events, _clientstats")
+        self.pconn.commit()
 
         debug('Uploading visits..')
         rds2rs('visits', self.pcur)
+        self.pcur.execute( "INSERT INTO visits SELECT * FROM _visits WHERE visit_id > (SELECT max(visit_id) FROM visits)")
+        # self.pcur.execute( "DROP TABLE _visits")
+        self.pconn.commit()
 
         debug('Uploading campaigns..')
         rds2rs('campaigns', self.pcur)
+        self.pcur.execute( "INSERT INTO campaigns SELECT * FROM _campaigns WHERE campaign_id > (SELECT max(campaign_id) FROM campaigns)")
+        # self.pcur.execute( "DROP TABLE _campaigns")
+        self.pconn.commit()
+
+        # get tables out of RDS and into redshift
+        debug('Uploading events..')
+        rds2rs('events', self.pcur)
+        debug('Inserting events..')
+        self.pcur.execute( "INSERT INTO events SELECT * FROM _events WHERE event_id > (SELECT max(event_id) FROM events)")
+        # self.pcur.execute( "DROP TABLE _events")
+        self.pconn.commit()
 
         # create the dashboard stats table.
         debug('Building client stats..')
-        self.pcur.execute("DROP TABLE clientstats")
+        # self.pcur.execute("DROP TABLE clientstats")
 
         megaquery = """
 
-    CREATE TABLE clientstats AS
+    CREATE TABLE _clientstats AS
     SELECT
         t.campaign_id,
         date_trunc('hour', t.updated) as hour,
@@ -161,7 +175,13 @@ class App(tornado.web.Application):
     GROUP BY t.campaign_id, hour
         """
 
+        #self.pcur.execute("DROP TABLE _clientstats")
+
         self.pcur.execute(megaquery)
+        self.pconn.commit()
+        debug( 'beginning DELETE / INSERT on clientstats') 
+        self.pcur.execute("DELETE FROM clientstats WHERE 1")
+        self.pcur.execute("INSERT INTO clientstats SELECT * FROM _clientstats WHERE 1")
         self.pconn.commit()
 
         self.updated = strftime('%x %X')
