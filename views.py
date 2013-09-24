@@ -148,7 +148,6 @@ def chartdata(camp_id, cursor, day=None):
     out['maxday'] = maxday.strftime( '%m/%d/%y')
 
     # pick the day we're going to look up data for, by POST or default
-    logging.debug(day)
     if day:
         #catch errors on this as malicious POSTs
         d = datetime.strptime( day, '%m/%d/%Y')
@@ -158,6 +157,8 @@ def chartdata(camp_id, cursor, day=None):
         #    d = maxday
     else:
         d = maxday
+
+    d = d.replace(hour=0, minute=0)  # set to midnight of that day
 
     # pad our data with zeros, stuff it into google format
     out['monthly'] = sum_campaign(data)

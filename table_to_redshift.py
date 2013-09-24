@@ -47,7 +47,6 @@ def _map(val):
 
 
     out = redshift_vals[val.split('(')[0]]
-    logging.info('{} -> {}'.format( val,out))
     return out
 
 
