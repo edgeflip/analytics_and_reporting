@@ -84,8 +84,8 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
         # look up campaigns
         q = """
             SELECT campaign_id, name FROM campaigns WHERE client_id=2 AND campaign_id IN
-                (SELECT DISTINCT(campaign_id) FROM events WHERE type='button_load')
-            ORDER BY campaign_id DESC
+                (SELECT DISTINCT(root_id) FROM campchain)
+            ORDER BY campaign_id DESC;
             """
         self.application.pcur.execute(q)
         ctx['campaigns'] = self.application.pcur.fetchall()

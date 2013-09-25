@@ -117,32 +117,29 @@ def pad_day(data, day):
 
 
 def chartdata(camp_id, cursor, day=None):
-
     out = {}
 
-    # check for an aggregate request
-    if camp_id == 'aggregate':
-        return aggregate()
-
-    """
-    pconn = psycopg2.connect(host='wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com',
-            user='edgeflip', database='edgeflip', port=5439, password='XzriGDp2FfVy9K')
-    pcur = pconn.cursor(cursor_factory = psycopg2.extras.DictCursor)
-    """
     pcur = cursor
-
-    camps = """
-    SELECT camps.campaign_id, MIN(updated), MAX(updated) FROM 
-        (SELECT visit_id FROM events WHERE campaign_id=81 AND type='button_load') AS inits, 
-        (SELECT campaign_id, visit_id, updated FROM events) as camps 
-    WHERE inits.visit_id=camps.visit_id
-    GROUP BY camps.campaign_id
-    """
-
-    
-    pcur.execute("""SELECT campaign_id, hour, visits, clicks,
-                    auths,uniq_auths,shown,shares,audience,
-                    clickbacks FROM clientstats WHERE campaign_id=%s ORDER BY hour ASC""",(camp_id,))
+    pcur.execute("""SELECT 
+                        SUM(campaign_id), 
+                        hour, 
+                        SUM(visits), 
+                        SUM(clicks),
+                        SUM(auths),
+                        SUM(uniq_auths),
+                        SUM(shown),
+                        SUM(shares),
+                        SUM(audience),
+                        SUM(clickbacks) 
+                    FROM clientstats 
+                    WHERE campaign_id IN
+                        (SELECT distinct(child_id) FROM campchain 
+                            WHERE root_id=%s 
+                            AND child_id IS NOT NULL 
+                    UNION SELECT %s
+                        )
+                    GROUP BY hour
+                    ORDER BY hour ASC""",(camp_id,camp_id))
     data = [row for row in pcur.fetchall()]
 
     days = [row[1] for row in data]
