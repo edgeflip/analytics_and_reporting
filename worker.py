@@ -16,23 +16,6 @@ from auth import Login, Logout, AuthMixin
 
 class ETL(object):
 
-    def dyndump(self):
-        #debug('starting dynamo dump')
-        #self.pcur.execute("""COPY dynamousers FROM 'dynamodb://staging.users' credentials 'aws_access_key_id=AKIAIQOKJC2POKATFP5Q;aws_secret_access_key=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' readratio 100;""")
-        #debug('fin')
-        t = time()
-
-        table = self.dconn.get_table('staging.users')
-        result = table.scan()
-        response = result.response
-        
-        while response['ScannedCount'] < table.item_count:
-            info( 'Scan Count: {}'.format(result.scanned_count))
-            response = result.next_response()
-            
-
-        info( 'Completed in {}'.format(time()-t))
-
     def connect(self):
         """make db connections, would be cool to time this out"""
 
@@ -209,6 +192,22 @@ class ETL(object):
         self.updated = strftime('%x %X')
 
         debug('Done.')
+
+    def dyndump(self):
+        #debug('starting dynamo dump')
+        #self.pcur.execute("""COPY dynamousers FROM 'dynamodb://staging.users' credentials 'aws_access_key_id=AKIAIQOKJC2POKATFP5Q;aws_secret_access_key=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' readratio 100;""")
+        #debug('fin')
+        t = time()
+
+        table = self.dconn.get_table('staging.users')
+        result = table.scan()
+        response = result.response
+        
+        while response['ScannedCount'] < table.item_count:
+            info( 'Scan Count: {}'.format(result.scanned_count))
+            response = result.next_response()
+
+        info( 'Completed in {}'.format(time()-t))
 
 
 class App(ETL, tornado.web.Application):
