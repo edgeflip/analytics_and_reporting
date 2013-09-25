@@ -14,42 +14,7 @@ from tornado.web import HTTPError
 
 from auth import Login, Logout, AuthMixin
 
-class App(tornado.web.Application):
-
-    def __init__(self, debug):
-        """
-        Settings
-        """
-        settings = dict(
-            cookie_secret="changemeplz",
-            login_url="/login/", 
-            template_path= "templates",
-            static_path= "static",
-            xsrf_cookies= False,
-            debug = debug, #autoreloads on changes, among other things
-        )
-
-        """
-        map URLs to Handlers, with regex patterns
-        """
-        handlers = [
-        #    (r"/", MainHandler),
-        ]
-
-        # build connections to redshift, RDS
-        self.connect()
-
-        # TODO: maintain connection, rebuild cursors
-        P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
-        P.start()
-
-        #keep our stats realtime
-        self.mkstats()
-        P = tornado.ioloop.PeriodicCallback(self.mkstats, 1000 * 60 * 30)
-        P.start()
-
-        tornado.web.Application.__init__(self, handlers, **settings)
-
+class ETL(object):
 
     def dyndump(self):
         #debug('starting dynamo dump')
@@ -93,44 +58,54 @@ class App(tornado.web.Application):
  
         debug('Done.')
 
-    def mkstats(self):
+    def extract(self):
         from table_to_redshift import main as rds2rs
 
-        debug('Dropping tables')
-        for table in ['_visits', '_campaigns', '_events', '_clientstats']:
+        for table,table_id in [
+            ('visits', 'visit_id'), 
+            ('campaigns', 'campaign_id'),
+            ('events', 'event_id'),
+            ('campaign_properties', 'campaign_property_id'),
+            ('clientstats', False),
+            ]:
             try:
-                self.pcur.execute( "DROP TABLE {}".format(table))
+                debug('Dropping table _{}'.format(table))
+                self.pcur.execute( "DROP TABLE _{}".format(table))
                 self.pconn.commit()
             except Exception as e:
-                debug( '{}'.format(e))
+                # usually just "table doesn't exist"
+                warning( '{}'.format(e))
                 self.pconn.rollback()
 
-        debug('Uploading visits..')
-        rds2rs('visits', self.pcur)
-        self.pcur.execute( "INSERT INTO visits SELECT * FROM _visits WHERE visit_id > (SELECT max(visit_id) FROM visits)")
-        # self.pcur.execute( "DROP TABLE _visits")
-        self.pconn.commit()
+            if not table_id: continue
 
-        debug('Uploading campaigns..')
-        rds2rs('campaigns', self.pcur)
-        self.pcur.execute( "INSERT INTO campaigns SELECT * FROM _campaigns WHERE campaign_id > (SELECT max(campaign_id) FROM campaigns)")
-        # self.pcur.execute( "DROP TABLE _campaigns")
-        self.pconn.commit()
+            try:
+                debug('Uploading {} ..'.format(table))
+                rds2rs(table, self.pcur)
+                debug('Done.')  # poor man's timer
 
-        # get tables out of RDS and into redshift
-        debug('Uploading events..')
-        rds2rs('events', self.pcur)
-        debug('Inserting events..')
-        self.pcur.execute( "INSERT INTO events SELECT * FROM _events WHERE event_id > (SELECT max(event_id) FROM events)")
-        # self.pcur.execute( "DROP TABLE _events")
-        self.pconn.commit()
+                self.pcur.execute( """
+                    INSERT INTO {table} SELECT * FROM _{table} 
+                    WHERE {table_id} > (SELECT max({table_id}) FROM {table})
+                    """.format(table=table, table_id=table_id))
+                self.pconn.commit()
+            except Exception as e:
+                raise
+                warning( '{}'.format(e))
+                self.pconn.rollback()
 
-        # create the dashboard stats table.
-        debug('Building client stats..')
-        # self.pcur.execute("DROP TABLE clientstats")
+        self.mkstats()
 
+    def mkchains(self):
+        """
+        add columns to the campaign table then calculate parents and 
+        roots via the _properties table
+        """
+        import pdb;pdb.set_trace()
+
+
+    def mkstats(self):
         megaquery = """
-
     CREATE TABLE _clientstats AS
     SELECT
         t.campaign_id,
@@ -172,7 +147,6 @@ class App(tornado.web.Application):
                 WHERE e2.type='clickback' AND e3.type='shared'
         ) t
 
-
     LEFT JOIN (SELECT visit_id,campaign_id FROM events WHERE type='button_load') e4
         USING (visit_id)
     INNER JOIN (SELECT fbid, visit_id FROM visits) v
@@ -193,6 +167,42 @@ class App(tornado.web.Application):
 
         debug('Done.')
 
+
+class App(ETL, tornado.web.Application):
+
+    def __init__(self, debug):
+        """
+        Settings
+        """
+        settings = dict(
+            cookie_secret="changemeplz",
+            login_url="/login/", 
+            template_path= "templates",
+            static_path= "static",
+            xsrf_cookies= False,
+            debug = debug, #autoreloads on changes, among other things
+        )
+
+        """
+        map URLs to Handlers, with regex patterns
+        """
+        handlers = [
+        #    (r"/", MainHandler),
+        ]
+
+        # build connections to redshift, RDS
+        self.connect()
+
+        # TODO: maintain connection, rebuild cursors
+        P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
+        P.start()
+
+        #keep our stats realtime
+        self.extract()
+        P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 30)
+        P.start()
+
+        tornado.web.Application.__init__(self, handlers, **settings)
 
 def main():
     from tornado.options import define, options
