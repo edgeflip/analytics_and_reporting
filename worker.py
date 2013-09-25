@@ -94,14 +94,57 @@ class ETL(object):
                 warning( '{}'.format(e))
                 self.pconn.rollback()
 
+        self.mkchains()
         self.mkstats()
+
 
     def mkchains(self):
         """
-        add columns to the campaign table then calculate parents and 
-        roots via the _properties table
+        calculate campaign relationships via the _properties table, be sure to run this
+        after campaigns have been loaded to avoid race conditions
         """
-        import pdb;pdb.set_trace()
+
+        self.pcur.execute( """
+            SELECT campaign_id, name FROM campaigns WHERE client_id=2 AND campaign_id IN
+                (SELECT DISTINCT(campaign_id) FROM events WHERE type='button_load')
+            ORDER BY campaign_id DESC
+            """)
+        roots = [row['campaign_id'] for row in self.pcur.fetchall()]
+
+        for root_id in roots:
+            debug('Wiping root {}'.format(root_id))
+
+            #wipe anything that's in there
+            self.pcur.execute( """DELETE FROM campchain WHERE root_id=%s""", (root_id,))
+
+            self.pcur.execute("""
+            SELECT fallback_campaign_id FROM campaign_properties WHERE campaign_id=%s
+            """, (root_id,))
+            fallback_id = self.pcur.fetchone()['fallback_campaign_id']
+
+            # create row for root:
+            self.pcur.execute("""
+            INSERT INTO campchain VALUES (%s,%s,%s)
+            """, (root_id, None, fallback_id))
+
+            parent_id = root_id 
+            while fallback_id:
+                # crawl down the chain
+                debug('crawling root {}, on child {}'.format(root_id, fallback_id))
+
+                self.pcur.execute("""
+                SELECT fallback_campaign_id FROM campaign_properties WHERE campaign_id=%s
+                """, (parent_id,))
+                fallback_id = self.pcur.fetchone()['fallback_campaign_id']
+
+                self.pcur.execute("""
+                INSERT INTO campchain VALUES (%s,%s,%s)
+                """, (root_id, parent_id, fallback_id))
+
+                parent_id = fallback_id
+
+            # commit each set of root updates in a single transaction
+            self.pconn.commit()
 
 
     def mkstats(self):
@@ -201,6 +244,7 @@ class App(ETL, tornado.web.Application):
         self.extract()
         P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 30)
         P.start()
+
 
         tornado.web.Application.__init__(self, handlers, **settings)
 
