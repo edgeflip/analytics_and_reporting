@@ -82,6 +82,7 @@ class ETL(object):
                 warning( '{}'.format(e))
                 self.pconn.rollback()
 
+        self.extract_users()
         self.mkchains()
         self.mkstats()
 
@@ -231,26 +232,37 @@ class ETL(object):
 
     def get_user(self):
         """ Grab a fbid off of the queue and get it out of dynamo """
-        fbid = self.fbids.pop()
+        try:
+            fbid = self.fbids.pop()
+        except KeyError:
+            # empty queue
+            return
+
+        # null fbids :\
         if not fbid: return
 
         table = self.dconn.get_table('prod.users')
+        data = defaultdict(lambda: None)
 
         try:
             debug('Seeking key {} in dynamo'.format(fbid))
-            data = table.get_item(fbid)
+            dyndata = table.get_item(fbid)
 
             # cast from epoch to dates and times
-            if data['birthday']:
-                data['birthday'] = datetime.date.fromtimestamp( data['birthday'])
+            if 'birthday' in dyndata and dyndata['birthday']:
+                dyndata['birthday'] = datetime.date.fromtimestamp( dyndata['birthday'])
 
-            if data['updated']:
-                data['updated'] = datetime.datetime.fromtimestamp( data['updated'])
+            if 'updated' in dyndata and dyndata['updated']:
+                dyndata['updated'] = datetime.datetime.fromtimestamp( dyndata['updated'])
+
+            data.update(dyndata)
 
         except boto.dynamodb.exceptions.DynamoDBKeyNotFoundError:
+            # this apparently is a real/possible thing, especially for legacy stuff
+            # insert a blank row so we stop looking for it
             warning('fbid {} not found in dynamo!'.format(fbid))
-            data = defaultdict(lambda: None)
 
+        # insert what we got
         self.pcur.execute("""
             INSERT INTO users
             (fbid, fname, lname, email, gender, birthday, city, state, updated)
@@ -261,7 +273,7 @@ class ETL(object):
             )
 
         self.pconn.commit()
-        debug( 'Successfully updated users table for fbid {}'.format(fbid))
+        info( 'Successfully updated users table for fbid {}'.format(fbid))
 
 
 class App(ETL, tornado.web.Application):
@@ -295,7 +307,7 @@ class App(ETL, tornado.web.Application):
 
 
         # keep our stats realtime
-        self.extract_users()
+        self.extract()
         P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 30)
         P.start()
 
