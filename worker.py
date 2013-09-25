@@ -1,7 +1,9 @@
 from logging import debug, info, warning
 import json
+import datetime
 import MySQLdb
 from time import strftime, time
+from collections import defaultdict
 
 import tornado.httpserver
 import tornado.ioloop
@@ -10,11 +12,15 @@ import tornado.web
 
 import psycopg2
 import psycopg2.extras
+import boto.dynamodb
 from tornado.web import HTTPError
 
 from auth import Login, Logout, AuthMixin
 
 class ETL(object):
+
+    #hold a queue of users to hit dynamo for
+    fbids = set([])
 
     def connect(self):
         """make db connections, would be cool to time this out"""
@@ -35,7 +41,6 @@ class ETL(object):
         self.mconn = MySQLdb.connect( **rds)
         """
 
-        import boto.dynamodb
         from keys import aws
         self.dconn = boto.dynamodb.connect_to_region('us-east-1', **aws)
  
@@ -193,12 +198,26 @@ class ETL(object):
 
         debug('Done.')
 
-    def dyndump(self):
+    def extract_users(self):
         #debug('starting dynamo dump')
         #self.pcur.execute("""COPY dynamousers FROM 'dynamodb://staging.users' credentials 'aws_access_key_id=AKIAIQOKJC2POKATFP5Q;aws_secret_access_key=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' readratio 100;""")
         #debug('fin')
         t = time()
 
+        self.pcur.execute("""
+            SELECT DISTINCT(visits.fbid) FROM users 
+            RIGHT JOIN visits 
+                ON visits.fbid=users.fbid 
+            WHERE users.fbid IS NULL 
+            ORDER BY visits.updated DESC;
+            """)
+
+        fbids = [row['fbid'] for row in self.pcur.fetchall()]
+        info("Found {} unknown fbids".format(len(fbids)))
+
+        self.fbids = self.fbids.union(set(fbids))
+
+        """
         table = self.dconn.get_table('staging.users')
         result = table.scan()
         response = result.response
@@ -206,8 +225,43 @@ class ETL(object):
         while response['ScannedCount'] < table.item_count:
             info( 'Scan Count: {}'.format(result.scanned_count))
             response = result.next_response()
+        """
+        info( 'Queued users for extraction in {}'.format(time()-t))
 
-        info( 'Completed in {}'.format(time()-t))
+
+    def get_user(self):
+        """ Grab a fbid off of the queue and get it out of dynamo """
+        fbid = self.fbids.pop()
+        if not fbid: return
+
+        table = self.dconn.get_table('prod.users')
+
+        try:
+            debug('Seeking key {} in dynamo'.format(fbid))
+            data = table.get_item(fbid)
+
+            # cast from epoch to dates and times
+            if data['birthday']:
+                data['birthday'] = datetime.date.fromtimestamp( data['birthday'])
+
+            if data['updated']:
+                data['updated'] = datetime.datetime.fromtimestamp( data['updated'])
+
+        except boto.dynamodb.exceptions.DynamoDBKeyNotFoundError:
+            warning('fbid {} not found in dynamo!'.format(fbid))
+            data = defaultdict(lambda: None)
+
+        self.pcur.execute("""
+            INSERT INTO users
+            (fbid, fname, lname, email, gender, birthday, city, state, updated)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (fbid, data['fname'], data['lname'], data['email'], 
+                    data['gender'], data['birthday'], data['city'], data['state'], 
+                    data['updated'])
+            )
+
+        self.pconn.commit()
+        debug( 'Successfully updated users table for fbid {}'.format(fbid))
 
 
 class App(ETL, tornado.web.Application):
@@ -239,11 +293,15 @@ class App(ETL, tornado.web.Application):
         P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
         P.start()
 
-        #keep our stats realtime
-        self.extract()
+
+        # keep our stats realtime
+        self.extract_users()
         P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 30)
         P.start()
 
+        # crawl for users, lightly
+        P = tornado.ioloop.PeriodicCallback(self.get_user, 1000)
+        P.start()
 
         tornado.web.Application.__init__(self, handlers, **settings)
 
