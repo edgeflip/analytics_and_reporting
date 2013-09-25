@@ -120,26 +120,28 @@ def chartdata(camp_id, cursor, day=None):
     out = {}
 
     pcur = cursor
-    pcur.execute("""SELECT 
-                        SUM(campaign_id), 
-                        hour, 
-                        SUM(visits), 
-                        SUM(clicks),
-                        SUM(auths),
-                        SUM(uniq_auths),
-                        SUM(shown),
-                        SUM(shares),
-                        SUM(audience),
-                        SUM(clickbacks) 
-                    FROM clientstats 
-                    WHERE campaign_id IN
-                        (SELECT distinct(child_id) FROM campchain 
-                            WHERE root_id=%s 
-                            AND child_id IS NOT NULL 
-                    UNION SELECT %s
-                        )
-                    GROUP BY hour
-                    ORDER BY hour ASC""",(camp_id,camp_id))
+    pcur.execute("""
+        SELECT 
+            SUM(campaign_id), 
+            hour, 
+            SUM(visits), 
+            SUM(clicks),
+            SUM(auths),
+            SUM(uniq_auths),
+            SUM(shown),
+            SUM(shares),
+            SUM(audience),
+            SUM(clickbacks) 
+        FROM clientstats 
+        WHERE campaign_id IN
+            (SELECT distinct(child_id) FROM campchain 
+                WHERE root_id=%s 
+                AND child_id IS NOT NULL 
+        UNION SELECT %s
+            )
+        GROUP BY hour
+        ORDER BY hour ASC
+        """,(camp_id,camp_id))
     data = [row for row in pcur.fetchall()]
 
     days = [row[1] for row in data]
