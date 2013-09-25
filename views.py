@@ -131,6 +131,14 @@ def chartdata(camp_id, cursor, day=None):
     """
     pcur = cursor
 
+    camps = """
+    SELECT camps.campaign_id, MIN(updated), MAX(updated) FROM 
+        (SELECT visit_id FROM events WHERE campaign_id=81 AND type='button_load') AS inits, 
+        (SELECT campaign_id, visit_id, updated FROM events) as camps 
+    WHERE inits.visit_id=camps.visit_id
+    GROUP BY camps.campaign_id
+    """
+
     
     pcur.execute("""SELECT campaign_id, hour, visits, clicks,
                     auths,uniq_auths,shown,shares,audience,
