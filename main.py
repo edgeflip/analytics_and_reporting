@@ -191,6 +191,7 @@ class Summary(AuthMixin, tornado.web.RequestHandler):
 
 class DataHandler(AuthMixin, tornado.web.RequestHandler):
 
+    @tornado.web.authenticated
     def post(self): 
         # grab args and pass them into the django view
         camp_id = self.get_argument('campaign')

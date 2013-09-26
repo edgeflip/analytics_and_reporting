@@ -49,6 +49,16 @@ table {
     font-size: 13px;
     text-align: center;
     color: #424242;
+    padding-top:6px;
+    padding-bottom:6px;
+    }
+
+tr.child:hover {
+    background: #EDF4FC;
+    }
+
+tr.child td:hover {
+    text-decoration: underline;
     }
 
 table th {
