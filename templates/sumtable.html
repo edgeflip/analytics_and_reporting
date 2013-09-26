@@ -6,11 +6,13 @@
 {% block includes %}
     <script src="//www.google.com/jsapi"></script>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/d3.v3.min.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/mod_csrf.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/floathead.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/sumtable.js"></script>
 
+    <link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.min.css" />
     <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/auth.css" />
     <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/dash.css" />
 {% end %}
@@ -40,35 +42,29 @@
             <th>User Shares</th>
             <th>Friends Shared With</th>
             <th>Clickbacks</th>
+            <th></th>
             </tr>
         </thead>
 
         {% for chainkey in chainkeys %}
 
-            <tr class="chainhead">
-                <td colspan="9"></td>
+            <tr class="root" id="{{chainkey}}">
+            {% set d = sumdata[chainkey] %}
+            <td class="name">{{ meta[chainkey]['name'] }}</td>
+            {% for k in ['visits','clicks','auths','uniq_auths','shown','shares','audience','clickbacks'] %}
+                <td class="datapoint {{k}}">{{d[k]}}</td>
+            {% end %}
+            <td><button class="more"</button></td>
             </tr>
 
             {% for childkey in chains[chainkey] %}
                 <tr class="child" id="{{childkey}}">
                     {% set d = data[childkey] if childkey in data else defaultdict(lambda:0) %}
                     {% for k in ['name', 'visits','clicks','auths','uniq_auths','shown','shares','audience','clickbacks'] %}
-                        {% if k=='name' and childkey==chainkey %}
-                            <td><b>{{d[k]}}</b></td>
-                        {% else %}
-                            <td class="datapoint">{{d[k]}}</td>
-                        {% end %}
+                        <td class="datapoint {{k}}">{{d[k]}}</td>
                     {% end %}
                 </tr>
             {% end %}
-
-            <tr class="root" id="{{chainkey}}">
-            <td><b>Campaign Totals</b></td>
-            {% set d = sumdata[chainkey] %}
-            {% for k in ['visits','clicks','auths','uniq_auths','shown','shares','audience','clickbacks'] %}
-                <td class="datapoint">{{d[k]}}</td>
-            {% end %}
-            </tr>
 
         {% end %}
     </table>

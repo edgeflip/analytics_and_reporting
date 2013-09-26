@@ -2,8 +2,23 @@ window.onload = init
 
 function init() {
     // load data
-    // $.post('/chartdata/', {'campaign':'aggregate'}, onData)
+
+    // set up detail buttons
+    $('.more').button( {'icons':{'secondary':'ui-icon-minus'}, 'text':false})
+    $('.more').click( function(){
+        $(this).parents('tr.root').nextUntil('tr.root').slideToggle( 200);
+        // $(this).text(function(_, value){return value=='-'?'+':'-'});
+        var toggle = $(this).button('option', 'icons').secondary=='ui-icon-plus'?'ui-icon-minus':'ui-icon-plus';
+        $(this).button('option', 'icons', {secondary:toggle});
+
+        });
+
+    // give it a click to hide sub-campaigns by default 
+    $('.more').click();
     }
+
+
+
 
 
 function onData(response) {

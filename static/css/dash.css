@@ -32,17 +32,19 @@ table {
     border-collapse:collapse;
     }
 
+table .name {
+    text-align: right;
+    }
+
 .child td {
     border-bottom: 1px solid #E3E3E3;
     } 
 
-.chainhead td {
-    border-top: 13px solid gray;
-    }
-
 .root td { 
-    border-top: 2px solid gray; 
-    padding-bottom: 26px;
+    border-top: 4px solid gray;
+    border-bottom: 2px solid gray; 
+    padding-top: 13px;
+    padding-bottom: 13px;
     }
 
 .datapoint {
@@ -53,13 +55,20 @@ table {
     padding-bottom:6px;
     }
 
-tr.child:hover {
+.chain .datapoint {
+    font-size: 15px;
+    }
+
+tr:hover {
     background: #EDF4FC;
     }
 
-tr.child td:hover {
-    text-decoration: underline;
+/*
+ * kinda like this, but the size changes on text makes things jump around
+tr td:hover {
+    font-weight: bold;
     }
+*/
 
 table th {
    /*  would be cool to match the edgeflip blue, but it reads as purple
@@ -69,4 +78,14 @@ table th {
     border-bottom: 2px solid gray;
     background: white;
     padding: 6px;
+    }
+
+button.more {
+    padding:3px;
+    margin: 3px;
+    z-index:1! important;
+    }
+
+.tableFloatingHeader {
+    z-index:2;
     }
