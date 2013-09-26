@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}EdgeFlip | Dashboard{% end %}
+
+
+{% block includes %}
+    <script src="//www.google.com/jsapi"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/mod_csrf.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/d3.v3.min.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/sumtable.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/auth.css" />
+    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/dash.css" />
+{% end %}
+
+
+{% block login %}
+    <div id="login">
+        <p>
+        Logged in as {{ user }} | <a href="/logout/">Logout</a>
+        </p>
+    </div>
+{% end %}
+
+
+{% block body %}
+<div id="bounds">
+
+    <table>
+        {% for chainkey in chainkeys %}
+        <tr><td>{{chainkey}}:{{meta[chainkey]['name']}}</td></tr>
+            {% for childkey in chains[chainkey] %}
+                {% set childdata = data[childkey] if childkey in data else defaultdict(lambda:0) %}
+                <tr id="{{childkey}}">
+                    <td>{{childdata['name']}}</td>
+                    <td>{{childdata['visits']}}</td>
+                    <td>{{childdata['clicks']}}</td>
+                    <td>{{childdata['auths']}}</td>
+                    <td>{{childdata['uniq_auths']}}</td>
+                    <td>{{childdata['shown']}}</td>
+                    <td>{{childdata['shares']}}</td>
+                    <td>{{childdata['audience']}}</td>
+                    <td>{{childdata['clickbacks']}}</td>
+                </tr>
+            {% end %}
+        {% end %}
+    </table>
+
+</div>
+
+<hr style="clear:both; margin-top:50px;">
+<div id="timestamp"><i style="font-size:12px">data last updated: {{ updated }}</i></div>
+{% end %}

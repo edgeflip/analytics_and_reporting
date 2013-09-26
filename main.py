@@ -2,6 +2,7 @@ from logging import debug, info, warning
 import json
 import MySQLdb
 from time import strftime
+from collections import defaultdict
 
 import tornado.httpserver
 import tornado.ioloop
@@ -34,6 +35,7 @@ class App(tornado.web.Application):
         """
         handlers = [
             (r"/", MainHandler),
+            (r"/summary/?", Summary),
             (r"/chartdata/", DataHandler),
             (r"/login/", Login),
             (r"/logout/", Logout),
@@ -93,6 +95,89 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
         return self.render('dashboard.html', **ctx)
 
 
+class Summary(AuthMixin, tornado.web.RequestHandler):
+
+    @tornado.web.authenticated
+    def get(self):
+
+        ctx = {
+            'STATIC_URL':'/static/',
+            'user': self.get_current_user(),
+            'updated': self.application.updated,
+            'defaultdict': defaultdict,
+        }
+
+        ctx.update( self.aggregate())
+
+        #import pdb;pdb.set_trace()
+
+        return self.render('sumtable.html', **ctx)
+
+    def aggregate(self, client=2):
+
+        # get all the summary data
+        self.application.pcur.execute("""
+        SELECT meta.campaign_id, meta.name, visits, clicks, auths, uniq_auths,
+                    shown, shares, audience, clickbacks
+        FROM
+            (SELECT campaign_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,
+                    SUM(uniq_auths) AS uniq_auths, SUM(shown) AS shown, SUM(shares) AS shares,
+                    SUM(audience) AS audience, SUM(clickbacks) AS clickbacks
+                FROM clientstats
+                GROUP BY campaign_id
+            ) AS stats,
+
+            (SELECT campaign_id, name FROM campaigns WHERE client_id=%s) AS meta
+
+        WHERE stats.campaign_id=meta.campaign_id
+        ORDER BY meta.campaign_id DESC;
+        """, (client,))
+
+        # index by campaign_id
+        aggdata = {row['campaign_id']:dict(row) for row in self.application.pcur.fetchall()}
+
+        # look up root campaigns
+        self.application.pcur.execute("""
+        SELECT root_id,parent_id
+        FROM campchain 
+
+        LEFT JOIN 
+            (SELECT DISTINCT(campaign_id) FROM campaigns WHERE client_id=%s) as clientcampaigns
+        ON clientcampaigns.campaign_id=campchain.parent_id
+
+        WHERE parent_id IS NOT NULL
+        ORDER BY root_id DESC, parent_id DESC;
+        """, (client,))
+
+        # build chains as lists
+        chains = defaultdict(lambda: [])
+        for row in self.application.pcur.fetchall():
+            chains[row['root_id']].append( row['parent_id'])
+
+        chainkeys = chains.keys()
+        chainkeys.sort()
+        chainkeys.reverse()
+
+        # grab campaign metadata
+        self.application.pcur.execute("""
+        SELECT campaign_id, name FROM campaigns WHERE client_id=%s
+        """, (client,))
+        campmeta = {row['campaign_id']:dict(row) for row in self.application.pcur.fetchall()}
+
+        """
+        # GOOGlify it
+        aggdata = []
+        for row in self.application.pcur.fetchall():
+            aggdata.append( {'c': [{'v':x} for x in row[1:]]})
+        """
+   
+        from views import MONTHLY_METRICS 
+        metrics = MONTHLY_METRICS[:]
+        metrics[0] = {'type':'string', 'id':'campname', 'label':'Campaign Name'}
+
+        return {'data':aggdata, 'chains':chains, 'chainkeys':chainkeys, 'cols':metrics, 'meta':campmeta}
+
+
 class DataHandler(AuthMixin, tornado.web.RequestHandler):
 
     def post(self): 
@@ -110,7 +195,6 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
         data = chartdata(camp_id, self.application.pcur, day)
 
         self.finish(data)
-
 
     def aggregate(self):
 
@@ -145,6 +229,9 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
         out = {'cols': metrics, 'rows': aggdata}
 
         return out
+
+
+
 
 
 def main():
