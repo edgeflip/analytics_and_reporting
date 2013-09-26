@@ -28,20 +28,43 @@
 <div id="bounds">
 
     <table>
+        <th>Campaign Name</th>
+        <th>Visits</th>
+        <th>Clicks</th>
+        <th>Auths</th>
+        <th>Unique Auths</th>
+        <th>Users Shown Faces</th>
+        <th>User Shares</th>
+        <th>Friends Shared With</th>
+        <th>Clickbacks</th>
         {% for chainkey in chainkeys %}
-        <tr><td>{{chainkey}}:{{meta[chainkey]['name']}}</td></tr>
+            <tr class="root" id="{{chainkey}}">
+            <td>{{chainkey}}:{{meta[chainkey]['name']}}</td>
+            {% set d = sumdata[chainkey] %}
+            <td>{{d['visits']}}</td>
+            <td>{{d['clicks']}}</td>
+            <td>{{d['auths']}}</td>
+            <td>{{d['uniq_auths']}}</td>
+            <td>{{d['shown']}}</td>
+            <td>{{d['shares']}}</td>
+            <td>{{d['audience']}}</td>
+            <td>{{d['clickbacks']}}</td>
+            </tr>
+
             {% for childkey in chains[chainkey] %}
-                {% set childdata = data[childkey] if childkey in data else defaultdict(lambda:0) %}
-                <tr id="{{childkey}}">
-                    <td>{{childdata['name']}}</td>
-                    <td>{{childdata['visits']}}</td>
-                    <td>{{childdata['clicks']}}</td>
-                    <td>{{childdata['auths']}}</td>
-                    <td>{{childdata['uniq_auths']}}</td>
-                    <td>{{childdata['shown']}}</td>
-                    <td>{{childdata['shares']}}</td>
-                    <td>{{childdata['audience']}}</td>
-                    <td>{{childdata['clickbacks']}}</td>
+                <tr class="child" id="{{childkey}}">
+
+                    {% set d = data[childkey] if childkey in data else defaultdict(lambda:0) %}
+                    <td>{{d['name']}}</td>
+                    <td>{{d['visits']}}</td>
+                    <td>{{d['clicks']}}</td>
+                    <td>{{d['auths']}}</td>
+                    <td>{{d['uniq_auths']}}</td>
+                    <td>{{d['shown']}}</td>
+                    <td>{{d['shares']}}</td>
+                    <td>{{d['audience']}}</td>
+                    <td>{{d['clickbacks']}}</td>
+
                 </tr>
             {% end %}
         {% end %}

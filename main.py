@@ -109,28 +109,26 @@ class Summary(AuthMixin, tornado.web.RequestHandler):
 
         ctx.update( self.aggregate())
 
-        #import pdb;pdb.set_trace()
-
         return self.render('sumtable.html', **ctx)
 
     def aggregate(self, client=2):
 
         # get all the summary data
         self.application.pcur.execute("""
-        SELECT meta.campaign_id, meta.name, visits, clicks, auths, uniq_auths,
-                    shown, shares, audience, clickbacks
-        FROM
-            (SELECT campaign_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,
-                    SUM(uniq_auths) AS uniq_auths, SUM(shown) AS shown, SUM(shares) AS shares,
-                    SUM(audience) AS audience, SUM(clickbacks) AS clickbacks
-                FROM clientstats
-                GROUP BY campaign_id
-            ) AS stats,
-
-            (SELECT campaign_id, name FROM campaigns WHERE client_id=%s) AS meta
-
-        WHERE stats.campaign_id=meta.campaign_id
-        ORDER BY meta.campaign_id DESC;
+            SELECT meta.campaign_id, meta.name, visits, clicks, auths, uniq_auths,
+                        shown, shares, audience, clickbacks
+            FROM
+                (SELECT campaign_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,
+                        SUM(uniq_auths) AS uniq_auths, SUM(shown) AS shown, SUM(shares) AS shares,
+                        SUM(audience) AS audience, SUM(clickbacks) AS clickbacks
+                    FROM clientstats
+                    GROUP BY campaign_id
+                ) AS stats,
+    
+                (SELECT campaign_id, name FROM campaigns WHERE client_id=%s) AS meta
+    
+            WHERE stats.campaign_id=meta.campaign_id
+            ORDER BY meta.campaign_id DESC;
         """, (client,))
 
         # index by campaign_id
@@ -138,15 +136,15 @@ class Summary(AuthMixin, tornado.web.RequestHandler):
 
         # look up root campaigns
         self.application.pcur.execute("""
-        SELECT root_id,parent_id
-        FROM campchain 
-
-        LEFT JOIN 
-            (SELECT DISTINCT(campaign_id) FROM campaigns WHERE client_id=%s) as clientcampaigns
-        ON clientcampaigns.campaign_id=campchain.parent_id
-
-        WHERE parent_id IS NOT NULL
-        ORDER BY root_id DESC, parent_id DESC;
+            SELECT root_id,parent_id
+            FROM campchain 
+    
+            LEFT JOIN 
+                (SELECT DISTINCT(campaign_id) FROM campaigns WHERE client_id=%s) as clientcampaigns
+            ON clientcampaigns.campaign_id=campchain.parent_id
+    
+            WHERE parent_id IS NOT NULL
+            ORDER BY root_id DESC, parent_id DESC;
         """, (client,))
 
         # build chains as lists
@@ -154,9 +152,22 @@ class Summary(AuthMixin, tornado.web.RequestHandler):
         for row in self.application.pcur.fetchall():
             chains[row['root_id']].append( row['parent_id'])
 
+        # but we need them ordered.. so this is probably silly
         chainkeys = chains.keys()
         chainkeys.sort()
         chainkeys.reverse()
+
+        # build summary data per root
+        sumdata = {}
+        for root in chains:
+            d = defaultdict(lambda:[])
+            for child in chains[root]:
+                if child not in aggdata: continue
+                _data = aggdata[child]
+                [d[k].append(_data[k]) for k in _data]
+            del d['name']
+
+            sumdata[root] = {k:sum(d[k]) for k in d}
 
         # grab campaign metadata
         self.application.pcur.execute("""
@@ -175,7 +186,7 @@ class Summary(AuthMixin, tornado.web.RequestHandler):
         metrics = MONTHLY_METRICS[:]
         metrics[0] = {'type':'string', 'id':'campname', 'label':'Campaign Name'}
 
-        return {'data':aggdata, 'chains':chains, 'chainkeys':chainkeys, 'cols':metrics, 'meta':campmeta}
+        return {'data':aggdata, 'sumdata':sumdata, 'chains':chains, 'chainkeys':chainkeys, 'cols':metrics, 'meta':campmeta}
 
 
 class DataHandler(AuthMixin, tornado.web.RequestHandler):
@@ -183,6 +194,7 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
     def post(self): 
         # grab args and pass them into the django view
         camp_id = self.get_argument('campaign')
+        info( 'Getting data for campaign {}'.format(camp_id))
 
         # magic case for the "aggregate" view
         if camp_id == 'aggregate':
