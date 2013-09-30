@@ -36,8 +36,11 @@ table .name {
     text-align: right;
     }
 
+.ascend { border: 2px solid red;}
+.descend { border: 2px solid green;}
+
 .child td {
-    border-bottom: 1px solid #E3E3E3;
+    border-bottom: 2px solid #E3E3E3;
     } 
 
 .root td { 

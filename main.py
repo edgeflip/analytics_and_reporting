@@ -93,7 +93,7 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
         self.application.pcur.execute(q)
         ctx['campaigns'] = self.application.pcur.fetchall()
 
-        return self.render('dashboard.html', **ctx)
+        return self.render('clientsum.html', **ctx)
 
 
 class ClientSummary(AuthMixin, tornado.web.RequestHandler):
@@ -124,6 +124,7 @@ class ClientSummary(AuthMixin, tornado.web.RequestHandler):
         """, (client,))
 
         return self.finish(json.dumps([dict(row) for row in self.application.pcur.fetchall()]))
+
 
 class Summary(AuthMixin, tornado.web.RequestHandler):
 

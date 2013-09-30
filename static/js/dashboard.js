@@ -4,8 +4,10 @@ google.setOnLoadCallback(init);
 
 function init() {
     // first pageview, get data for newest campaign and draw a chart
-    getData();
+    // getData();
+    mksummary();
 
+    /*
     // load up datepicker widgets
     $( "#datepicker" ).datepicker({gotoCurrent:true, onSelect:getData});
 
@@ -24,6 +26,67 @@ function init() {
         $('#chart').button( "option", "label", "View as: "+(window.chart? "Tables":"Charts"));
         draw();
         });
+    */
+
+    $('th').click(sort); 
+    window.sort = d3.ascending;
+    window.metric = 'visits';
+
+    }
+
+
+function mksummary() {
+    // load summary data and build a table
+    $.get("/clientsummary", function (response) {
+        window.response = JSON.parse(response); // TODO: this should automatically work
+
+        // we're manually adding column headers at the moment, TODO, send this serverside
+        var columns = ['name', 'visits', 'clicks', 'auths', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
+
+        var table = d3.select('#sumtable')
+
+
+        // build rows
+        var body = table.append("tbody")
+        var rows = body.selectAll("tr").data(window.response)
+            .enter()
+            .append("tr")
+            .attr("class", "child");
+
+        window.cells = rows.selectAll("td").data(
+            /* so for each row, we end up wanting an array of values, in column order */
+            function(row) {
+                // columns.map makes a nice [] of datapoints per row
+                return columns.map(function(column) {return row[column]})
+            })
+            .enter()
+            .append("td")
+            .text(function(d){return d})
+            .attr("class", "datapoint");
+
+        })
+    }
+
+
+function sort() {
+    var metric = this.id
+    if (metric == window.metric) {
+        // toggling sort order
+        window.sort = window.sort === d3.ascending ? d3.descending : d3.ascending;
+        }
+    else {
+        window.sort = d3.descending;
+        }
+
+    var sortstyle = window.sort === d3.descending ? 'descend' : 'ascend';
+
+    // clear old styles and set window.metric
+    $('th').removeClass('ascend descend')
+    console.log( sortstyle);
+    $(this).addClass( sortstyle);
+    window.metric = metric;
+
+    d3.selectAll("tr.child").sort(function(a,b) {return window.sort(a[metric],b[metric])} )
 
     }
 
@@ -37,8 +100,6 @@ function getData() {
 
     $.post('/chartdata/', {'campaign':campaign, 'day':day}, callback);
     }
-
-
 
 
 function onData(response) {
