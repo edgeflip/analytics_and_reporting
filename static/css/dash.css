@@ -41,7 +41,7 @@ table .name {
     } 
 
 .root td { 
-    border-top: 4px solid gray;
+    border-top: 8px solid gray;
     border-bottom: 2px solid gray; 
     padding-top: 13px;
     padding-bottom: 13px;

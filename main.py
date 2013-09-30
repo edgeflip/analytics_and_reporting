@@ -36,6 +36,7 @@ class App(tornado.web.Application):
         handlers = [
             (r"/", MainHandler),
             (r"/summary/?", Summary),
+            (r"/clientsummary/?", ClientSummary),
             (r"/chartdata/", DataHandler),
             (r"/login/", Login),
             (r"/logout/", Logout),
@@ -94,6 +95,35 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
 
         return self.render('dashboard.html', **ctx)
 
+
+class ClientSummary(AuthMixin, tornado.web.RequestHandler):
+    @tornado.web.authenticated
+    def get(self, client=2):  # at some point, grab client by looking at the auth'd user
+
+        # very similar to the sums per campaign, but join on root campaign
+        self.application.pcur.execute("""
+            SELECT meta.root_id, meta.name, visits, clicks, auths, uniq_auths,
+                        shown, shares, audience, clickbacks
+            FROM
+                (SELECT campchain.root_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,
+                        SUM(uniq_auths) AS uniq_auths, SUM(shown) AS shown, SUM(shares) AS shares,
+                        SUM(audience) AS audience, SUM(clickbacks) AS clickbacks
+                    FROM clientstats, campchain
+                    WHERE campchain.parent_id=clientstats.campaign_id
+                    GROUP BY root_id
+                ) AS stats,
+
+                (SELECT campchain.root_id, campaigns.campaign_id, campaigns.name 
+                    FROM campaigns, campchain
+                    WHERE campchain.parent_id=campaigns.campaign_id
+                    AND client_id=2
+                ) AS meta
+
+            WHERE stats.root_id=meta.campaign_id
+            ORDER BY meta.root_id DESC;
+        """, (client,))
+
+        return self.finish(json.dumps([dict(row) for row in self.application.pcur.fetchall()]))
 
 class Summary(AuthMixin, tornado.web.RequestHandler):
 
