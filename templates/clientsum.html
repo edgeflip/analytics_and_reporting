@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}EdgeFlip | Dashboard{% end %}
+
+
+{% block includes %}
+    <script src="//www.google.com/jsapi"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/d3.v3.min.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/mod_csrf.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/floathead.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/dashboard.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.min.css" />
+    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/auth.css" />
+    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/dash.css" />
+{% end %}
+
+
+{% block login %}
+    <div id="login">
+        <p>
+        Logged in as {{ user }} | <a href="/logout/">Logout</a>
+        </p>
+    </div>
+{% end %}
+
+
+{% block body %}
+<div id="bounds">
+
+    <table class="floathead" id="sumtable">
+        <thead>
+            <tr>
+            <th id="name">Campaign</th>
+            <th id="visits">Visits</th>
+            <th id="clicks">Clicks</th>
+            <th id="auths">Auths</th>
+            <th id="uniq_auths">Unique Auths</th>
+            <th id="shown">Users Shown Faces</th>
+            <th id="shares">User Shares</th>
+            <th id="audience">Friends Shared With</th>
+            <th id="clickbacks">Clickbacks</th>
+            <th></th>
+            </tr>
+        </thead>
+
+    </table>
+
+</div>
+
+<hr style="clear:both; margin-top:50px;">
+<div id="timestamp"><i style="font-size:12px">data last updated: {{ updated }}</i></div>
+{% end %}

@@ -3,8 +3,7 @@ google.load("visualization", "1.0", {"packages": ["table", "corechart"]});
 google.setOnLoadCallback(init);
 
 function init() {
-    // first pageview, get data for newest campaign and draw a chart
-    // getData();
+    // first pageview, get summary data and draw main table
     mksummary();
 
     /*
@@ -38,6 +37,7 @@ function init() {
 function mksummary() {
     // load summary data and build a table
     $.get("/clientsummary", function (response) {
+
         window.response = JSON.parse(response); // TODO: this should automatically work
 
         // we're manually adding column headers at the moment, TODO, send this serverside
@@ -53,7 +53,8 @@ function mksummary() {
             .append("tr")
             .attr("class", "child");
 
-        window.cells = rows.selectAll("td").data(
+        // build cells per row
+        rows.selectAll("td").data(
             /* so for each row, we end up wanting an array of values, in column order */
             function(row) {
                 // columns.map makes a nice [] of datapoints per row
@@ -64,29 +65,44 @@ function mksummary() {
             .text(function(d){return d})
             .attr("class", "datapoint");
 
+        // and a final summary row
+        body.append("tr").attr("class", "totals")
+            .selectAll("td")
+            .data(columns)
+            .enter()
+            .append("td")
+            .text( function(metric,i) {return i==0?'TOTALS':d3.sum(window.response.map(function(d){return d[metric]})) })
+            .attr("class", "datapoint");
+
+        // like d3.sum(response.map(function(d,i) {console.log(d);return d.visits}))
+
+
         })
     }
 
 
 function sort() {
-    var metric = this.id
+    var metric = this.id;
     if (metric == window.metric) {
-        // toggling sort order
+        // toggling sort order if they've clicked the same metric
         window.sort = window.sort === d3.ascending ? d3.descending : d3.ascending;
         }
     else {
+        // else a new metric, set to descending by default
         window.sort = d3.descending;
         }
 
     var sortstyle = window.sort === d3.descending ? 'descend' : 'ascend';
 
     // clear old styles and set window.metric
-    $('th').removeClass('ascend descend')
-    console.log( sortstyle);
+    $('th').removeClass('ascend descend');
+
+    $('.tableFloatingHeaderOriginal #'+metric).addClass(sortstyle);
+    $('.tableFloatingHeader #'+metric).addClass(sortstyle);
     $(this).addClass( sortstyle);
     window.metric = metric;
 
-    d3.selectAll("tr.child").sort(function(a,b) {return window.sort(a[metric],b[metric])} )
+    d3.selectAll("tr.child").sort(function(a,b) {return window.sort(a[metric],b[metric])} );
 
     }
 
@@ -212,5 +228,4 @@ function drawcharts() {
         hAxis: {gridlines: {color:'#FFF', count:7}, format:'M/dd', title:'Date', titleTextStyle:{fontSize:13}},
         });
     }
-
 
