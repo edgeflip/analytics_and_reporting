@@ -278,7 +278,7 @@ class ETL(object):
 
 class App(ETL, tornado.web.Application):
 
-    def __init__(self, debug):
+    def __init__(self, debug, daemon=True):
         """
         Settings
         """
@@ -301,19 +301,20 @@ class App(ETL, tornado.web.Application):
         # build connections to redshift, RDS
         self.connect()
 
-        # TODO: maintain connection, rebuild cursors
-        P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
-        P.start()
-
-
-        # keep our stats realtime
-        self.extract()
-        P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 30)
-        P.start()
-
-        # crawl for users, lightly
-        P = tornado.ioloop.PeriodicCallback(self.get_user, 1000)
-        P.start()
+        if daemon:
+            # TODO: maintain connection, rebuild cursors
+            P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
+            P.start()
+    
+    
+            # keep our stats realtime
+            self.extract()
+            P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 30)
+            P.start()
+    
+            # crawl for users, lightly
+            P = tornado.ioloop.PeriodicCallback(self.get_user, 1000)
+            P.start()
 
         tornado.web.Application.__init__(self, handlers, **settings)
 
@@ -321,13 +322,22 @@ def main():
     from tornado.options import define, options
     define("port", default=8001, help="run on the given port", type=int)
     define("debug", default=False, help="debug mode", type=bool)
+    define("mkCSV", default=False, help="generate and upload client CSV file")
 
     tornado.options.parse_command_line()
 
-    http_server = tornado.httpserver.HTTPServer( App(options.debug) )
-    http_server.listen(options.port)
-    info( 'Serving on port %d' % options.port )
-    tornado.ioloop.IOLoop.instance().start()
+    if options.mkCSV:
+        # running as a batch job, don't daemonize
+        from tasks import mkCSV
+        app = App(options.debug, False)
+        mkCSV(app)
+
+    else:
+        app = App(options.debug, False)
+        http_server = tornado.httpserver.HTTPServer(app)
+        http_server.listen(options.port)
+        info( 'Serving on port %d' % options.port )
+        tornado.ioloop.IOLoop.instance().start()
 
 
 if __name__ == "__main__":
