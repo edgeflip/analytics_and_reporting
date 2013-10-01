@@ -35,6 +35,7 @@ label {float:right;}
 table {
     border-spacing:0;
     border-collapse:collapse;
+    margin-top: 50px;
     }
 
 table .name {
