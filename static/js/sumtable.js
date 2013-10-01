@@ -18,9 +18,6 @@ function init() {
     }
 
 
-
-
-
 function onData(response) {
     window.response = response;
 

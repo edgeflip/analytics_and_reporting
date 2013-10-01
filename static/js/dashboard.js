@@ -1,36 +1,15 @@
-google.load("visualization", "1.0", {"packages": ["table", "corechart"]});
-// google.load('jquery', '1.4.2');
-google.setOnLoadCallback(init);
+$(document).ready(init)
 
 function init() {
     // first pageview, get summary data and draw main table
     mksummary();
 
-    /*
-    // load up datepicker widgets
-    $( "#datepicker" ).datepicker({gotoCurrent:true, onSelect:getData});
-
-    // toggle for logarithmic scaling
-    window.logscale = false;
-    $('#logscale').button().click( function () {
-        window.logscale = window.logscale ? false:true;
-        $('#logscale').button( "option", "label", "Logarithmic Scaling: "+(window.logscale? "On":"Off"));
-        draw();
-        });
-
-    // toggle for charts / tables
-    window.chart = true;
-    $('#chart').button().click( function () {
-        window.chart = window.chart ? false:true;
-        $('#chart').button( "option", "label", "View as: "+(window.chart? "Tables":"Charts"));
-        draw();
-        });
-    */
-
     $('th').click(sort); 
     window.sort = d3.ascending;
     window.metric = 'visits';
 
+    // though we bind the sort handler to the entire th, style the actual buttons
+    $('.sorter').button( {'icons':{'secondary':'ui-icon-arrow-2-n-s'}, 'text':true})
     }
 
 
@@ -94,12 +73,22 @@ function sort() {
 
     var sortstyle = window.sort === d3.descending ? 'descend' : 'ascend';
 
-    // clear old styles and set window.metric
+    // clear old styles
     $('th').removeClass('ascend descend');
 
+    // reset button styles
+    $('.sorter').button( {'icons':{'secondary':'ui-icon-arrow-2-n-s'}, 'text':true})
+
+    // set new styles
     $('.tableFloatingHeaderOriginal #'+metric).addClass(sortstyle);
     $('.tableFloatingHeader #'+metric).addClass(sortstyle);
     $(this).addClass( sortstyle);
+
+    // set new button icon
+    var toggle = sortstyle == 'descend' ? 'ui-icon-arrowthick-1-s': 'ui-icon-arrowthick-1-n';
+    $('.tableFloatingHeaderOriginal #'+metric+' .sorter').button('option', 'icons', {secondary:toggle});
+    $('.tableFloatingHeader #'+metric+' .sorter').button('option', 'icons', {secondary:toggle});
+
     window.metric = metric;
 
     d3.selectAll("tr.child").sort(function(a,b) {return window.sort(a[metric],b[metric])} );
