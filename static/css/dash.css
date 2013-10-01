@@ -74,14 +74,17 @@ tr:hover {
     }
 
 button.sorter {
-    padding-top: 8px;
-    padding-bottom: 8px;
-    background: #E3E3E3;
+    border: none;
+    background: white;
     font-size: 12px;
+    color: #424242;
     }
 
-.ascend button { border: 2px solid gray;}
-.descend button { border: 2px solid gray;}
+.ascend button { font-weight:bold;color: black;}
+.descend button { font-weight:bold;color: black;}
+.ascend { border-bottom: 2px solid black;}
+.descend { border-bottom: 2px solid black;}
+
 
 table th {
    /*  would be cool to match the edgeflip blue, but it reads as purple

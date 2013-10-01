@@ -4,7 +4,7 @@
 
 
 {% block includes %}
-    <script src="//www.google.com/jsapi"></script>
+    <!-- <script src="//www.google.com/jsapi"></script> -->
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
     <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/d3.v3.min.js"></script>
@@ -33,15 +33,15 @@
     <table class="floathead" id="sumtable">
         <thead>
             <tr>
-            <th id="name">Campaign</th>
-            <th id="visits">Visits</th>
-            <th id="clicks">Clicks</th>
-            <th id="auths">Auths</th>
-            <th id="uniq_auths">Unique Auths</th>
-            <th id="shown">Users Shown Faces</th>
-            <th id="shares">User Shares</th>
-            <th id="audience">Friends Shared With</th>
-            <th id="clickbacks">Clickbacks</th>
+            <th id="name"><button class="sorter">Campaign</button></th>
+            <th id="visits"><button class="sorter">Visits</button></th>
+            <th id="clicks"><button class="sorter">Clicks</button></th>
+            <th id="auths"><button class="sorter">Auths</button></th>
+            <th id="uniq_auths"><button class="sorter">Unique Auths</button></th>
+            <th id="shown"><button class="sorter">Users Shown Faces</button></th>
+            <th id="shares"><button class="sorter">User Shares</button></th>
+            <th id="audience"><button class="sorter">Friends Shared With</button></th>
+            <th id="clickbacks"><button class="sorter">Clickbacks</button></th>
             <th></th>
             </tr>
         </thead>
