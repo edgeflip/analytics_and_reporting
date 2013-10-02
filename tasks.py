@@ -76,3 +76,13 @@ def mkCSV(application, t=False, client_id=2):
     debug(f.getvalue())
     f.close()
 
+    import email
+    msg = email.Message.Message()
+    msg['Subject'] = 'Uploaded {} for VA'.format(basefile)
+
+
+    import smtplib
+    smtp = smtplib.SMTP()
+    smtp.connect()
+    smtp.sendmail('japhy@edgeflip.com', ['japhy@edgeflip.com',], msg.as_string())
+
