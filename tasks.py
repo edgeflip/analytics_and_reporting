@@ -1,7 +1,7 @@
 from logging import debug, info
 import cStringIO
 import csv
-
+from boto.s3.connection import S3Connection
 
 def mkCSV(application, t=False, client_id=2):
     """ Grab event data for the hour preceding t """
@@ -12,6 +12,14 @@ def mkCSV(application, t=False, client_id=2):
     hour = rs.fetchone()[0]
     info('Gathering datapoints for client {}, hour {}'.format(client_id, str(hour)))
 
+
+    # S3 connection, base filename
+    from keys import aws
+    S3 = S3Connection( **aws)
+    bucket = S3.get_bucket('ef-client-data')
+    basefile = "{}-{}-{}-{}-{}".format('virginia',hour.year,hour.month,hour.day,hour.hour)
+
+
     # EVENTS
     rs.execute( """    
     SELECT e.event_datetime AS time, v.session_id, v.fbid, e.friend_fbid, e.type
@@ -21,7 +29,6 @@ def mkCSV(application, t=False, client_id=2):
         AND e.campaign_id IN
         (SELECT DISTINCT(campaign_id) FROM campaigns WHERE client_id=%s)
     ORDER BY time DESC 
-    LIMIT 40;
     """, (hour,client_id))
 
     # then make some csvs
@@ -32,7 +39,10 @@ def mkCSV(application, t=False, client_id=2):
     for row in rs.fetchall():
         writer.writerow(row)
 
-    # and TODO: put it on S3
+    # put it on S3
+    f.seek(0)
+    key = bucket.new_key(basefile + '-events.csv')
+    key.set_contents_from_file(f)
 
     debug(f.getvalue())
     f.close()  # clear memory
@@ -59,6 +69,10 @@ def mkCSV(application, t=False, client_id=2):
     for row in rs.fetchall():
         writer.writerow(row)
 
+    # put it on S3
+    f.seek(0)
+    key = bucket.new_key(basefile + '-users.csv')
+    key.set_contents_from_file(f)
     debug(f.getvalue())
     f.close()
 
