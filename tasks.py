@@ -43,6 +43,7 @@ def mkCSV(application, t=False, client_id=2):
     f.seek(0)
     key = bucket.new_key(basefile + '-events.csv')
     key.set_contents_from_file(f)
+    key.set_acl('public-read')
 
     debug(f.getvalue())
     f.close()  # clear memory
@@ -73,6 +74,7 @@ def mkCSV(application, t=False, client_id=2):
     f.seek(0)
     key = bucket.new_key(basefile + '-users.csv')
     key.set_contents_from_file(f)
+    key.set_acl('public-read')
     debug(f.getvalue())
     f.close()
 
