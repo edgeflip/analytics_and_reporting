@@ -49,10 +49,11 @@ class ETL(object):
     def extract(self):
         from table_to_redshift import main as rds2rs
 
-        for table,table_id in [
+        for table, table_id in [
             ('visits', 'visit_id'), 
             ('campaigns', 'campaign_id'),
             ('events', 'event_id'),
+            ('clients', 'client_id'),
             ('campaign_properties', 'campaign_property_id'),
             ('clientstats', False),
             ]:
@@ -179,14 +180,10 @@ class ETL(object):
                 WHERE e2.type='clickback' AND e3.type='shared'
         ) t
 
-    LEFT JOIN (SELECT visit_id,campaign_id FROM events WHERE type='button_load') e4
-        USING (visit_id)
     INNER JOIN (SELECT fbid, visit_id FROM visits) v
         USING (visit_id)
     GROUP BY t.campaign_id, hour
         """
-
-        #self.pcur.execute("DROP TABLE _clientstats")
 
         self.pcur.execute(megaquery)
         self.pconn.commit()
@@ -333,7 +330,7 @@ def main():
         mkCSV(app)
 
     else:
-        app = App(options.debug, False)
+        app = App(options.debug, True)
         http_server = tornado.httpserver.HTTPServer(app)
         http_server.listen(options.port)
         info( 'Serving on port %d' % options.port )
