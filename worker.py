@@ -306,7 +306,7 @@ class App(ETL, tornado.web.Application):
     
             # keep our stats realtime
             self.extract()
-            P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 30)
+            P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
             P.start()
     
             # crawl for users, lightly
