@@ -95,7 +95,7 @@ class ETL(object):
         """
 
         self.pcur.execute( """
-            SELECT campaign_id, name FROM campaigns WHERE client_id=2 AND campaign_id IN
+            SELECT campaign_id, name FROM campaigns WHERE campaign_id IN
                 (SELECT DISTINCT(campaign_id) FROM events WHERE type='button_load')
             ORDER BY campaign_id DESC
             """)
