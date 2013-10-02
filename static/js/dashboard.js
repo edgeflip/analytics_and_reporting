@@ -20,7 +20,7 @@ function mksummary() {
         window.response = JSON.parse(response); // TODO: this should automatically work
 
         // we're manually adding column headers at the moment, TODO, send this serverside
-        var columns = ['name', 'visits', 'clicks', 'auths', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
+        var columns = ['name', 'visits', 'clicks', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
 
         var table = d3.select('#sumtable')
 
