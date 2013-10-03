@@ -196,6 +196,7 @@ class ETL(object):
 
         debug('Done.')
 
+
     def extract_users(self):
         #debug('starting dynamo dump')
         #self.pcur.execute("""COPY dynamousers FROM 'dynamodb://staging.users' credentials 'aws_access_key_id=AKIAIQOKJC2POKATFP5Q;aws_secret_access_key=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' readratio 100;""")
@@ -210,20 +211,13 @@ class ETL(object):
             ORDER BY visits.updated DESC;
             """)
 
+        self.pcur.execute(""" SELECT fbid FROM users WHERE updated IS NOT NULL ORDER BY updated DESC LIMIT 20""")
+
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
         info("Found {} unknown fbids".format(len(fbids)))
 
         self.fbids = self.fbids.union(set(fbids))
 
-        """
-        table = self.dconn.get_table('staging.users')
-        result = table.scan()
-        response = result.response
-        
-        while response['ScannedCount'] < table.item_count:
-            info( 'Scan Count: {}'.format(result.scanned_count))
-            response = result.next_response()
-        """
         info( 'Queued users for extraction in {}'.format(time()-t))
 
 
@@ -238,9 +232,9 @@ class ETL(object):
         # null fbids :\
         if not fbid: return
 
+        # USER DATA
         table = self.dconn.get_table('prod.users')
         data = defaultdict(lambda: None)
-
         try:
             debug('Seeking key {} in dynamo'.format(fbid))
             dyndata = table.get_item(fbid)
@@ -273,6 +267,43 @@ class ETL(object):
         info( 'Successfully updated users table for fbid {}'.format(fbid))
 
 
+
+
+        # EDGE DATA
+        table = self.dconn.get_table('prod.edges_incoming')
+        try:
+            debug('Seeking edge relationships for key {}'.format(fbid))
+            result = table.query(fbid)
+            for edge in result.response['Items']:
+                debug(edge)
+
+                edge['updated'] = datetime.date.fromtimestamp( edge['updated'])
+
+                # insert what we got
+                self.pcur.execute("""
+                    INSERT INTO _edges
+                    (fbid_source, fbid_target, wall_comms, post_comms, 
+                        tags, wall_posts, mut_friends, stat_likes, 
+                        photos_other, post_likes, photos_target, stat_comms, 
+                        updated )
+                    VALUES (%s, %s, %s, %s, 
+                            %s, %s, %s, %s, 
+                            %s, %s, %s, %s, 
+                            %s)
+                    """, (edge['fbid_source'], edge['fbid_target'], edge['wall_comms'], edge['post_comms'], 
+                            edge['tags'], edge['wall_posts'], edge['mut_friends'], edge['stat_likes'], 
+                            edge['photos_other'], edge['post_likes'], edge['photos_target'], edge['stat_comms'], 
+                            edge['updated'])
+                    )
+
+        except boto.dynamodb.exceptions.DynamoDBKeyNotFoundError:
+            warning('fbid {} not found in dynamo edges'.format(fbid))
+
+        info( 'Successfully updated edges table for fbid {}'.format(fbid))
+        self.pconn.commit()
+
+
+
 class App(ETL, tornado.web.Application):
 
     def __init__(self, debug, daemon=True):
@@ -299,6 +330,7 @@ class App(ETL, tornado.web.Application):
         self.connect()
 
         if daemon:
+            """
             # TODO: maintain connection, rebuild cursors
             P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
             P.start()
@@ -308,6 +340,8 @@ class App(ETL, tornado.web.Application):
             self.extract()
             P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
             P.start()
+            """
+            self.extract_users()
     
             # crawl for users, lightly
             P = tornado.ioloop.PeriodicCallback(self.get_user, 1000)
