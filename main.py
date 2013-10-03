@@ -146,7 +146,7 @@ class Summary(AuthMixin, tornado.web.RequestHandler):
 
         # get all the summary data
         self.application.pcur.execute("""
-            SELECT meta.campaign_id, meta.name, visits, clicks, uniq_auths,
+            SELECT meta.campaign_id, meta.name, visits, clicks, auths, uniq_auths,
                         shown, shares, audience, clickbacks
             FROM
                 (SELECT campaign_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,

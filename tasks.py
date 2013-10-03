@@ -21,22 +21,26 @@ def mkCSV(application, t=False, client_id=2):
 
 
     # EVENTS
+    # get campaign_id, activity_id
     rs.execute( """    
-    SELECT e.event_datetime AS time, v.session_id, v.fbid, e.friend_fbid, e.type
-    FROM events AS e,visits AS v 
+    SELECT e.event_datetime AS time, v.session_id, v.fbid, e.friend_fbid, e.type, root.root_id, e.activity_id
+    FROM events AS e, visits AS v, campchain as root 
         WHERE e.visit_id=v.visit_id 
         AND DATE_TRUNC('hour', time) = %s
         AND e.campaign_id IN
         (SELECT DISTINCT(campaign_id) FROM campaigns WHERE client_id=%s)
+        AND e.type IN ('session_start', 'authorized', 'shared', 'clickback') 
+        AND root.parent_id IS NOT NULL AND e.campaign_id=root.parent_id
     ORDER BY time DESC 
     """, (hour,client_id))
 
     # then make some csvs
     f = cStringIO.StringIO()
-    headers = ['time', 'session_id', 'fbid', 'friend_fbid','type']
+    headers = ['time', 'session_id', 'fbid', 'friend_fbid','type', 'campaign_id', 'activity_id']
     writer = csv.writer(f, delimiter=",")
     writer.writerow(headers)
     for row in rs.fetchall():
+        debug(row)
         writer.writerow(row)
 
     # put it on S3
