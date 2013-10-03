@@ -44,6 +44,8 @@ function mksummary() {
             .text(function(d){return d})
             .attr("class", "datapoint");
 
+        // and a chart-toggler at the end
+
         // and a final summary row
         body.append("tr").attr("class", "totals")
             .selectAll("td")
