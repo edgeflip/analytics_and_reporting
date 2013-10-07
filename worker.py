@@ -268,7 +268,9 @@ class ETL(object):
 
     def queue_edges(self):
         self.pcur.execute("""
-            SELECT DISTINCT fbid FROM visits WHERE fbid NOT IN (SELECT DISTINCT fbid_target FROM edges)
+            SELECT DISTINCT fbid FROM visits 
+            WHERE fbid NOT IN (SELECT DISTINCT fbid_target FROM edges)
+            ORDER BY updated DESC
             """)
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
