@@ -19,8 +19,9 @@ from auth import Login, Logout, AuthMixin
 
 class ETL(object):
 
-    #hold a queue of users to hit dynamo for
+    #queues of users to hit dynamo for
     fbids = set([])
+    edge_fbids = set([])
 
     def connect(self):
         """make db connections, would be cool to time this out"""
@@ -35,11 +36,9 @@ class ETL(object):
         self.pconn = psycopg2.connect( **redshift)
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
-        """
         debug('Connecting to RDS..')
         from keys import rds
         self.mconn = MySQLdb.connect( **rds)
-        """
 
         from keys import aws
         self.dconn = boto.dynamodb.connect_to_region('us-east-1', **aws)
@@ -83,7 +82,8 @@ class ETL(object):
                 warning( '{}'.format(e))
                 self.pconn.rollback()
 
-        self.extract_users()
+        self.queue_users()
+        self.queue_edges()
         self.mkchains()
         self.mkstats()
 
@@ -166,6 +166,7 @@ class ETL(object):
             FROM events e1
                 WHERE type <> 'clickback'
             UNION
+            (
             SELECT e3.visit_id,
                 e3.campaign_id,
                 e2.content_id,
@@ -178,6 +179,7 @@ class ETL(object):
             FROM events e2 
             LEFT JOIN events e3 USING (activity_id)
                 WHERE e2.type='clickback' AND e3.type='shared'
+            )
         ) t
 
     INNER JOIN (SELECT fbid, visit_id FROM visits) v
@@ -185,6 +187,7 @@ class ETL(object):
     GROUP BY t.campaign_id, hour
         """
 
+        debug('Calculating client stats')
         self.pcur.execute(megaquery)
         self.pconn.commit()
         debug( 'beginning DELETE / INSERT on clientstats') 
@@ -197,21 +200,20 @@ class ETL(object):
         debug('Done.')
 
 
-    def extract_users(self):
-        #debug('starting dynamo dump')
-        #self.pcur.execute("""COPY dynamousers FROM 'dynamodb://staging.users' credentials 'aws_access_key_id=AKIAIQOKJC2POKATFP5Q;aws_secret_access_key=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' readratio 100;""")
-        #debug('fin')
+    def queue_users(self):
         t = time()
 
         self.pcur.execute("""
-            SELECT DISTINCT(visits.fbid) FROM users 
-            RIGHT JOIN visits 
-                ON visits.fbid=users.fbid 
-            WHERE users.fbid IS NULL 
-            ORDER BY visits.updated DESC;
+            SELECT DISTINCT(visits.fbid) AS fbid FROM users 
+                RIGHT JOIN visits 
+                    ON visits.fbid=users.fbid 
+                WHERE users.fbid IS NULL 
+            UNION
+            SELECT DISTINCT(edges.fbid_source) AS fbid FROM users
+                RIGHT JOIN edges
+                    ON users.fbid=edges.fbid_source
+                WHERE users.fbid IS NULL
             """)
-
-        self.pcur.execute(""" SELECT fbid FROM users WHERE updated IS NOT NULL ORDER BY updated DESC LIMIT 20""")
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
         info("Found {} unknown fbids".format(len(fbids)))
@@ -221,13 +223,10 @@ class ETL(object):
         info( 'Queued users for extraction in {}'.format(time()-t))
 
 
-    def get_user(self):
+    def extract_user(self):
         """ Grab a fbid off of the queue and get it out of dynamo """
-        try:
-            fbid = self.fbids.pop()
-        except KeyError:
-            # empty queue
-            return
+        if len(self.fbids) < 1: return
+        fbid = self.fbids.pop()
 
         # null fbids :\
         if not fbid: return
@@ -267,37 +266,53 @@ class ETL(object):
         info( 'Successfully updated users table for fbid {}'.format(fbid))
 
 
+    def queue_edges(self):
+        self.pcur.execute("""
+            SELECT DISTINCT fbid FROM visits WHERE fbid NOT IN (SELECT DISTINCT fbid_target FROM edges)
+            """)
+
+        fbids = [row['fbid'] for row in self.pcur.fetchall()]
+        self.edge_fbids = self.edge_fbids.union( set(fbids))
+
+        info("{} fbids queued for edge extraction".format(len(self.edge_fbids)))
 
 
+    def extract_edge(self):
+        if len(self.edge_fbids) < 1: return
+        fbid = self.edge_fbids.pop()
         # EDGE DATA
         table = self.dconn.get_table('prod.edges_incoming')
         try:
             debug('Seeking edge relationships for key {}'.format(fbid))
             result = table.query(fbid)
-            for edge in result.response['Items']:
-                debug(edge)
+            if len(result.response['Items']) == 0:
+                raise boto.dynamodb.exceptions.DynamoDBKeyNotFoundError('Empty set returned for {}'.format(fbid))
+            else:
+                info( "found {} edges from fbid {}".format( len(result.response['Items']), fbid))
 
-                edge['updated'] = datetime.date.fromtimestamp( edge['updated'])
+            edges =[ ("({},{},{},{},{},{},{},{},{},{},{},{},'{}')".format(
+                            edge['fbid_source'], edge['fbid_target'], edge['wall_comms'], edge['post_comms'], 
+                            edge['tags'], edge['wall_posts'], edge['mut_friends'], edge['stat_likes'], 
+                            edge['photos_other'], edge['post_likes'], edge['photos_target'], edge['stat_comms'], 
+                            datetime.datetime.fromtimestamp( edge['updated'])) )
+                    for edge in result.response['Items']]
 
-                # insert what we got
-                self.pcur.execute("""
-                    INSERT INTO _edges
+            # insert what we got
+            self.pcur.execute("""
+                    INSERT INTO edges
                     (fbid_source, fbid_target, wall_comms, post_comms, 
                         tags, wall_posts, mut_friends, stat_likes, 
                         photos_other, post_likes, photos_target, stat_comms, 
                         updated )
-                    VALUES (%s, %s, %s, %s, 
-                            %s, %s, %s, %s, 
-                            %s, %s, %s, %s, 
-                            %s)
-                    """, (edge['fbid_source'], edge['fbid_target'], edge['wall_comms'], edge['post_comms'], 
-                            edge['tags'], edge['wall_posts'], edge['mut_friends'], edge['stat_likes'], 
-                            edge['photos_other'], edge['post_likes'], edge['photos_target'], edge['stat_comms'], 
-                            edge['updated'])
+                    VALUES 
+                    """ + ",".join(edges),
                     )
+
+
 
         except boto.dynamodb.exceptions.DynamoDBKeyNotFoundError:
             warning('fbid {} not found in dynamo edges'.format(fbid))
+            return 
 
         info( 'Successfully updated edges table for fbid {}'.format(fbid))
         self.pconn.commit()
@@ -330,21 +345,20 @@ class App(ETL, tornado.web.Application):
         self.connect()
 
         if daemon:
-            """
             # TODO: maintain connection, rebuild cursors
             P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
             P.start()
-    
-    
+   
             # keep our stats realtime
             self.extract()
             P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
             P.start()
-            """
-            self.extract_users()
+
     
-            # crawl for users, lightly
-            P = tornado.ioloop.PeriodicCallback(self.get_user, 1000)
+            # crawl for users and edges, lightly
+            P = tornado.ioloop.PeriodicCallback(self.extract_user, 2000)
+            P.start()
+            P = tornado.ioloop.PeriodicCallback(self.extract_edge, 2000)
             P.start()
 
         tornado.web.Application.__init__(self, handlers, **settings)
