@@ -234,13 +234,18 @@ class ETL(object):
         # USER DATA
         table = self.dconn.get_table('prod.users')
         data = defaultdict(lambda: None)
+
+        fbid = 100000664102285
+
         try:
             debug('Seeking key {} in dynamo'.format(fbid))
             dyndata = table.get_item(fbid)
 
             # cast from epoch to dates and times
             if 'birthday' in dyndata and dyndata['birthday']:
-                dyndata['birthday'] = datetime.date.fromtimestamp( int(dyndata['birthday']))
+                dyndata['birthday'] = datetime.date.fromtimestamp( dyndata['birthday'])
+            else: 
+                dyndata['birthday'] = None
 
             if 'updated' in dyndata and dyndata['updated']:
                 dyndata['updated'] = datetime.datetime.fromtimestamp( dyndata['updated'])
@@ -357,9 +362,11 @@ class App(ETL, tornado.web.Application):
             P.start()
    
             # keep our stats realtime
-            self.extract()
-            P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
-            P.start()
+            # self.extract()
+            # P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
+            # P.start()
+
+            self.queue_users()
 
             # crawl for users and edges, lightly
             P = tornado.ioloop.PeriodicCallback(self.extract_user, 2000)
