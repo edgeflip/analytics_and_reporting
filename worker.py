@@ -316,7 +316,7 @@ class ETL(object):
 
         except boto.dynamodb.exceptions.DynamoDBKeyNotFoundError:
             warning('fbid {} not found in dynamo edges'.format(fbid))
-            self.pcur.execute("INSERT INTO missingedges (fbid) VALUES (%s)", fbid)
+            self.pcur.execute("INSERT INTO missingedges (fbid) VALUES (%s)", (fbid,))
             self.pconn.commit()
             return 
 
