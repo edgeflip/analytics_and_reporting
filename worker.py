@@ -240,7 +240,7 @@ class ETL(object):
 
             # cast from epoch to dates and times
             if 'birthday' in dyndata and dyndata['birthday']:
-                dyndata['birthday'] = datetime.date.fromtimestamp( dyndata['birthday'])
+                dyndata['birthday'] = datetime.date.fromtimestamp( int(dyndata['birthday']))
 
             if 'updated' in dyndata and dyndata['updated']:
                 dyndata['updated'] = datetime.datetime.fromtimestamp( dyndata['updated'])
@@ -251,6 +251,8 @@ class ETL(object):
             # this apparently is a real/possible thing, especially for legacy stuff
             # insert a blank row so we stop looking for it
             warning('fbid {} not found in dynamo!'.format(fbid))
+
+            return
 
         # insert what we got
         self.pcur.execute("""
@@ -314,6 +316,8 @@ class ETL(object):
 
         except boto.dynamodb.exceptions.DynamoDBKeyNotFoundError:
             warning('fbid {} not found in dynamo edges'.format(fbid))
+            self.pcur.execute("INSERT INTO missingedges (fbid) VALUES (%s)", fbid)
+            self.pconn.commit()
             return 
 
         info( 'Successfully updated edges table for fbid {}'.format(fbid))
@@ -356,7 +360,6 @@ class App(ETL, tornado.web.Application):
             P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
             P.start()
 
-    
             # crawl for users and edges, lightly
             P = tornado.ioloop.PeriodicCallback(self.extract_user, 2000)
             P.start()
