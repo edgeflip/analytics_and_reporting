@@ -235,8 +235,6 @@ class ETL(object):
         table = self.dconn.get_table('prod.users')
         data = defaultdict(lambda: None)
 
-        fbid = 100000664102285
-
         try:
             debug('Seeking key {} in dynamo'.format(fbid))
             dyndata = table.get_item(fbid)
