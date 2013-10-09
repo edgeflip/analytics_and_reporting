@@ -74,8 +74,8 @@ tr:hover {
     background: #EDF4FC;
     }
 
-button.sorter {
-    border: none;
+button.sorter, button.charter {
+    border: none !important;
     background: white;
     font-size: 12px;
     color: #424242;
@@ -85,6 +85,11 @@ button.sorter {
 .descend button { font-weight:bold;color: black;}
 .ascend { border-bottom: 2px solid black;}
 .descend { border-bottom: 2px solid black;}
+
+button.charter {
+    height:21px;
+    width:21px;
+    }
 
 
 table th {

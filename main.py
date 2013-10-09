@@ -34,10 +34,10 @@ class App(tornado.web.Application):
         map URLs to Handlers, with regex patterns
         """
         handlers = [
-            (r"/", MainHandler),
-            (r"/summary/?", Summary),
-            (r"/clientsummary/?", ClientSummary),
+            (r"/", MainHandler),  # main client template
+            (r"/tabledata/?", ClientSummary),  # client summary data
             (r"/chartdata/", DataHandler),
+            (r"/summary/?", Summary),  # summary data by internal campaign_id, broken now
             (r"/login/", Login),
             (r"/logout/", Logout),
         ]

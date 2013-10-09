@@ -4,9 +4,9 @@ function init() {
     // first pageview, get summary data and draw main table
     mksummary();
 
-    $('th').click(sort); 
-    window.sort = d3.ascending;
+    // default sorting metric
     window.metric = 'visits';
+    $('#sumtable th').click(sort); 
 
     // though we bind the sort handler to the entire th, style the actual buttons
     $('.sorter').button( {'icons':{'secondary':'ui-icon-arrow-2-n-s'}, 'text':true})
@@ -15,11 +15,11 @@ function init() {
 
 function mksummary() {
     // load summary data and build a table
-    $.get("/clientsummary", function (response) {
+    $.get("/tabledata/", function (response) {
 
         window.response = JSON.parse(response); // TODO: this should automatically work
 
-        // we're manually adding column headers at the moment, TODO, send this serverside
+        // we're manually adding column headers in the template right now, TODO, send this serverside
         var columns = ['name', 'visits', 'clicks', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
 
         var table = d3.select('#sumtable')
@@ -30,7 +30,8 @@ function mksummary() {
         var rows = body.selectAll("tr").data(window.response)
             .enter()
             .append("tr")
-            .attr("class", "child");
+            .attr("class", "child")
+            .attr("id", function(d) {return d.root_id});
 
         // build cells per row
         rows.selectAll("td").data(
@@ -42,9 +43,18 @@ function mksummary() {
             .enter()
             .append("td")
             .text(function(d){return d})
-            .attr("class", "datapoint");
+            .attr("class", "datapoint")
 
         // and a chart-toggler at the end
+        rows.append("td")
+            .append("button")
+            .attr("class", "charter")
+            .attr("root-id", function(d){return d.root_id});
+
+        // make them jquery buttons
+        $('.charter').button( {'icons':{'primary':'ui-icon-image'}, 'text':false});
+        // bind a click function
+        $('button.charter').click(mkchart);
 
         // and a final summary row
         body.append("tr").attr("class", "totals")
@@ -62,18 +72,26 @@ function mksummary() {
     }
 
 
+function mkchart () {
+    window.thing = this;
+    console.log( $(this).attr('root-id'));
+
+    }
+
+
 function sort() {
+    console.log('sorting');
     var metric = this.id;
     if (metric == window.metric) {
         // toggling sort order if they've clicked the same metric
-        window.sort = window.sort === d3.ascending ? d3.descending : d3.ascending;
+        window.sorter = window.sorter === d3.ascending ? d3.descending : d3.ascending;
         }
     else {
         // else a new metric, set to descending by default
-        window.sort = d3.descending;
+        window.sorter = d3.descending;
         }
 
-    var sortstyle = window.sort === d3.descending ? 'descend' : 'ascend';
+    var sortstyle = window.sorter === d3.descending ? 'descend' : 'ascend';
 
     // clear old styles
     $('th').removeClass('ascend descend');
@@ -93,7 +111,7 @@ function sort() {
 
     window.metric = metric;
 
-    d3.selectAll("tr.child").sort(function(a,b) {return window.sort(a[metric],b[metric])} );
+    d3.selectAll("tr.child").sort(function(a,b) {return window.sorter(a[metric],b[metric])} );
 
     }
 
@@ -103,9 +121,7 @@ function getData() {
     day = $.datepicker.formatDate('mm/dd/yy', $('#datepicker').datepicker('getDate'));
     campaign = $('#campaignpicker select').val();
 
-    var callback = campaign=='aggregate'? onAggData : onData
-
-    $.post('/chartdata/', {'campaign':campaign, 'day':day}, callback);
+    $.post('/chartdata/', {'campaign':campaign, 'day':day}, onData);
     }
 
 
@@ -132,22 +148,6 @@ function onData(response) {
     draw();
     }
 
-
-function onAggData(response) {
-    window.response = response;
-
-    // clear the canvases.. canvii ?
-    window.dailychart.clearChart(); 
-    window.monthlychart.clearChart();
-    $('#datepicker').hide();
-    $('label').hide();
-   
-    // load the data into the now woefully named dailydata 
-    window.dailydata = new google.visualization.DataTable( {'cols':response.cols, 'rows':response.rows});
-    window.dailychart = new google.visualization.Table( $('#daily')[0] );
-
-    window.dailychart.draw(window.dailydata, {});
-    }
 
 
 function draw() {
