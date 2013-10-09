@@ -90,3 +90,43 @@ def mkCSV(application, t=False, client_id=2):
     smtp.connect()
     smtp.sendmail('japhy@edgeflip.com', ['japhy@edgeflip.com',], msg.as_string())
 
+def mkemailCSV(application, client_id=2):
+    info('Making email CSV for client {}'.format(client_id))
+
+    rs = application.pcur  # redshift cursor, need better naming convention
+
+    # S3 connection, base filename
+    from keys import aws
+    S3 = S3Connection( **aws)
+    bucket = S3.get_bucket('ef-client-data')
+
+    rs.execute("""
+        SELECT DISTINCT fname,lname,email 
+        FROM users,visits,events,campaigns 
+        WHERE users.fbid=visits.fbid 
+            AND visits.visit_id=events.visit_id 
+            AND events.campaign_id=campaigns.campaign_id 
+            AND campaigns.client_id=%s
+        """,(client_id,))
+
+    # then make some csvs
+    f = cStringIO.StringIO()
+    headers = ['fname','lname','email']
+    writer = csv.writer(f, delimiter=",")
+    writer.writerow(headers)
+    for row in rs.fetchall():
+        debug(row)
+        writer.writerow(row)
+
+
+    # put it on S3
+    f.seek(0)
+    key = bucket.new_key('54e946104e477c00df6fd684e0955d7e')
+    key.set_contents_from_file(f)
+    key.set_acl('public-read')
+    debug(f.getvalue())
+    f.close()
+
+    info('Done.')
+
+
