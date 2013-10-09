@@ -203,6 +203,9 @@ class ETL(object):
     def queue_users(self):
         t = time()
 
+        # distinct fbids from visits missing from users
+        # union: secondaries that we don't have user records for
+        # union: users that we guess may have changed
         self.pcur.execute("""
             SELECT DISTINCT(visits.fbid) AS fbid FROM users 
                 RIGHT JOIN visits 
