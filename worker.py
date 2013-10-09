@@ -365,7 +365,7 @@ class App(ETL, tornado.web.Application):
             P.start()
 
             # crawl for users and edges, lightly
-            P = tornado.ioloop.PeriodicCallback(self.extract_user, 2000)
+            P = tornado.ioloop.PeriodicCallback(self.extract_user, 1000)
             P.start()
             P = tornado.ioloop.PeriodicCallback(self.extract_edge, 2000)
             P.start()
@@ -382,9 +382,10 @@ def main():
 
     if options.mkCSV:
         # running as a batch job, don't daemonize
-        from tasks import mkCSV
+        from tasks import mkCSV, mkemailCSV
         app = App(options.debug, False)
         mkCSV(app)
+        mkemailCSV(app)
 
     else:
         app = App(options.debug, True)
