@@ -90,7 +90,7 @@ def mkCSV(application, t=False, client_id=2):
     import json
     requests.post('http://va-c2v.herokuapp.com/datafiles', data=json.dumps(out))
     out['type'] = 'Users'
-    out['key'] = basefile='-users.csv'
+    out['key'] = basefile+'-users.csv'
     requests.post('http://va-c2v.herokuapp.com/datafiles', data=json.dumps(out))
 
 
