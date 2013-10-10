@@ -86,8 +86,6 @@ def mkCSV(application, t=False, client_id=2):
     out['type'] = 'Events'
     out['key'] = basefile+'-events.csv'
 
-    import pdb;pdb.set_trace()
-
     import requests
     import json
     requests.post('http://va-c2v.herokuapp.com/datafiles', data=json.dumps(out))
