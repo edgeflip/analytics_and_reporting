@@ -82,17 +82,18 @@ def mkCSV(application, t=False, client_id=2):
     f.close()
 
     # Params for Virginia's service
-    out = {'bucket':'ef-client-data'}
-    out['type'] = 'Events'
-    out['key'] = basefile+'-events.csv'
-
     import requests
     import json
-    requests.post('http://va-c2v.herokuapp.com/datafiles', data=json.dumps(out))
-    out['type'] = 'Users'
-    out['key'] = basefile+'-users.csv'
-    requests.post('http://va-c2v.herokuapp.com/datafiles', data=json.dumps(out))
+    out = {'bucket':'ef-client-data'}
+    out['type'] = 'EventFile'
+    out['key'] = basefile+'-events.csv'
 
+    headers = {'Content-Type': 'application/json'}
+
+    requests.post('http://va-c2v.herokuapp.com/datafiles', data=json.dumps(out), headers=headers)
+    out['type'] = 'UserFile'
+    out['key'] = basefile+'-users.csv'
+    requests.post('http://va-c2v.herokuapp.com/datafiles', data=json.dumps(out), headers=headers)
 
     import email
     msg = email.Message.Message()
