@@ -228,54 +228,34 @@ class DataHandler(AuthMixin, tornado.web.RequestHandler):
         camp_id = self.get_argument('campaign')
         info( 'Getting data for campaign {}'.format(camp_id))
 
-        # magic case for the "aggregate" view
-        if camp_id == 'aggregate':
-            return self.finish(self.aggregate()) 
+        # first, grab data for the bigger chart, grouped and summed by day
+        self.application.pcur.execute("""
+        SELECT DATE_TRUNC('day', hour) as day,
+            SUM(visits) AS visits,
+            SUM(clicks) AS clicks,
+            SUM(auths) AS auths,
+            SUM(uniq_auths) AS uniq_auths,
+            SUM(shown) AS shown,
+            SUM(shares) AS shares,
+            SUM(audience) AS audience,
+            SUM(clickbacks) AS clickbacks
+            
+        FROM clientstats,campchain 
+        WHERE clientstats.campaign_id=campchain.parent_id
+        AND campchain.root_id=%s
+        GROUP BY day 
+        ORDER BY day ASC
+        """, (camp_id,))
 
-        camp_id = int(self.request.arguments['campaign'][0])
-        day = self.request.arguments['day'][0]
+        def mangle(row):
+            row = dict(row)
+            row['day'] = row['day'].isoformat()
+            return row
 
-        from views import chartdata
-        data = chartdata(camp_id, self.application.pcur, day)
+        data = [mangle(row) for row in self.application.pcur.fetchall()]
 
-        self.finish(data)
-
-    def aggregate(self):
-
-        q = """
-        SELECT meta.campaign_id, meta.name, visits, clicks, auths, uniq_auths,
-                    shown, shares, audience, clickbacks
-        FROM
-            (SELECT campaign_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,
-                    SUM(uniq_auths) AS uniq_auths, SUM(shown) AS shown, SUM(shares) AS shares,
-                    SUM(audience) AS audience, SUM(clickbacks) AS clickbacks
-                FROM clientstats
-                GROUP BY campaign_id
-            ) AS stats,
-
-            (SELECT campaign_id, name FROM campaigns WHERE client_id=2) AS meta
-
-        WHERE stats.campaign_id=meta.campaign_id
-        ORDER BY meta.campaign_id DESC;
-        """
-
-        self.application.pcur.execute(q)
-
-        # GOOGlify it
-        aggdata = []
-        for row in self.application.pcur.fetchall():
-            aggdata.append( {'c': [{'v':x} for x in row[1:]]})
-   
-        from views import MONTHLY_METRICS 
-        metrics = MONTHLY_METRICS[:]
-        metrics[0] = {'type':'string', 'id':'campname', 'label':'Campaign Name'}
-    
-        out = {'cols': metrics, 'rows': aggdata}
-
-        return out
-
-
-
+        # day = self.get_argument('day', None)
+        self.finish({'data':data})
 
 
 def main():

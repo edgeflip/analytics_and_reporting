@@ -10,9 +10,11 @@
     <script type="text/javascript" src="{{ STATIC_URL }}js/d3.v3.min.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/mod_csrf.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/floathead.js"></script>
+    <script type="text/javascript" src="{{ STATIC_URL }}js/rickshaw.min.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/dashboard.js"></script>
 
     <link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.min.css" />
+    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/rickshaw.min.css" />
     <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/auth.css" />
     <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}css/dash.css" />
 {% end %}
@@ -37,7 +39,7 @@
             <th id="visits"><button class="sorter">Visits</button></th>
             <th id="clicks"><button class="sorter">Clicks</button></th>
             <th id="uniq_auths"><button class="sorter">Unique Auths</button></th>
-            <th id="shown"><button class="sorter">Users Shown Faces</button></th>
+            <th id="shown"><button class="sorter">Faces Shown</button></th>
             <th id="shares"><button class="sorter">User Shares</button></th>
             <th id="audience"><button class="sorter">Friends Shared With</button></th>
             <th id="clickbacks"><button class="sorter">Clickbacks</button></th>
@@ -48,6 +50,12 @@
     </table>
 
 </div>
+
+<div id="modal">
+<div id="graph">
+</div>
+</div>
+
 
 <hr style="clear:both; margin-top:50px;">
 <div id="timestamp"><i style="font-size:12px">data last updated: {{ updated }}</i></div>

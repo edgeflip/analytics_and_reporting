@@ -73,14 +73,82 @@ function mksummary() {
 
 
 function mkchart () {
-    window.thing = this;
-    console.log( $(this).attr('root-id'));
-
+    $.post('/chartdata/', {'campaign':$(this).attr('root-id')}, on_data );
     }
 
 
+function on_data (response) {
+
+    $('#graph').children().remove();
+
+    window.response = response;
+    $('#modal').dialog({'modal':true, width:700, height:400})
+
+    var palette = new Rickshaw.Color.Palette();
+
+    var graph = new Rickshaw.Graph( {
+        element: document.querySelector("#graph"),
+        width: 600,
+        height: 150,
+        renderer: 'line',
+        series: [
+
+            {
+                name: "Visits",
+                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.visits}}),
+                color: palette.color(),
+            },
+
+            {
+                name: "Clicks",
+                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.clicks}}),
+                color: palette.color(),
+            },
+
+            {
+                name: "Unique Auths",
+                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.uniq_auths}}),
+                color: palette.color(),
+            },
+
+            {
+                name: "Faces Shown",
+                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.shown}}),
+                color: palette.color(),
+            },
+
+            {
+                name: "Shares",
+                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.shares}}),
+                color: palette.color(),
+            },
+
+            {
+                name: "Audience",
+                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.audience}}),
+                color: palette.color(),
+            },
+
+            {
+                name: "Clickbacks",
+                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.clickbacks}}),
+                color: palette.color(),
+            },
+
+            ]
+        });
+
+    // var time = new Rickshaw.Fixtures.Time();
+    // window.time = time
+
+    // new Rickshaw.Graph.Axis.Time( { graph: graph, timeUnit:time.unit('day') } );
+    new Rickshaw.Graph.HoverDetail({ graph: graph, yFormatter: function (x) {return x} });
+
+    graph.render();
+
+    }
+
 function sort() {
-    console.log('sorting');
     var metric = this.id;
     if (metric == window.metric) {
         // toggling sort order if they've clicked the same metric
@@ -112,7 +180,6 @@ function sort() {
     window.metric = metric;
 
     d3.selectAll("tr.child").sort(function(a,b) {return window.sorter(a[metric],b[metric])} );
-
     }
 
 
