@@ -53,7 +53,7 @@ function mksummary() {
 
         // make them jquery buttons
         $('.charter').button( {'icons':{'primary':'ui-icon-image'}, 'text':false});
-        // bind a click function
+        // bind a click function for charts
         $('button.charter').click(mkchart);
 
         // and a final summary row
@@ -73,7 +73,66 @@ function mksummary() {
 
 
 function mkchart () {
+    // on click of a campaign, get more detailed data and draw some charts
     $.post('/chartdata/', {'campaign':$(this).attr('root-id')}, on_data );
+    }
+
+function mkdatepicker (now) {
+
+    $('#datepicker').children().remove();
+    var daterange = window.response.data.map( function(row){return new Date(row.day)} ); 
+    window.daterange = daterange;
+
+    // set current date somewhere in the middle if there is no now arg
+    now = daterange[ Math.floor(daterange.length/2)]
+
+    // BUTTONS
+    var container = d3.select('#datepicker');
+
+    // oldest date
+    container.append('button')
+        .text( d3.min(daterange).toString().substr(0,15))
+        .attr('id', 'first')
+        .attr('data-index', 0);
+    $('#first').button( {'icons':{'primary':'ui-icon-seek-first'}});
+
+    // previous day
+    container.append('button')
+        .text( daterange[daterange.indexOf(now)-1].toString().substr(0,15))
+        .attr('id', 'prev')
+        .attr('data-index', daterange.indexOf(now)-1);
+    $('#prev').button( {'icons':{'primary':'ui-icon-seek-prev'}});
+
+    // button for today, does nothing, but convenient for styling
+    container.append('button')
+        .text( now.toString().substr(0,15))
+        .attr('id', 'now')
+        .attr('data-index', daterange.indexOf(now));
+    $('#now').button({disabled:true});
+
+    // next day
+    container.append('button')
+        .text( daterange[daterange.indexOf(now)+1].toString().substr(0,15))
+        .attr('id', 'next')
+        .attr('data-index', daterange.indexOf(now)+1);
+    $('#next').button( {'icons':{'primary':'ui-icon-seek-next'}});
+
+    // newest date
+    container.append('button')
+        .text( d3.max(daterange).toString().substr(0,15))
+        .attr('id', 'last')
+        .attr('data-index', daterange.length-1);
+    $('#last').button( {'icons':{'primary':'ui-icon-seek-end'}});
+
+    // click handlers for all
+    $('#datepicker button').click( change_now );
+
+    }
+
+function change_now () {
+
+    console.log( window.daterange[$(this).attr('data-index')] );
+
     }
 
 
@@ -83,6 +142,8 @@ function on_data (response) {
 
     window.response = response;
     $('#modal').dialog({'modal':true, width:700, height:400})
+
+    mkdatepicker();
 
     var palette = new Rickshaw.Color.Palette();
 
