@@ -13,8 +13,10 @@ function init() {
     }
 
 
+// FIRST VIEW, THE LEADERBOARD
+
 function mksummary() {
-    // load summary data and build a table
+    // initial load of summary data
     $.get("/tabledata/", function (response) {
 
         window.response = JSON.parse(response); // TODO: this should automatically work
@@ -72,9 +74,11 @@ function mksummary() {
     }
 
 
+// CAMPAIGN DETAILS SPAWNED FROM BUTTON PER ROW 
+
 function mkchart () {
     // on click of a campaign, get more detailed data and draw some charts
-    $.post('/dailydata/', {'campaign':$(this).attr('root-id')}, on_data );
+    $.post('/dailydata/', {'campaign':$(this).attr('root-id')}, mkdaily );
 
     // stash this so other UI elements know which campaign is selected
     window.campaign_id = $(this).attr('root-id')  
@@ -134,12 +138,14 @@ function mkdatepicker (now) {
 
     }
 
-function change_now () {
+function change_now (event, now) {
 
-    var reqdate = window.daterange[$(this).attr('data-index')];
+    var eldate = window.daterange[$(this).attr('data-index')];
+    var reqdate = typeof now !== 'undefined' ? now : eldate;
+    console.log( 'eldate', eldate);
+    console.log( 'now', now);
+
     $.post('/hourlydata/', {reqdate:reqdate.toJSON(), campaign:window.campaign_id}, on_hourly);
-
-    console.log( 'Changing now to:', reqdate, reqdate.toJSON());
 
     // update datepicking controls
     mkdatepicker(reqdate);
@@ -154,17 +160,27 @@ function on_hourly (response) {
     }
 
 
-function on_data (response) {
+function mkdaily (response) {
 
-    // really more like on_daily_data
+    // the first load of data, a chart of all stats over the course of
+    // the campaign, grouped by day
 
-    window.response = response;
+    // open the modal.. but let's do that prev.
     $('#modal').dialog({'modal':true, width:800, height:500})
     $('#modal').on( "dialogclose", function() {$('#modal').children().remove()});
 
+    window.response = response;  // debuggy but convenient
+
+    // many things use this
     window.daterange = window.response.data.map( function(row){return new Date(row.day)} ); 
+
+    // make datepicker controls now that we know the range of dates
     mkdatepicker();
 
+    // load the first hourly chart from whatever we chose as default
+    change_now(null, window.daterange[$('#now').attr('data-index')]);
+
+    // draw the first chart
     mkgraph('#dailygraph', response);
 
     }
