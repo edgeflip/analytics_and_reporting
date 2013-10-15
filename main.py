@@ -36,7 +36,8 @@ class App(tornado.web.Application):
         handlers = [
             (r"/", MainHandler),  # main client template
             (r"/tabledata/?", ClientSummary),  # client summary data
-            (r"/chartdata/", DataHandler),
+            (r"/dailydata/", DailyData),
+            (r"/hourlydata/", HourlyData),
             (r"/summary/?", Summary),  # summary data by internal campaign_id, broken now
             (r"/login/", Login),
             (r"/logout/", Logout),
@@ -219,14 +220,63 @@ class Summary(AuthMixin, tornado.web.RequestHandler):
 
         return {'data':aggdata, 'sumdata':sumdata, 'chains':chains, 'chainkeys':chainkeys, 'cols':metrics, 'meta':campmeta}
 
+import datetime
+class HourlyData(AuthMixin, tornado.web.RequestHandler):
 
-class DataHandler(AuthMixin, tornado.web.RequestHandler):
+    @tornado.web.authenticated
+    def post(self): 
+
+        # grab args and pass them into the django view
+        camp_id = self.get_argument('campaign')
+        day = self.get_argument('reqdate')
+        day = datetime.datetime.strptime(day, "%Y-%m-%dT%H:%M:%S.%fZ")
+
+        info( 'Getting hourly data for campaign {}, day {}'.format(camp_id, day))
+
+
+        """
+        super awks, naming the field `day` even though it's an hour, to match the daily format
+        to make the front end code more "usable"
+        """
+
+        # first, grab data for the bigger chart, grouped and summed by day
+        self.application.pcur.execute("""
+        SELECT DATE_TRUNC('hour', hour) as day,
+            SUM(visits) AS visits,
+            SUM(clicks) AS clicks,
+            SUM(auths) AS auths,
+            SUM(uniq_auths) AS uniq_auths,
+            SUM(shown) AS shown,
+            SUM(shares) AS shares,
+            SUM(audience) AS audience,
+            SUM(clickbacks) AS clickbacks
+            
+        FROM clientstats,campchain 
+        WHERE clientstats.campaign_id=campchain.parent_id
+        AND campchain.root_id=%s
+        AND DATE_TRUNC('day', hour) = %s
+        GROUP BY day
+        ORDER BY day ASC
+        """, (camp_id,day))
+
+        def mangle(row):
+            row = dict(row)
+            row['day'] = row['day'].isoformat()
+            return row
+
+        data = [mangle(row) for row in self.application.pcur.fetchall()]
+
+        # day = self.get_argument('day', None)
+        self.finish({'data':data})
+
+
+class DailyData(AuthMixin, tornado.web.RequestHandler):
 
     @tornado.web.authenticated
     def post(self): 
         # grab args and pass them into the django view
         camp_id = self.get_argument('campaign')
-        info( 'Getting data for campaign {}'.format(camp_id))
+        info( 'Getting daily data for campaign {}'.format(camp_id))
 
         # first, grab data for the bigger chart, grouped and summed by day
         self.application.pcur.execute("""

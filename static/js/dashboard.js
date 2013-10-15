@@ -74,52 +74,57 @@ function mksummary() {
 
 function mkchart () {
     // on click of a campaign, get more detailed data and draw some charts
-    $.post('/chartdata/', {'campaign':$(this).attr('root-id')}, on_data );
+    $.post('/dailydata/', {'campaign':$(this).attr('root-id')}, on_data );
+
+    // stash this so other UI elements know which campaign is selected
+    window.campaign_id = $(this).attr('root-id')  
     }
 
 function mkdatepicker (now) {
 
     $('#datepicker').children().remove();
-    var daterange = window.response.data.map( function(row){return new Date(row.day)} ); 
-    window.daterange = daterange;
+
+    var daterange = window.daterange;
 
     // set current date somewhere in the middle if there is no now arg
-    now = daterange[ Math.floor(daterange.length/2)]
+    now = typeof now !== 'undefined' ? now : daterange[ Math.floor(daterange.length/2)];
 
     // BUTTONS
     var container = d3.select('#datepicker');
 
     // oldest date
     container.append('button')
-        .text( d3.min(daterange).toString().substr(0,15))
+        .text( d3.min(daterange).toUTCString().substr(0,15))
         .attr('id', 'first')
         .attr('data-index', 0);
     $('#first').button( {'icons':{'primary':'ui-icon-seek-first'}});
 
     // previous day
+    var previndex = daterange.indexOf(now) == 0 ? 0 : daterange.indexOf(now)-1;
     container.append('button')
-        .text( daterange[daterange.indexOf(now)-1].toString().substr(0,15))
+        .text( daterange[previndex].toUTCString().substr(0,15))
         .attr('id', 'prev')
         .attr('data-index', daterange.indexOf(now)-1);
     $('#prev').button( {'icons':{'primary':'ui-icon-seek-prev'}});
 
     // button for today, does nothing, but convenient for styling
     container.append('button')
-        .text( now.toString().substr(0,15))
+        .text( now.toUTCString().substr(0,15))
         .attr('id', 'now')
         .attr('data-index', daterange.indexOf(now));
     $('#now').button({disabled:true});
 
     // next day
+    var nextindex = daterange.indexOf(now) == daterange.length-1 ? daterange.length-1 : daterange.indexOf(now) + 1;
     container.append('button')
-        .text( daterange[daterange.indexOf(now)+1].toString().substr(0,15))
+        .text( daterange[nextindex].toUTCString().substr(0,15))
         .attr('id', 'next')
         .attr('data-index', daterange.indexOf(now)+1);
     $('#next').button( {'icons':{'primary':'ui-icon-seek-next'}});
 
     // newest date
     container.append('button')
-        .text( d3.max(daterange).toString().substr(0,15))
+        .text( d3.max(daterange).toUTCString().substr(0,15))
         .attr('id', 'last')
         .attr('data-index', daterange.length-1);
     $('#last').button( {'icons':{'primary':'ui-icon-seek-end'}});
@@ -131,24 +136,46 @@ function mkdatepicker (now) {
 
 function change_now () {
 
-    console.log( window.daterange[$(this).attr('data-index')] );
+    var reqdate = window.daterange[$(this).attr('data-index')];
+    $.post('/hourlydata/', {reqdate:reqdate.toJSON(), campaign:window.campaign_id}, on_hourly);
+
+    console.log( 'Changing now to:', reqdate, reqdate.toJSON());
+
+    // update datepicking controls
+    mkdatepicker(reqdate);
+    }
+
+function on_hourly (response) {
+    window.response = response ;
+
+    $('#hourlygraph').children().remove();
+    mkgraph('#hourlygraph', response);
 
     }
 
 
 function on_data (response) {
 
-    $('#graph').children().remove();
+    // really more like on_daily_data
 
     window.response = response;
-    $('#modal').dialog({'modal':true, width:700, height:400})
+    $('#modal').dialog({'modal':true, width:800, height:500})
+    $('#modal').on( "dialogclose", function() {$('#modal').children().remove()});
 
+    window.daterange = window.response.data.map( function(row){return new Date(row.day)} ); 
     mkdatepicker();
+
+    mkgraph('#dailygraph', response);
+
+    }
+
+
+function mkgraph(element, response) {
 
     var palette = new Rickshaw.Color.Palette();
 
     var graph = new Rickshaw.Graph( {
-        element: document.querySelector("#graph"),
+        element: document.querySelector(element),
         width: 600,
         height: 150,
         renderer: 'line',
@@ -199,15 +226,16 @@ function on_data (response) {
             ]
         });
 
-    // var time = new Rickshaw.Fixtures.Time();
-    // window.time = time
-
     // new Rickshaw.Graph.Axis.Time( { graph: graph, timeUnit:time.unit('day') } );
     new Rickshaw.Graph.HoverDetail({ graph: graph, yFormatter: function (x) {return x} });
 
     graph.render();
 
+    var xAxis = new Rickshaw.Graph.Axis.Time({ graph: graph });
+    xAxis.render();
+
     }
+
 
 function sort() {
     var metric = this.id;
@@ -249,7 +277,7 @@ function getData() {
     day = $.datepicker.formatDate('mm/dd/yy', $('#datepicker').datepicker('getDate'));
     campaign = $('#campaignpicker select').val();
 
-    $.post('/chartdata/', {'campaign':campaign, 'day':day}, onData);
+    $.post('/dailydata/', {'campaign':campaign, 'day':day}, onData);
     }
 
 
