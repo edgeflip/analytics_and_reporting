@@ -23,9 +23,7 @@ function mksummary() {
 
         // we're manually adding column headers in the template right now, TODO, send this serverside
         var columns = ['name', 'visits', 'clicks', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
-
         var table = d3.select('#sumtable')
-
 
         // build rows
         var body = table.append("tbody")
@@ -85,13 +83,20 @@ function mkchart () {
 
     // open a blank modal so the user knows the button click registered
     $('#modal').dialog({'modal':true, 'width':1000}) // pass height if you need to
-    $('#modal').on( "dialogclose", function() {$('.chart').children().remove()});
+    $('#modal').on( "dialogclose", function() {
+        // clear old data
+        $('.chart').children().remove()
+        $('#hourlytable tbody').children().remove();
+
+        // and make sure we are showing charts, not TSV data!
+        $('#hourlytable').hide();
+        $('#modal .chart').show()
+        $('#modal #datepicker').show();
+        });
     }
 
 
 function mkdatepicker (now) {
-
-    console.log('mking dates for', now);
 
     $('#datepicker').children().remove();
 
@@ -159,21 +164,19 @@ function mkdatepicker (now) {
 
 
 function change_now (event, now) {
-
     /* Change whatever day the detailed chart is focused on */
 
     var reqdate = typeof now !== 'undefined' ? now : window.daterange[$(this).attr('data-index')];
-
-    console.log('now',now);
-    console.log('reqdate',reqdate);
     $.post('/hourlydata/', {reqdate:reqdate.toJSON(), campaign:window.campaign_id}, on_hourly);
 
     // update datepicking controls
     mkdatepicker(reqdate);
+
     }
 
 
 function on_hourly (response) {
+    // callback for a call to change_now basically
     window.response = response ;
 
     $('#hourlygraph').children().remove();
@@ -183,7 +186,6 @@ function on_hourly (response) {
 
 
 function mkdaily (response) {
-
     // the first load of data, a chart of all stats over the course of
     // the campaign, grouped by day
 
@@ -192,16 +194,17 @@ function mkdaily (response) {
     // many things use this
     window.daterange = window.response.data.map( function(row){return new Date(row.day)} ); 
 
-    // make datepicker controls now that we know the range of dates
-    // mkdatepicker();
-
-    console.log('mkdaily', window.daterange);
-
     // load the first hourly chart from whatever we chose as default
     change_now(null, window.daterange[0]);
 
     // draw the first chart
     mkgraph('#dailygraph', response);
+
+    // the control for revealing TSV data
+    $('#tsver').button();
+    $('#tsver').off('click').on('click', function() {
+        $.post('/alldata/', {campaign:window.campaign_id}, tsv_data);
+        })
 
     }
 
@@ -293,6 +296,53 @@ function sort() {
     d3.selectAll("tr.child").sort(function(a,b) {return window.sorter(a[metric],b[metric])} );
     }
 
+function tsv_data(response) {
+    console.log(response);
+    window.response = typeof response.data !== 'undefined' ? response.data : window.response;
+
+    /* Load the data and build up the table element, then toggle displays */
+
+    // we're manually adding column headers in the template right now, TODO, send this serverside
+    var columns = ['day', 'visits', 'clicks', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
+    var table = d3.select('#hourlytable')
+
+    // build rows
+    var body = table.append("tbody")
+    var rows = body.selectAll("tr").data(window.response)
+        .enter()
+        .append("tr");
+
+    // build cells per row
+    rows.selectAll("td").data(
+        /* so for each row, we end up wanting an array of values, in column order */
+        function(row) {
+            // columns.map makes a nice [] of datapoints per row
+            return columns.map(function(column) {return row[column]})
+        })
+        .enter()
+        .append("td")
+        .text(function(d){return d})
+        .attr("class", "datapoint")
+
+    // toggle visibility .. kinda awkward
+    $('#hourlytable').show();
+    $('#modal .chart').hide()
+    $('#modal #datepicker').hide();
+
+    // toggle button functionality
+    $('#tsver span').text('Show Graphs');
+    $('#tsver').off('click').on('click', function () {
+        $('#hourlytable').hide();
+        $('#modal .chart').show();
+        $('#modal #datepicker').show();
+        $('#tsver span').text('Show Raw Data');
+        $('#tsver').off('click').on('click', tsv_data);
+        });
+    }
+
+
+/* Cruft below ? */
+
 
 function getData() {
     // no need to post client, the server can pick that out of whatever user
@@ -325,7 +375,6 @@ function onData(response) {
 
     draw();
     }
-
 
 
 function draw() {

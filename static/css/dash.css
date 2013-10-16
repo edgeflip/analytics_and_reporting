@@ -11,8 +11,11 @@ body {
 /* something, somewhere, is overriding font-sizes */
 .ui-widget {
     font-size: 10px;
+    border: none;
     }
 
+.ui-state-highlight, .ui-state-focus{
+    }
 
 /* SUMMARY TABLE STYLING */
 

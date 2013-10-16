@@ -38,6 +38,7 @@ class App(tornado.web.Application):
             (r"/tabledata/?", ClientSummary),  # client summary data
             (r"/dailydata/", DailyData),
             (r"/hourlydata/", HourlyData),
+            (r"/alldata/", AllData),
             (r"/summary/?", Summary),  # summary data by internal campaign_id, broken now
             (r"/login/", Login),
             (r"/logout/", Logout),
@@ -220,7 +221,43 @@ class Summary(AuthMixin, tornado.web.RequestHandler):
 
         return {'data':aggdata, 'sumdata':sumdata, 'chains':chains, 'chainkeys':chainkeys, 'cols':metrics, 'meta':campmeta}
 
+
 import datetime
+class AllData(AuthMixin, tornado.web.RequestHandler):
+    @tornado.web.authenticated
+    def post(self): 
+        camp_id = self.get_argument('campaign')
+
+        # first, grab data for the bigger chart, grouped and summed by day
+        self.application.pcur.execute("""
+        SELECT DATE_TRUNC('hour', hour) as day,
+            SUM(visits) AS visits,
+            SUM(clicks) AS clicks,
+            SUM(auths) AS auths,
+            SUM(uniq_auths) AS uniq_auths,
+            SUM(shown) AS shown,
+            SUM(shares) AS shares,
+            SUM(audience) AS audience,
+            SUM(clickbacks) AS clickbacks
+            
+        FROM clientstats,campchain 
+        WHERE clientstats.campaign_id=campchain.parent_id
+        AND campchain.root_id=%s
+        GROUP BY day
+        ORDER BY day ASC
+        """, (camp_id,))
+
+        def mangle(row):
+            row = dict(row)
+            row['day'] = row['day'].isoformat()
+            return row
+
+        data = [mangle(row) for row in self.application.pcur.fetchall()]
+
+        # day = self.get_argument('day', None)
+        self.finish({'data':data})
+
+
 class HourlyData(AuthMixin, tornado.web.RequestHandler):
 
     @tornado.web.authenticated
