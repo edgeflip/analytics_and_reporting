@@ -140,10 +140,7 @@ function mkdatepicker (now) {
 
 function change_now (event, now) {
 
-    var eldate = window.daterange[$(this).attr('data-index')];
-    var reqdate = typeof now !== 'undefined' ? now : eldate;
-    console.log( 'eldate', eldate);
-    console.log( 'now', now);
+    var reqdate = typeof now !== 'undefined' ? now : window.daterange[$(this).attr('data-index')];
 
     $.post('/hourlydata/', {reqdate:reqdate.toJSON(), campaign:window.campaign_id}, on_hourly);
 
@@ -156,7 +153,6 @@ function on_hourly (response) {
 
     $('#hourlygraph').children().remove();
     mkgraph('#hourlygraph', response);
-
     }
 
 
@@ -166,7 +162,7 @@ function mkdaily (response) {
     // the campaign, grouped by day
 
     // open the modal.. but let's do that prev.
-    $('#modal').dialog({'modal':true, width:800, height:500})
+    $('#modal').dialog({'modal':true, 'width':1000}) // pass height if you need to
     $('#modal').on( "dialogclose", function() {$('#modal').children().remove()});
 
     window.response = response;  // debuggy but convenient
@@ -195,51 +191,35 @@ function mkgraph(element, response) {
         width: 600,
         height: 150,
         renderer: 'line',
-        series: [
-
-            {
+        series: [{
                 name: "Visits",
                 data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.visits}}),
                 color: palette.color(),
-            },
-
-            {
+            },{
                 name: "Clicks",
                 data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.clicks}}),
                 color: palette.color(),
-            },
-
-            {
+            },{
                 name: "Unique Auths",
                 data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.uniq_auths}}),
                 color: palette.color(),
-            },
-
-            {
+            },{
                 name: "Faces Shown",
                 data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.shown}}),
                 color: palette.color(),
-            },
-
-            {
+            },{
                 name: "Shares",
                 data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.shares}}),
                 color: palette.color(),
-            },
-
-            {
+            },{
                 name: "Audience",
                 data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.audience}}),
                 color: palette.color(),
-            },
-
-            {
+            },{
                 name: "Clickbacks",
                 data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.clickbacks}}),
                 color: palette.color(),
-            },
-
-            ]
+            },]
         });
 
     // new Rickshaw.Graph.Axis.Time( { graph: graph, timeUnit:time.unit('day') } );
@@ -247,7 +227,9 @@ function mkgraph(element, response) {
 
     graph.render();
 
-    var xAxis = new Rickshaw.Graph.Axis.Time({ graph: graph });
+    var xAxis = new Rickshaw.Graph.Axis.Time({ 
+            graph: graph,
+        });
     xAxis.render();
 
     }

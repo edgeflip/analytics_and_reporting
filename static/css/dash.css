@@ -8,21 +8,6 @@ body {
     width: 800px;
     }
 
-#datepicker {
-    float:right;
-    margin: 10px 0 0 40px;
-    }
-
-#daily { float:left; }
-
-#monthly {clear:both;}
-
-label {float:right;}
-
-.google-visualization-table-table {
-    margin: 20px 0;
-    }
-
 /* something, somewhere, is overriding font-sizes */
 .ui-widget {
     font-size: 10px;
@@ -90,6 +75,30 @@ button.charter {
     height:21px;
     width:21px;
     }
+
+
+/* styling for chart elements, would be nice to put this elsewhere */
+
+#modal {
+    text-align: center;
+    padding:30px 0;
+    }
+
+.chart {
+    margin: 30px auto;
+    width: 600px;
+    }
+
+#modal button { 
+    margin: 0 3px; 
+    }
+#datepicker {
+    margin:0 auto;
+    width: 600px;
+    text-align:center;
+    }
+
+
 
 
 table th {
