@@ -79,6 +79,27 @@ button.charter {
     width:21px;
     }
 
+table th {
+   /*  would be cool to match the edgeflip blue, but it reads as purple
+    *   on a thin line 
+    * border-bottom: 2px solid #4E5869;
+    */
+    border-bottom: 2px solid gray;
+    background: white;
+    padding: 5px;
+    }
+
+button.more {
+    padding:3px;
+    margin: 3px;
+    z-index:1! important;
+    }
+
+.tableFloatingHeader {
+    z-index:2;
+    }
+
+
 
 /* styling for chart elements, would be nice to put this elsewhere */
 
@@ -107,24 +128,12 @@ button.charter {
     font-size:15px;
     }
 
-
-
-table th {
-   /*  would be cool to match the edgeflip blue, but it reads as purple
-    *   on a thin line 
-    * border-bottom: 2px solid #4E5869;
-    */
-    border-bottom: 2px solid gray;
-    background: white;
-    padding: 5px;
+#hourlytable {
+    margin: 30px auto;
     }
 
-button.more {
-    padding:3px;
-    margin: 3px;
-    z-index:1! important;
+#tsver {
+    float: right;
+    margin-right: 30px;
     }
 
-.tableFloatingHeader {
-    z-index:2;
-    }

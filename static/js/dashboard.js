@@ -321,7 +321,7 @@ function tsv_data(response) {
         })
         .enter()
         .append("td")
-        .text(function(d){return d})
+        .text(function(d){return d+'\t'})
         .attr("class", "datapoint")
 
     // toggle visibility .. kinda awkward
