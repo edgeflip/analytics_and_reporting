@@ -82,9 +82,16 @@ function mkchart () {
 
     // stash this so other UI elements know which campaign is selected
     window.campaign_id = $(this).attr('root-id')  
+
+    // open a blank modal so the user knows the button click registered
+    $('#modal').dialog({'modal':true, 'width':1000}) // pass height if you need to
+    $('#modal').on( "dialogclose", function() {$('.chart').children().remove()});
     }
 
+
 function mkdatepicker (now) {
+
+    console.log('mking dates for', now);
 
     $('#datepicker').children().remove();
 
@@ -98,55 +105,73 @@ function mkdatepicker (now) {
 
     // oldest date
     container.append('button')
-        .text( d3.min(daterange).toUTCString().substr(0,15))
+        .text( d3.min(daterange).toUTCString().substr(0,16))
         .attr('id', 'first')
         .attr('data-index', 0);
-    $('#first').button( {'icons':{'primary':'ui-icon-seek-first'}});
+    $('#first').button( {
+            'icons':{'primary':'ui-icon-seek-first'},
+            'disabled': daterange.indexOf(now) == 0? true : false,
+            });
 
     // previous day
     var previndex = daterange.indexOf(now) == 0 ? 0 : daterange.indexOf(now)-1;
     container.append('button')
-        .text( daterange[previndex].toUTCString().substr(0,15))
+        .text( daterange[previndex].toUTCString().substr(0,11))
         .attr('id', 'prev')
         .attr('data-index', daterange.indexOf(now)-1);
-    $('#prev').button( {'icons':{'primary':'ui-icon-seek-prev'}});
+    $('#prev').button( {
+            'icons':{'primary':'ui-icon-seek-prev'},
+            'disabled': daterange.indexOf(now) == 0? true : false,
+            });
 
     // button for today, does nothing, but convenient for styling
     container.append('button')
-        .text( now.toUTCString().substr(0,15))
+        .text( now.toUTCString().substr(0,11))
         .attr('id', 'now')
         .attr('data-index', daterange.indexOf(now));
-    $('#now').button({disabled:true});
+    $('#now').button({disabled:false});
 
     // next day
     var nextindex = daterange.indexOf(now) == daterange.length-1 ? daterange.length-1 : daterange.indexOf(now) + 1;
     container.append('button')
-        .text( daterange[nextindex].toUTCString().substr(0,15))
+        .text( daterange[nextindex].toUTCString().substr(0,11))
         .attr('id', 'next')
         .attr('data-index', daterange.indexOf(now)+1);
-    $('#next').button( {'icons':{'primary':'ui-icon-seek-next'}});
+    $('#next').button( {
+            'icons':{'primary':'ui-icon-seek-next'},
+            'disabled': daterange.indexOf(now) == daterange.length-1? true : false,
+            });
 
     // newest date
     container.append('button')
-        .text( d3.max(daterange).toUTCString().substr(0,15))
+        .text( d3.max(daterange).toUTCString().substr(0,16))
         .attr('id', 'last')
         .attr('data-index', daterange.length-1);
-    $('#last').button( {'icons':{'primary':'ui-icon-seek-end'}});
+    $('#last').button( {
+            'icons':{'primary':'ui-icon-seek-end'},
+            'disabled': daterange.indexOf(now) == daterange.length-1? true : false,
+            });
 
     // click handlers for all
     $('#datepicker button').click( change_now );
 
     }
 
+
 function change_now (event, now) {
+
+    /* Change whatever day the detailed chart is focused on */
 
     var reqdate = typeof now !== 'undefined' ? now : window.daterange[$(this).attr('data-index')];
 
+    console.log('now',now);
+    console.log('reqdate',reqdate);
     $.post('/hourlydata/', {reqdate:reqdate.toJSON(), campaign:window.campaign_id}, on_hourly);
 
     // update datepicking controls
     mkdatepicker(reqdate);
     }
+
 
 function on_hourly (response) {
     window.response = response ;
@@ -156,14 +181,11 @@ function on_hourly (response) {
     }
 
 
+
 function mkdaily (response) {
 
     // the first load of data, a chart of all stats over the course of
     // the campaign, grouped by day
-
-    // open the modal.. but let's do that prev.
-    $('#modal').dialog({'modal':true, 'width':1000}) // pass height if you need to
-    $('#modal').on( "dialogclose", function() {$('#modal').children().remove()});
 
     window.response = response;  // debuggy but convenient
 
@@ -171,10 +193,12 @@ function mkdaily (response) {
     window.daterange = window.response.data.map( function(row){return new Date(row.day)} ); 
 
     // make datepicker controls now that we know the range of dates
-    mkdatepicker();
+    // mkdatepicker();
+
+    console.log('mkdaily', window.daterange);
 
     // load the first hourly chart from whatever we chose as default
-    change_now(null, window.daterange[$('#now').attr('data-index')]);
+    change_now(null, window.daterange[0]);
 
     // draw the first chart
     mkgraph('#dailygraph', response);
