@@ -78,9 +78,9 @@ class ETL(object):
                     """.format(table=table, table_id=table_id))
                 self.pconn.commit()
             except Exception as e:
-                raise
                 warning( '{}'.format(e))
                 self.pconn.rollback()
+                raise
 
         self.queue_users()
         self.queue_edges()
