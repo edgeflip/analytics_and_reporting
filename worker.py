@@ -216,6 +216,9 @@ class ETL(object):
                 RIGHT JOIN edges
                     ON users.fbid=edges.fbid_source
                 WHERE users.fbid IS NULL
+            UNION
+            SELECT DISTINCT(fbid) FROM USERS
+                WHERE users.fname IS NULL
             """)
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
@@ -258,7 +261,6 @@ class ETL(object):
             # insert a blank row so we stop looking for it
             warning('fbid {} not found in dynamo!'.format(fbid))
 
-            return
 
         # insert what we got
         self.pcur.execute("""
