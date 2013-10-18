@@ -36,8 +36,6 @@ class App(tornado.web.Application):
         handlers = [
             (r"/", MainHandler),  # main client template
             (r"/tabledata/?", ClientSummary),  # client summary data
-            (r"/dailydata/", DailyData),
-            (r"/hourlydata/", HourlyData),
             (r"/alldata/", AllData),
             (r"/login/", Login),
             (r"/logout/", Logout),
@@ -79,8 +77,6 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
     @tornado.web.authenticated
     def get(self):
 
-        """Basically just loads template.. why does this query for campaigns?"""
-
         ctx = {
             'STATIC_URL':'/static/',
             'user': self.get_current_user(),
@@ -120,7 +116,6 @@ class ClientSummary(AuthMixin, tornado.web.RequestHandler):
         return self.finish(json.dumps([dict(row) for row in self.application.pcur.fetchall()]))
 
 
-import datetime
 class AllData(AuthMixin, tornado.web.RequestHandler):
     @tornado.web.authenticated
     def post(self): 
@@ -142,93 +137,6 @@ class AllData(AuthMixin, tornado.web.RequestHandler):
         WHERE clientstats.campaign_id=campchain.parent_id
         AND campchain.root_id=%s
         GROUP BY time
-        ORDER BY time ASC
-        """, (camp_id,))
-
-        def mangle(row):
-            row = dict(row)
-            row['time'] = row['time'].isoformat()
-            return row
-
-        data = [mangle(row) for row in self.application.pcur.fetchall()]
-
-        # day = self.get_argument('day', None)
-        self.finish({'data':data})
-
-
-class HourlyData(AuthMixin, tornado.web.RequestHandler):
-
-    @tornado.web.authenticated
-    def post(self): 
-
-        # grab args and pass them into the django view
-        camp_id = self.get_argument('campaign')
-        day = self.get_argument('reqdate')
-        day = datetime.datetime.strptime(day, "%Y-%m-%dT%H:%M:%S.%fZ")
-
-        info( 'Getting hourly data for campaign {}, day {}'.format(camp_id, day))
-
-
-        """
-        super awks, naming the field `day` even though it's an hour, to match the daily format
-        to make the front end code more "usable"
-        """
-
-        # first, grab data for the bigger chart, grouped and summed by day
-        self.application.pcur.execute("""
-        SELECT DATE_TRUNC('hour', hour) as time,
-            SUM(visits) AS visits,
-            SUM(clicks) AS clicks,
-            SUM(auths) AS auths,
-            SUM(uniq_auths) AS uniq_auths,
-            SUM(shown) AS shown,
-            SUM(shares) AS shares,
-            SUM(audience) AS audience,
-            SUM(clickbacks) AS clickbacks
-            
-        FROM clientstats,campchain 
-        WHERE clientstats.campaign_id=campchain.parent_id
-        AND campchain.root_id=%s
-        AND DATE_TRUNC('day', hour) = %s
-        GROUP BY time
-        ORDER BY time ASC
-        """, (camp_id,day))
-
-        def mangle(row):
-            row = dict(row)
-            row['time'] = row['time'].isoformat()
-            return row
-
-        data = [mangle(row) for row in self.application.pcur.fetchall()]
-
-        # day = self.get_argument('day', None)
-        self.finish({'data':data})
-
-
-class DailyData(AuthMixin, tornado.web.RequestHandler):
-
-    @tornado.web.authenticated
-    def post(self): 
-        # grab args and pass them into the django view
-        camp_id = self.get_argument('campaign')
-        info( 'Getting daily data for campaign {}'.format(camp_id))
-
-        # first, grab data for the bigger chart, grouped and summed by day
-        self.application.pcur.execute("""
-        SELECT DATE_TRUNC('day', hour) as time,
-            SUM(visits) AS visits,
-            SUM(clicks) AS clicks,
-            SUM(auths) AS auths,
-            SUM(uniq_auths) AS uniq_auths,
-            SUM(shown) AS shown,
-            SUM(shares) AS shares,
-            SUM(audience) AS audience,
-            SUM(clickbacks) AS clickbacks
-            
-        FROM clientstats,campchain 
-        WHERE clientstats.campaign_id=campchain.parent_id
-        AND campchain.root_id=%s
-        GROUP BY time 
         ORDER BY time ASC
         """, (camp_id,))
 

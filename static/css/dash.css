@@ -117,11 +117,6 @@ button.more {
 #modal button { 
     margin: 0 3px; 
     }
-#datepicker {
-    margin:0 auto;
-    width: 600px;
-    text-align:center;
-    }
 
 #now {
     background:white;
@@ -131,6 +126,10 @@ button.more {
 
 #hourlytable {
     margin: 30px auto;
+    }
+
+#slider {
+    margin: 0 auto;
     }
 
 #tsver {

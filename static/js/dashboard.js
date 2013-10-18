@@ -76,7 +76,7 @@ function mksummary() {
 
 function mkchart () {
     // on click of a campaign, get more detailed data and draw some charts
-    $.post('/dailydata/', {'campaign':$(this).attr('root-id')}, mkdaily );
+    $.post('/alldata/', {'campaign':$(this).attr('root-id')}, on_hourly );
 
     // stash this so other UI elements know which campaign is selected
     window.campaign_id = $(this).attr('root-id')  
@@ -96,109 +96,20 @@ function mkchart () {
     }
 
 
-function mkdatepicker (now) {
-
-    $('#datepicker').children().remove();
-
-    var daterange = window.daterange;
-
-    // set current date somewhere in the middle if there is no now arg
-    now = typeof now !== 'undefined' ? now : daterange[ Math.floor(daterange.length/2)];
-
-    // BUTTONS
-    var container = d3.select('#datepicker');
-
-    // oldest date
-    container.append('button')
-        .text( d3.min(daterange).toUTCString().substr(0,16))
-        .attr('id', 'first')
-        .attr('data-index', 0);
-    $('#first').button( {
-            'icons':{'primary':'ui-icon-seek-first'},
-            'disabled': daterange.indexOf(now) == 0? true : false,
-            });
-
-    // previous day
-    var previndex = daterange.indexOf(now) == 0 ? 0 : daterange.indexOf(now)-1;
-    container.append('button')
-        .text( daterange[previndex].toUTCString().substr(0,11))
-        .attr('id', 'prev')
-        .attr('data-index', daterange.indexOf(now)-1);
-    $('#prev').button( {
-            'icons':{'primary':'ui-icon-seek-prev'},
-            'disabled': daterange.indexOf(now) == 0? true : false,
-            });
-
-    // button for today, does nothing, but convenient for styling
-    container.append('button')
-        .text( now.toUTCString().substr(0,11))
-        .attr('id', 'now')
-        .attr('data-index', daterange.indexOf(now));
-    $('#now').button({disabled:false});
-
-    // next day
-    var nextindex = daterange.indexOf(now) == daterange.length-1 ? daterange.length-1 : daterange.indexOf(now) + 1;
-    container.append('button')
-        .text( daterange[nextindex].toUTCString().substr(0,11))
-        .attr('id', 'next')
-        .attr('data-index', daterange.indexOf(now)+1);
-    $('#next').button( {
-            'icons':{'primary':'ui-icon-seek-next'},
-            'disabled': daterange.indexOf(now) == daterange.length-1? true : false,
-            });
-
-    // newest date
-    container.append('button')
-        .text( d3.max(daterange).toUTCString().substr(0,16))
-        .attr('id', 'last')
-        .attr('data-index', daterange.length-1);
-    $('#last').button( {
-            'icons':{'primary':'ui-icon-seek-end'},
-            'disabled': daterange.indexOf(now) == daterange.length-1? true : false,
-            });
-
-    // click handlers for all
-    $('#datepicker button').click( change_now );
-
-    }
-
-
-function change_now (event, now) {
-    /* Change whatever day the detailed chart is focused on */
-
-    var reqdate = typeof now !== 'undefined' ? now : window.daterange[$(this).attr('data-index')];
-    $.post('/hourlydata/', {reqdate:reqdate.toJSON(), campaign:window.campaign_id}, on_hourly);
-
-    // update datepicking controls
-    mkdatepicker(reqdate);
-
-    }
-
-
 function on_hourly (response) {
     // callback for a call to change_now basically
     window.response = response ;
 
-    $('#hourlygraph').children().remove();
-    mkgraph('#hourlygraph', response);
-    }
-
-
-
-function mkdaily (response) {
-    // the first load of data, a chart of all stats over the course of
-    // the campaign, grouped by day
-
-    window.response = response;  // debuggy but convenient
-
     // many things use this
     window.daterange = window.response.data.map( function(row){return new Date(row.time)} ); 
 
-    // load the first hourly chart from whatever we chose as default
-    change_now(null, window.daterange[0]);
+    $('#hourlygraph').children().remove();
+    var graph = mkgraph('#hourlygraph', response);
 
-    // draw the first chart
-    mkgraph('#dailygraph', response);
+    var slider = new Rickshaw.Graph.RangeSlider( {
+        graph: graph,
+        element: $('#slider')
+        } );
 
     // the control for revealing TSV data
     $('#tsver').button();
@@ -206,6 +117,7 @@ function mkdaily (response) {
         $.post('/alldata/', {campaign:window.campaign_id}, tsv_data);
         })
     $('#tsver').show();
+
     }
 
 
@@ -216,7 +128,7 @@ function mkgraph(element, response) {
     var graph = new Rickshaw.Graph( {
         element: document.querySelector(element),
         width: 600,
-        height: 150,
+        height: 300,
         renderer: 'line',
         series: [{
                 name: "Visits",
@@ -259,6 +171,8 @@ function mkgraph(element, response) {
         });
     xAxis.render();
 
+    return graph;
+
     }
 
 
@@ -299,7 +213,6 @@ function sort() {
     }
 
 function tsv_data(response) {
-    console.log(response);
     window.response = typeof response.data !== 'undefined' ? response.data : window.response;
 
     /* Load the data and build up the table element, then toggle displays */
@@ -330,6 +243,7 @@ function tsv_data(response) {
     $('#hourlytable').show();
     $('#modal .chart').hide()
     $('#modal #datepicker').hide();
+    $('#modal #slider').hide();
 
     // toggle button functionality
     $('#tsver span').text('Show Graphs');
@@ -337,6 +251,7 @@ function tsv_data(response) {
         $('#hourlytable').hide();
         $('#modal .chart').show();
         $('#modal #datepicker').show();
+        $('#slider').show();
         $('#tsver span').text('Show Raw Data');
         $('#tsver').off('click').on('click', tsv_data);
         });
