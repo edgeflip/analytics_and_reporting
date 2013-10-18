@@ -128,7 +128,7 @@ class AllData(AuthMixin, tornado.web.RequestHandler):
 
         # first, grab data for the bigger chart, grouped and summed by day
         self.application.pcur.execute("""
-        SELECT DATE_TRUNC('hour', hour) as day,
+        SELECT DATE_TRUNC('hour', hour) as time,
             SUM(visits) AS visits,
             SUM(clicks) AS clicks,
             SUM(auths) AS auths,
@@ -141,13 +141,13 @@ class AllData(AuthMixin, tornado.web.RequestHandler):
         FROM clientstats,campchain 
         WHERE clientstats.campaign_id=campchain.parent_id
         AND campchain.root_id=%s
-        GROUP BY day
-        ORDER BY day ASC
+        GROUP BY time
+        ORDER BY time ASC
         """, (camp_id,))
 
         def mangle(row):
             row = dict(row)
-            row['day'] = row['day'].isoformat()
+            row['time'] = row['time'].isoformat()
             return row
 
         data = [mangle(row) for row in self.application.pcur.fetchall()]
@@ -176,7 +176,7 @@ class HourlyData(AuthMixin, tornado.web.RequestHandler):
 
         # first, grab data for the bigger chart, grouped and summed by day
         self.application.pcur.execute("""
-        SELECT DATE_TRUNC('hour', hour) as day,
+        SELECT DATE_TRUNC('hour', hour) as time,
             SUM(visits) AS visits,
             SUM(clicks) AS clicks,
             SUM(auths) AS auths,
@@ -190,13 +190,13 @@ class HourlyData(AuthMixin, tornado.web.RequestHandler):
         WHERE clientstats.campaign_id=campchain.parent_id
         AND campchain.root_id=%s
         AND DATE_TRUNC('day', hour) = %s
-        GROUP BY day
-        ORDER BY day ASC
+        GROUP BY time
+        ORDER BY time ASC
         """, (camp_id,day))
 
         def mangle(row):
             row = dict(row)
-            row['day'] = row['day'].isoformat()
+            row['time'] = row['time'].isoformat()
             return row
 
         data = [mangle(row) for row in self.application.pcur.fetchall()]
@@ -215,7 +215,7 @@ class DailyData(AuthMixin, tornado.web.RequestHandler):
 
         # first, grab data for the bigger chart, grouped and summed by day
         self.application.pcur.execute("""
-        SELECT DATE_TRUNC('day', hour) as day,
+        SELECT DATE_TRUNC('day', hour) as time,
             SUM(visits) AS visits,
             SUM(clicks) AS clicks,
             SUM(auths) AS auths,
@@ -228,13 +228,13 @@ class DailyData(AuthMixin, tornado.web.RequestHandler):
         FROM clientstats,campchain 
         WHERE clientstats.campaign_id=campchain.parent_id
         AND campchain.root_id=%s
-        GROUP BY day 
-        ORDER BY day ASC
+        GROUP BY time 
+        ORDER BY time ASC
         """, (camp_id,))
 
         def mangle(row):
             row = dict(row)
-            row['day'] = row['day'].isoformat()
+            row['time'] = row['time'].isoformat()
             return row
 
         data = [mangle(row) for row in self.application.pcur.fetchall()]

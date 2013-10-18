@@ -192,7 +192,7 @@ function mkdaily (response) {
     window.response = response;  // debuggy but convenient
 
     // many things use this
-    window.daterange = window.response.data.map( function(row){return new Date(row.day)} ); 
+    window.daterange = window.response.data.map( function(row){return new Date(row.time)} ); 
 
     // load the first hourly chart from whatever we chose as default
     change_now(null, window.daterange[0]);
@@ -220,31 +220,31 @@ function mkgraph(element, response) {
         renderer: 'line',
         series: [{
                 name: "Visits",
-                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.visits}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.visits}}),
                 color: palette.color(),
             },{
                 name: "Clicks",
-                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.clicks}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.clicks}}),
                 color: palette.color(),
             },{
                 name: "Unique Auths",
-                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.uniq_auths}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.uniq_auths}}),
                 color: palette.color(),
             },{
                 name: "Faces Shown",
-                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.shown}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.shown}}),
                 color: palette.color(),
             },{
                 name: "Shares",
-                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.shares}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.shares}}),
                 color: palette.color(),
             },{
                 name: "Audience",
-                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.audience}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.audience}}),
                 color: palette.color(),
             },{
                 name: "Clickbacks",
-                data: response.data.map(function(row) {return {x:new Date(row.day).getTime()/1000, y:row.clickbacks}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.clickbacks}}),
                 color: palette.color(),
             },]
         });
@@ -305,7 +305,7 @@ function tsv_data(response) {
     /* Load the data and build up the table element, then toggle displays */
 
     // we're manually adding column headers in the template right now, TODO, send this serverside
-    var columns = ['day', 'visits', 'clicks', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
+    var columns = ['time', 'visits', 'clicks', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
     var table = d3.select('#hourlytable')
 
     // build rows
