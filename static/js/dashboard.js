@@ -246,13 +246,13 @@ function tsv_data(response) {
     $('#modal #slider').hide();
 
     // toggle button functionality
-    $('#tsver span').text('Show Graphs');
+    $('#tsver span').text('Data as Graphs');
     $('#tsver').off('click').on('click', function () {
         $('#hourlytable').hide();
         $('#modal .chart').show();
         $('#modal #datepicker').show();
         $('#slider').show();
-        $('#tsver span').text('Show Raw Data');
+        $('#tsver span').text('Data as TSV');
         $('#tsver').off('click').on('click', tsv_data);
         });
     }
