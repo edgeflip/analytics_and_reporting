@@ -357,7 +357,6 @@ class ETL(object):
 
         # distinct fbids from visits missing from users
         # union: secondaries that we don't have user records for
-        # union: users that we guess may have changed
         self.pcur.execute("""
             SELECT DISTINCT(visits.fbid) AS fbid FROM users 
                 RIGHT JOIN visits 
@@ -378,8 +377,11 @@ class ETL(object):
 
         # probably missing, but potentially we need to scan for this user again
         self.pcur.execute("""
-            SELECT DISTINCT(fbid) FROM USERS
-                WHERE users.fname IS NULL
+            SELECT DISTINCT(users.fbid) FROM users
+                INNER JOIN visits ON users.fbid=visits.fbid
+                WHERE users.email IS NULL
+                AND users.fname IS NOT NULL
+                AND visits.fbid IS NOT NULL
             """)
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
@@ -463,8 +465,10 @@ class ETL(object):
 
     def queue_edges(self):
         self.pcur.execute("""
-            SELECT DISTINCT fbid FROM visits 
-            WHERE fbid NOT IN (SELECT DISTINCT fbid_target FROM edges)
+            SELECT DISTINCT fbid FROM 
+                (SELECT DISTINCT fbid FROM visits 
+                WHERE fbid NOT IN (SELECT DISTINCT fbid_target FROM edges)
+                )
             AND fbid NOT IN (SELECT DISTINCT fbid FROM missingedges)
             ORDER BY updated DESC
             """)
@@ -516,81 +520,4 @@ class ETL(object):
 
         info( 'Successfully updated edges table for fbid {}'.format(fbid))
         self.pconn.commit()
-
-
-
-class App(ETL, tornado.web.Application):
-
-    def __init__(self, debug, daemon=True):
-        """
-        Settings
-        """
-        settings = dict(
-            cookie_secret="changemeplz",
-            login_url="/login/", 
-            template_path= "templates",
-            static_path= "static",
-            xsrf_cookies= False,
-            debug = debug, #autoreloads on changes, among other things
-        )
-
-        """
-        map URLs to Handlers, with regex patterns
-        """
-        handlers = [
-        #    (r"/", MainHandler),
-        ]
-
-        # build connections to redshift, RDS
-        self.connect()
-
-        if daemon:
-            # TODO: maintain connection, rebuild cursors
-            P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
-            P.start()
-   
-            # keep our stats realtime
-            self.extract()
-            P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
-            P.start()
-
-            # crawl for users and edges, lightly
-            P = tornado.ioloop.PeriodicCallback(self.extract_user, 1000)
-            P.start()
-            P = tornado.ioloop.PeriodicCallback(self.extract_edge, 2000)
-            P.start()
-
-        tornado.web.Application.__init__(self, handlers, **settings)
-
-    def fromRDS(self):
-        self.queue_users()
-        self.queue_edges()
-
-def main():
-    from tornado.options import define, options
-    define("port", default=8001, help="run on the given port", type=int)
-    define("debug", default=False, help="debug mode", type=bool)
-    define("fromRDS", default=False, help="ETL process for data from RDS")
-    define("fromDynamo", default=False, help="ETL process for data from Dynamo")
-    define("mkCSV", default=False, help="generate and upload client CSV file")
-
-    tornado.options.parse_command_line()
-
-    if options.mkCSV:
-        # running as a batch job, don't daemonize
-        from tasks import mkCSV, mkemailCSV
-        app = App(options.debug, False)
-        mkCSV(app)
-        mkemailCSV(app)
-
-    else:
-        app = App(options.debug, True)
-        http_server = tornado.httpserver.HTTPServer(app)
-        http_server.listen(options.port)
-        info( 'Serving on port %d' % options.port )
-        tornado.ioloop.IOLoop.instance().start()
-
-
-if __name__ == "__main__":
-    main()
 
