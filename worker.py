@@ -64,6 +64,9 @@ class App(ETL, tornado.web.Application):
         P = tornado.ioloop.PeriodicCallback(self.extract_edge, 2000)
         P.start()
 
+    def scanDynamo(self):
+        import pdb;pdb.set_trace()
+
 
 def main():
     from tornado.options import define, options
@@ -71,6 +74,7 @@ def main():
     define("debug", default=False, help="debug mode", type=bool)
     define("fromRDS", default=False, help="ETL process for data from RDS")
     define("fromDynamo", default=False, help="ETL process for data from Dynamo")
+    define("scanDynamo", default=False, help="Full scan of Dynamo tables for missing keys")
     define("mkCSV", default=False, help="generate and upload client CSV file")
 
     tornado.options.parse_command_line()
@@ -78,7 +82,7 @@ def main():
     if options.mkCSV:
         # running as a batch job, don't daemonize
         from tasks import mkCSV, mkemailCSV
-        app = App(options.debug, False)
+        app = App(options.debug)
         mkCSV(app)
         mkemailCSV(app)
 
@@ -90,6 +94,9 @@ def main():
 
         if options.fromRDS:
             app.fromRDS()
+
+        if options.scanDynamo:
+            app.scanDynamo()
 
         http_server = tornado.httpserver.HTTPServer(app)
         http_server.listen(options.port)
