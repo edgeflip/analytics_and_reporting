@@ -55,9 +55,9 @@ class App(ETL, tornado.web.Application):
         P = tornado.ioloop.PeriodicCallback(self.queue_edges, 1000 * 60 * 15)
         P.start()
 
-        P = tornado.ioloop.PeriodicCallback(self.extract_user, 1000)
+        # top priority, grab new users
+        P = tornado.ioloop.PeriodicCallback(self.extract_user, 1000 * .8)
         P.start()
-
         # slightly less priority, updating users
         P = tornado.ioloop.PeriodicCallback(self.refresh_user, 1000 * 5)
         P.start()
