@@ -137,3 +137,15 @@ button.more {
     margin-right: 30px !important;
     }
 
+
+/* rickshaw default overrides, primarily the legend */
+
+.rickshaw_legend {
+    color: #404040;
+    background: #FFF;
+    text-align: left;
+    float: left;
+    margin-left: 30px;
+    margin-top: 180px;
+    }
+

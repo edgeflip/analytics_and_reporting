@@ -87,11 +87,14 @@ function mkchart () {
         // clear old data
         $('.chart').children().remove()
         $('#hourlytable tbody').children().remove();
+        $('#modal #legend').children().remove();
+        $('#modal #slider').children('a').remove();
 
         // and make sure we are showing charts, not TSV data!
         $('#hourlytable').hide();
         $('#modal .chart').show()
-        $('#modal #datepicker').show();
+        $('#modal #legend').hide();
+        $('#modal #slider').hide();
         });
     }
 
@@ -104,12 +107,10 @@ function on_hourly (response) {
     window.daterange = window.response.data.map( function(row){return new Date(row.time)} ); 
 
     $('#hourlygraph').children().remove();
-    var graph = mkgraph('#hourlygraph', response);
+    var graph = mkgraph('#graph', response);
 
-    var slider = new Rickshaw.Graph.RangeSlider( {
-        graph: graph,
-        element: $('#slider')
-        } );
+    $('#legend').show();
+    $('#slider').show();
 
     // the control for revealing TSV data
     $('#tsver').button();
@@ -164,10 +165,30 @@ function mkgraph(element, response) {
     // new Rickshaw.Graph.Axis.Time( { graph: graph, timeUnit:time.unit('day') } );
     new Rickshaw.Graph.HoverDetail({ graph: graph, yFormatter: function (x) {return x} });
 
+    var legend = new Rickshaw.Graph.Legend( {
+        graph: graph,
+        element: document.getElementById('legend')
+        } );
+
+    var highlight = new Rickshaw.Graph.Behavior.Series.Highlight( {
+        graph: graph,
+        legend: legend
+        } );
+
+    var shelving = new Rickshaw.Graph.Behavior.Series.Toggle( {
+        graph: graph,
+        legend: legend
+        } );
+
+    var slider = new Rickshaw.Graph.RangeSlider( {
+        graph: graph,
+        element: document.getElementById('slider')
+        } );
+
     graph.render();
 
     var xAxis = new Rickshaw.Graph.Axis.Time({ 
-            graph: graph,
+        graph: graph,
         });
     xAxis.render();
 
@@ -212,6 +233,7 @@ function sort() {
     d3.selectAll("tr.child").sort(function(a,b) {return window.sorter(a[metric],b[metric])} );
     }
 
+
 function tsv_data(response) {
     window.response = typeof response.data !== 'undefined' ? response.data : window.response;
 
@@ -240,18 +262,18 @@ function tsv_data(response) {
         .attr("class", "datapoint")
 
     // toggle visibility .. kinda awkward
-    $('#hourlytable').show();
     $('#modal .chart').hide()
-    $('#modal #datepicker').hide();
+    $('#modal #legend').hide();
     $('#modal #slider').hide();
+    $('#hourlytable').show();
 
     // toggle button functionality
     $('#tsver span').text('Data as Graphs');
     $('#tsver').off('click').on('click', function () {
         $('#hourlytable').hide();
         $('#modal .chart').show();
-        $('#modal #datepicker').show();
-        $('#slider').show();
+        $('#modal #legend').show();
+        $('#modal #slider').show();
         $('#tsver span').text('Data as TSV');
         $('#tsver').off('click').on('click', tsv_data);
         });
