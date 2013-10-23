@@ -127,7 +127,7 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
             'updated': self.application.updated,
         }
 
-        return self.render('clientsum.html', **ctx)
+        return self.render('clientdash.html', **ctx)
 
 
 class ClientSummary(AuthMixin, tornado.web.RequestHandler):
