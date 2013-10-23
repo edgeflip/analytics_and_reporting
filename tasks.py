@@ -104,6 +104,7 @@ def mkCSV(application, t=False, client_id=2):
     smtp.connect()
     smtp.sendmail('japhy@edgeflip.com', ['japhy@edgeflip.com',], msg.as_string())
 
+
 def mkemailCSV(application, client_id=2):
     info('Making email CSV for client {}'.format(client_id))
 
@@ -143,4 +144,55 @@ def mkemailCSV(application, client_id=2):
 
     info('Done.')
 
+def mkemailsummary(application, client_id=2):
+    rs.execute("""
+    SELECT
+        root_id,
+        campaigns.name,
+        source,
+        SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) AS visits,
+        SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
+        SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) AS auths,
+        COUNT(DISTINCT CASE WHEN t.type='authorized' THEN fbid ELSE NULL END) AS uniq_auths,
+        COUNT(DISTINCT CASE WHEN t.type='shown' THEN fbid ELSE NULL END) AS shown,
+        COUNT(DISTINCT CASE WHEN t.type='shared' THEN fbid ELSE NULL END) AS shares,
+        COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) AS audience,
+        COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_visit_id ELSE NULL END) AS clickbacks
+    FROM
+        (
+            SELECT e1.visit_id,
+                e1.campaign_id,
+                e1.content_id,
+                e1.friend_fbid,
+                e1.type,
+                e1.content,
+                e1.activity_id,
+                NULL AS cb_visit_id,
+                e1.updated
+            FROM events e1
+                WHERE type <> 'clickback'
+            UNION
+            (
+            SELECT e3.visit_id,
+                e3.campaign_id,
+                e2.content_id,
+                e3.friend_fbid,
+                e2.type,
+                e2.content,
+                e2.activity_id,
+                e2.visit_id AS cb_visit_id,
+                e2.updated
+            FROM events e2
+            LEFT JOIN events e3 USING (activity_id)
+                WHERE e2.type='clickback' AND e3.type='shared'
+            )
+        ) t
+    INNER JOIN (SELECT fbid, source, visit_id FROM visits) v
+        USING (visit_id)
+    INNER JOIN campchain ON parent_id=campaign_id
+    INNER JOIN campaigns ON campchain.root_id=campaigns.campaign_id
+    WHERE campaigns.client_id=2
+    GROUP BY root_id, source, campaigns.name
+    ORDER BY root_id DESC
+    """, (client_id,))
 
