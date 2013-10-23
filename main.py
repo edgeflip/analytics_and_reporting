@@ -35,7 +35,8 @@ class App(tornado.web.Application):
         """
         handlers = [
             (r"/", MainHandler),  # main client template
-            (r"/tabledata/?", ClientSummary),  # client summary data
+            (r"/edgeplorer/?", Edgeplorer),  # internal fbid explorer template
+            (r"/tabledata/", ClientSummary),  # client summary data
             (r"/alldata/", AllData),
             (r"/login/", Login),
             (r"/logout/", Logout),
@@ -62,6 +63,10 @@ class App(tornado.web.Application):
         from keys import redshift
         self.pconn = psycopg2.connect( **redshift)
 
+        debug('Connecting to RDS..')
+        from keys import rds
+        self.mconn = MySQLdb.connect( **rds)
+
         # TODO flip autocommit on in this cursor, dodge hanging transactions
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
@@ -70,6 +75,45 @@ class App(tornado.web.Application):
     def update(self):
         """ Someday, sync this with the data moving, somehow """
         self.updated = strftime('%x %X')
+
+
+class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
+
+    @tornado.web.authenticated
+    def get(self):
+        ctx = {
+            'STATIC_URL':'/static/',
+            'user': self.get_current_user(),
+            'updated': self.application.updated,
+        }
+
+        return self.render('edgeplorer.html', **ctx)
+
+    def post(self):
+        fbid = int(self.get_argument('fbid')) 
+
+        #datetimes aren't JSON serializable :(
+        def mangle(row, keys=['time',]):
+            row = dict(row)
+            for key in keys:
+                row[key] = row[key].isoformat() if row[key] else None
+            return row
+
+        self.application.pcur.execute("""
+        SELECT * FROM users WHERE fbid=%s
+        """, (fbid,))
+        users = [mangle(row, ['birthday','updated']) for row in self.application.pcur.fetchall()]
+
+        self.application.pcur.execute("""
+        SELECT events.* FROM events,visits 
+        WHERE events.visit_id=visits.visit_id 
+            AND fbid=%s 
+        ORDER BY event_datetime ASC;
+        """, (fbid,))
+        events = [mangle(row, ['updated', 'event_datetime', 'created']) for row in self.application.pcur.fetchall()]
+
+        self.finish( {'users':users, 'events':events})
+
 
 
 class MainHandler(AuthMixin, tornado.web.RequestHandler):
