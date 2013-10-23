@@ -162,6 +162,8 @@ function mkgraph(element, response) {
             },]
         });
 
+    window.graph = graph;
+
     // new Rickshaw.Graph.Axis.Time( { graph: graph, timeUnit:time.unit('day') } );
     new Rickshaw.Graph.HoverDetail({ graph: graph, yFormatter: function (x) {return x} });
 
@@ -187,10 +189,24 @@ function mkgraph(element, response) {
 
     graph.render();
 
-    var xAxis = new Rickshaw.Graph.Axis.Time({ 
+    // var xAxis = new Rickshaw.Graph.Axis.Time({ 
+    var xAxis = new Rickshaw.Graph.Axis.X({ 
         graph: graph,
+        orientation: 'bottom',
+        element: document.getElementById('xAxis'),
         });
     xAxis.render();
+
+
+    /*
+    var yAxis = new Rickshaw.Graph.Axis.Y({
+        graph: graph,
+        // orientation: 'left',
+        element: document.getElementById('yAxis'),
+        });
+    yAxis.render();
+    */
+
 
     return graph;
 
