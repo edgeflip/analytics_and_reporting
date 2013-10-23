@@ -44,8 +44,8 @@
 <div id="bounds">
     <img src="http://edgeflip.com/logo.png" width="443" height="120" id="logo" />
 
-    {% if errors %}
-        <p id="errors">Your username and password didn't match. Please try again.</p>
+    {% if error %}
+        <p id="errors">{{ error }}</p>
     {% end %}
 
     <form method="post" action="/login/" id="loginform">
