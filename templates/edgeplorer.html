@@ -29,8 +29,18 @@
 
 {% block body %}
 
+<style type="text/css">
+    table {
+        border: 1px solid gray;
+        width: 100%;
+        margin: 13px;
+    }
+</style>
+
 <form>
    FBID: <input name="fbid" type="text" id="fbid" /> <input id="submitter" type="submit" value="edgeplore!"/>
 </form>
+
+<div id="data"></div>
 
 {% end %}

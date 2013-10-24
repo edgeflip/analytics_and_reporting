@@ -90,7 +90,10 @@ class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
         return self.render('edgeplorer.html', **ctx)
 
     def post(self):
-        fbid = int(self.get_argument('fbid')) 
+        try:
+            fbid = int(self.get_argument('fbid')) 
+        except:
+            raise HTTPError(404)
 
         #datetimes aren't JSON serializable :(
         def mangle(row, keys=['time',]):
@@ -112,7 +115,12 @@ class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
         """, (fbid,))
         events = [mangle(row, ['updated', 'event_datetime', 'created']) for row in self.application.pcur.fetchall()]
 
-        self.finish( {'users':users, 'events':events})
+        self.application.pcur.execute("""
+        SELECT * FROM edges WHERE fbid_target=%s;
+        """, (fbid,))
+        edges = [mangle(row, ['updated',]) for row in self.application.pcur.fetchall()]
+
+        self.finish( {'users':users, 'events':events, 'edges':edges})
 
 
 
