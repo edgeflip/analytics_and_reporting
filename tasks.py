@@ -240,7 +240,11 @@ def mkSumEmail(application, client_id=2):
     import smtplib
     smtp = smtplib.SMTP()
     smtp.connect()
-    smtp.sendmail('japhy@edgeflip.com', ['japhy@edgeflip.com','rayid@edgeflip.com','matt@edgeflip.com'], msg.as_string())
+    smtp.sendmail('japhy@edgeflip.com', ['japhy@edgeflip.com',
+                                        'alex@terrymcauliffe.com',
+                                        'dbutterfield@bpimedia.com',
+                                        'aelman@bpimedia.com',
+                                        ], msg.as_string())
 
 
 """
