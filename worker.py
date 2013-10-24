@@ -76,6 +76,7 @@ def main():
     define("fromDynamo", default=False, help="ETL process for data from Dynamo")
     define("scanDynamo", default=False, help="Full scan of Dynamo tables for missing keys")
     define("mkCSV", default=False, help="generate and upload client CSV file")
+    define("mkVAEmail", default=False, help="generate and email VA a CSV of stats with sources")
 
     tornado.options.parse_command_line()
 
@@ -85,6 +86,11 @@ def main():
         app = App(options.debug)
         mkCSV(app)
         mkemailCSV(app)
+
+    elif options.mkVAEmail:
+        from tasks import mkSumEmail
+        app = App(options.debug)
+        mkSumEmail(app)
 
     else:
         app = App(options.debug)
