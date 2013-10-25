@@ -87,12 +87,14 @@ function mkchart () {
         // clear old data
         $('.chart').children().remove()
         $('#hourlytable tbody').children().remove();
-        $('#modal #legend').children().remove();
-        $('#modal #slider').children('a').remove();
+        $('#legend').children().remove();
+        $('#slider').children('a').remove();
+        $('#xAxis').children().remove();
+        $('#yAxis').children().remove();
 
         // and make sure we are showing charts, not TSV data!
         $('#hourlytable').hide();
-        $('#chart_container').show()
+        $('#chart_container').hide()
         });
     }
 
@@ -107,15 +109,13 @@ function on_hourly (response) {
     $('#hourlygraph').children().remove();
     var graph = mkgraph('#graph', response);
 
+    // reveal chart container
+    $('#chart_container').show()
+
 
     // the control for revealing TSV data
     $('#tsver').button();
     $('#tsver').off('click').on('click', tsv_data);
-    /*
-    $('#tsver').off('click').on('click', function() {
-        $.post('/alldata/', {campaign:window.campaign_id}, tsv_data);
-        })
-    */
     $('#tsver').show();
 
     }
@@ -163,7 +163,6 @@ function mkgraph(element, response) {
 
     window.graph = graph;
 
-    // new Rickshaw.Graph.Axis.Time( { graph: graph, timeUnit:time.unit('day') } );
     new Rickshaw.Graph.HoverDetail({ graph: graph, yFormatter: function (x) {return x} });
 
     var legend = new Rickshaw.Graph.Legend( {
@@ -188,19 +187,21 @@ function mkgraph(element, response) {
 
     graph.render();
 
+    // new Rickshaw.Graph.Axis.Time( { graph: graph, timeUnit:time.unit('day') } );
     // var xAxis = new Rickshaw.Graph.Axis.Time({ 
     var xAxis = new Rickshaw.Graph.Axis.X({ 
         graph: graph,
+        ticks: 3,
         orientation: 'bottom',
         element: document.getElementById('xAxis'),
         });
     xAxis.render();
 
-
     /*
     var yAxis = new Rickshaw.Graph.Axis.Y({
         graph: graph,
-        // orientation: 'left',
+        orientation: 'left',
+        ticks: 3,
         element: document.getElementById('yAxis'),
         });
     yAxis.render();

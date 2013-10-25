@@ -109,19 +109,14 @@ button.more {
     padding:30px 0;
     }
 
-.chart {
-    margin: 30px auto;
+#graph {
+    margin: 30px auto 2px;
     width: 600px;
     }
 
-#modal button { 
-    margin: 0 3px; 
-    }
-
-#now {
-    background:white;
-    border: none;
-    font-size:15px;
+#xAxis {
+    margin: 0 auto;
+    width: 600px;
     }
 
 #hourlytable {
@@ -133,8 +128,8 @@ button.more {
     }
 
 #tsver {
-    float: right;
-    margin-right: 30px !important;
+    float: left;
+    margin-left: 30px !important;
     }
 
 
@@ -144,8 +139,11 @@ button.more {
     color: #404040;
     background: #FFF;
     text-align: left;
-    float: left;
-    margin-left: 30px;
-    margin-top: 180px;
+    }
+
+#legend {
+    position:absolute;
+    top: 130px;
+    left: 30px;
     }
 
