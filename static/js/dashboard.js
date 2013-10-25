@@ -92,16 +92,14 @@ function mkchart () {
 
         // and make sure we are showing charts, not TSV data!
         $('#hourlytable').hide();
-        $('#modal .chart').show()
-        $('#modal #legend').hide();
-        $('#modal #slider').hide();
+        $('#chart_container').show()
         });
     }
 
 
 function on_hourly (response) {
-    // callback for a call to change_now basically
-    window.response = response ;
+    // receipt of hourly data for this campaign, draw some charts
+    window.response = response;
 
     // many things use this
     window.daterange = window.response.data.map( function(row){return new Date(row.time)} ); 
@@ -109,14 +107,15 @@ function on_hourly (response) {
     $('#hourlygraph').children().remove();
     var graph = mkgraph('#graph', response);
 
-    $('#legend').show();
-    $('#slider').show();
 
     // the control for revealing TSV data
     $('#tsver').button();
+    $('#tsver').off('click').on('click', tsv_data);
+    /*
     $('#tsver').off('click').on('click', function() {
         $.post('/alldata/', {campaign:window.campaign_id}, tsv_data);
         })
+    */
     $('#tsver').show();
 
     }
@@ -251,7 +250,6 @@ function sort() {
 
 
 function tsv_data(response) {
-    window.response = typeof response.data !== 'undefined' ? response.data : window.response;
 
     /* Load the data and build up the table element, then toggle displays */
 
@@ -261,7 +259,7 @@ function tsv_data(response) {
 
     // build rows
     var body = table.append("tbody")
-    var rows = body.selectAll("tr").data(window.response)
+    var rows = body.selectAll("tr").data(window.response.data)
         .enter()
         .append("tr");
 
@@ -278,18 +276,14 @@ function tsv_data(response) {
         .attr("class", "datapoint")
 
     // toggle visibility .. kinda awkward
-    $('#modal .chart').hide()
-    $('#modal #legend').hide();
-    $('#modal #slider').hide();
+    $('#chart_container').hide();
     $('#hourlytable').show();
 
     // toggle button functionality
     $('#tsver span').text('Data as Graphs');
     $('#tsver').off('click').on('click', function () {
         $('#hourlytable').hide();
-        $('#modal .chart').show();
-        $('#modal #legend').show();
-        $('#modal #slider').show();
+        $('#chart_container').show();
         $('#tsver span').text('Data as TSV');
         $('#tsver').off('click').on('click', tsv_data);
         });
