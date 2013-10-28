@@ -198,7 +198,6 @@ function mkgraph(element, response) {
             // find range to display either dates or times .. ideally calc this not for every tick (once per update)
             var stacktimes = graph.series[0].stack.map( function(row) {return row.x})
             var tdelta = d3.max(stacktimes) - d3.min(stacktimes);
-            console.log(tdelta);
 
             var d = new Date(x*1000)
             return tdelta > 86400 ? d.toLocaleDateString() : d.toLocaleTimeString(); 
