@@ -110,7 +110,7 @@ button.more {
     }
 
 #graph {
-    margin: 30px auto 2px;
+    margin: 30px auto 0;
     width: 600px;
     }
 
@@ -119,18 +119,30 @@ button.more {
     width: 600px;
     }
 
+#yAxis{
+    position:absolute;
+    top: 60px;
+    left: 140px;
+    height:320px;
+    }
+
 #hourlytable {
     margin: 30px auto;
     }
 
 #slider {
-    margin: 0 auto;
+    margin: 10px auto 0;
+    background: #F5F5F5;
     }
 
 #tsver {
-    float: left;
-    margin-left: 30px !important;
+    margin: 50px auto 0;
     }
+
+#xMin{ float: left; margin:8px 130px; }
+#xMax{ float: right; margin:8px 130px; }
+#yMin{ position:absolute; top:350px; left:180px; }
+#yMax{ position:absolute; top:150px; left:180px; }
 
 
 /* rickshaw default overrides, primarily the legend */

@@ -191,22 +191,38 @@ function mkgraph(element, response) {
     // var xAxis = new Rickshaw.Graph.Axis.Time({ 
     var xAxis = new Rickshaw.Graph.Axis.X({ 
         graph: graph,
-        ticks: 3,
+        ticks: 4,
         orientation: 'bottom',
         element: document.getElementById('xAxis'),
+        tickFormat: function(x) {
+            // find range to display either dates or times .. ideally calc this not for every tick (once per update)
+            var stacktimes = graph.series[0].stack.map( function(row) {return row.x})
+            var tdelta = d3.max(stacktimes) - d3.min(stacktimes);
+            console.log(tdelta);
+
+            var d = new Date(x*1000)
+            return tdelta > 86400 ? d.toLocaleDateString() : d.toLocaleTimeString(); 
+            }
         });
     xAxis.render();
 
-    /*
     var yAxis = new Rickshaw.Graph.Axis.Y({
         graph: graph,
         orientation: 'left',
-        ticks: 3,
+        ticks: 4,
         element: document.getElementById('yAxis'),
         });
     yAxis.render();
-    */
 
+    // permanent X min and maxes
+    $('#xMin').text( d3.min(response.data.map(function(row) {return new Date(row.time)})).toLocaleDateString());
+    $('#xMax').text( d3.max(response.data.map(function(row) {return new Date(row.time)})).toLocaleDateString());
+
+    // window Y min and max
+    graph.onUpdate( function() {
+        yMax = d3.max(graph.series.map( function(row) {return d3.max(row.stack.map( function(r) {return r.y}))}));
+        $('#yMax').text(yMax);
+        });
 
     return graph;
 
