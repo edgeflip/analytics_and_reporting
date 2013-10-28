@@ -6,6 +6,7 @@ body {
 #bounds {
     margin: 0 auto;
     width: 800px;
+    text-align:center;
     }
 
 /* something, somewhere, is overriding font-sizes */
@@ -14,8 +15,15 @@ body {
     border: none;
     }
 
+/* in theory, this will get rid of that damned blue "focus" highlight */
 .ui-state-highlight, .ui-state-focus{
     }
+
+
+.loading {
+    margin: 30px auto;
+    }
+
 
 /* SUMMARY TABLE STYLING */
 
@@ -102,7 +110,7 @@ button.more {
 
 
 
-/* styling for chart elements, would be nice to put this elsewhere */
+/* CHART MODAL STYLING */
 
 #modal {
     text-align: center;

@@ -19,6 +19,8 @@ function mksummary() {
     // initial load of summary data
     $.get("/tabledata/", function (response) {
 
+        $('.loading').hide();
+
         window.response = JSON.parse(response); // TODO: this should automatically work
 
         // we're manually adding column headers in the template right now, TODO, send this serverside
@@ -66,7 +68,6 @@ function mksummary() {
             .attr("class", "datapoint");
 
         // like d3.sum(response.map(function(d,i) {console.log(d);return d.visits}))
-
 
         })
     }
