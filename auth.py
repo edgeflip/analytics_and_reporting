@@ -80,7 +80,7 @@ def authorized(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if not self.superuser:
-            return self.render("login.html", error='Wrong password.')
+            return self.render("login.html", error='You are not authorized to view that page.')
 
         return method(self, *args, **kwargs)
     return wrapper
