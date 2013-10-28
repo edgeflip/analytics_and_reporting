@@ -62,14 +62,6 @@ class App(tornado.web.Application):
         debug('Connecting to redshift..')
         from keys import redshift
         self.pconn = psycopg2.connect( **redshift)
-<<<<<<< HEAD
-
-        debug('Connecting to RDS..')
-        from keys import rds
-        self.mconn = MySQLdb.connect( **rds)
-
-=======
->>>>>>> tornado
         # TODO flip autocommit on in this cursor, dodge hanging transactions
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
@@ -84,10 +76,11 @@ class App(tornado.web.Application):
         """ Someday, sync this with the data moving, somehow """
         self.updated = strftime('%x %X')
 
-
+from auth import authorized
 class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
 
     @tornado.web.authenticated
+    @authorized
     def get(self):
         ctx = {
             'STATIC_URL':'/static/',
