@@ -45,7 +45,6 @@ function mksummary() {
             .text(function(d){return d})
             .attr("class", "datapoint")
 
-        /*
         // and a chart-toggler at the end
         rows.append("td")
             .append("button")
@@ -56,7 +55,6 @@ function mksummary() {
         $('.charter').button( {'icons':{'primary':'ui-icon-image'}, 'text':false});
         // bind a click function for charts
         $('button.charter').click(mkchart);
-        */
 
         // and a final summary row
         body.append("tr").attr("class", "totals")
