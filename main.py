@@ -76,6 +76,7 @@ class App(tornado.web.Application):
         """ Someday, sync this with the data moving, somehow """
         self.updated = strftime('%x %X')
 
+
 from auth import authorized
 class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
 
@@ -107,6 +108,7 @@ class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
         SELECT * FROM users WHERE fbid=%s
         """, (fbid,))
         users = [mangle(row, ['birthday','updated']) for row in self.application.pcur.fetchall()]
+        debug(users)
 
         self.application.pcur.execute("""
         SELECT events.* FROM events,visits 
@@ -115,11 +117,13 @@ class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
         ORDER BY event_datetime ASC;
         """, (fbid,))
         events = [mangle(row, ['updated', 'event_datetime', 'created']) for row in self.application.pcur.fetchall()]
+        debug(events)
 
         self.application.pcur.execute("""
         SELECT * FROM edges WHERE fbid_target=%s;
         """, (fbid,))
         edges = [mangle(row, ['updated',]) for row in self.application.pcur.fetchall()]
+        debug(edges)
 
         self.finish( {'users':users, 'events':events, 'edges':edges})
 
