@@ -63,10 +63,14 @@ class App(tornado.web.Application):
         debug('Connecting to redshift..')
         from keys import redshift
         self.pconn = psycopg2.connect( **redshift)
-
         # TODO flip autocommit on in this cursor, dodge hanging transactions
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
+        debug('Connecting to RDS..')
+        from keys import rds
+        self.mconn = MySQLdb.connect( **rds)
+        self.mcur = self.mconn.cursor()
+        
         debug('Done.')
 
     def update(self):
@@ -85,7 +89,7 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
             'updated': self.application.updated,
         }
 
-        # look up campaigns
+        # look up campaigns..  but why?
         q = """
             SELECT campaign_id, name FROM campaigns WHERE client_id=2 AND campaign_id IN
                 (SELECT DISTINCT(root_id) FROM campchain)
@@ -93,6 +97,8 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
             """
         self.application.pcur.execute(q)
         ctx['campaigns'] = self.application.pcur.fetchall()
+
+        import pdb;pdb.set_trace()
 
         return self.render('clientsum.html', **ctx)
 

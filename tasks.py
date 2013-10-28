@@ -286,7 +286,7 @@ class ETL(object):
     edge_fbids = set([]) # fbids in the users table that we don't have edge info for
 
     def connect(self):
-        """make db connections, would be cool to time this out"""
+        # set up db connections, should put this in worker.py probably
 
         """
         I think that long running transactions cause:
