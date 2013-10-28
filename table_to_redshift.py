@@ -38,7 +38,7 @@ def _map(val):
         'double precision' : 'double precision', 
         'boolean' : 'boolean', 
         'char' : 'char(50)',  # ehhh.. this is usually ips
-        'varchar' : 'varchar', 
+        'varchar' : 'varchar(1028)', 
         'date' : 'date', 
         'timestamp': 'timestamp',
         'datetime': 'timestamp',  # kinda magic

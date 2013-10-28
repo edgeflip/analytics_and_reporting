@@ -13,7 +13,13 @@ rds = dict(
     db='edgeflip'
 )
 
+# kinda odd naming, but used for s3 as well as dynamo
 aws = dict(
     aws_access_key_id='AKIAIQOKJC2POKATFP5Q',
     aws_secret_access_key='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'
+)
+
+wes_aws = dict(
+    aws_access_key_id='AKIAJDIWDVVGWXFOSPEQ',
+    aws_secret_access_key='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'
 )

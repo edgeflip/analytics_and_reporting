@@ -62,14 +62,22 @@ class App(tornado.web.Application):
         debug('Connecting to redshift..')
         from keys import redshift
         self.pconn = psycopg2.connect( **redshift)
+<<<<<<< HEAD
 
         debug('Connecting to RDS..')
         from keys import rds
         self.mconn = MySQLdb.connect( **rds)
 
+=======
+>>>>>>> tornado
         # TODO flip autocommit on in this cursor, dodge hanging transactions
         self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
 
+        debug('Connecting to RDS..')
+        from keys import rds
+        self.mconn = MySQLdb.connect( **rds)
+        self.mcur = self.mconn.cursor()
+        
         debug('Done.')
 
     def update(self):
