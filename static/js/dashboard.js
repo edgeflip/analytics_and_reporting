@@ -19,6 +19,7 @@ function mksummary() {
     // initial load of summary data
     $.get("/tabledata/", function (response) {
 
+        // turn off our loading gif
         $('.loading').hide();
 
         window.response = JSON.parse(response); // TODO: this should automatically work
@@ -80,7 +81,7 @@ function mkchart () {
     $.post('/alldata/', {'campaign':$(this).attr('root-id')}, on_hourly );
 
     // stash this so other UI elements know which campaign is selected
-    window.campaign_id = $(this).attr('root-id')  
+    window.campaign_id = $(this).attr('root-id');
 
     // open a blank modal so the user knows the button click registered
     $('#modal').dialog({'modal':true, 'width':1000}) // pass height if you need to
@@ -93,16 +94,23 @@ function mkchart () {
         $('#xAxis').children().remove();
         $('#yAxis').children().remove();
 
-        // and make sure we are showing charts, not TSV data!
+        // reset the modal to show the loading spinner
         $('#hourlytable').hide();
-        $('#chart_container').hide()
+        $('#chart_container').hide();
+        $('#tsver').hide();
+        $('#modal .loading').show();
         });
+
+    $('#modal .loading').show();
     }
 
 
 function on_hourly (response) {
     // receipt of hourly data for this campaign, draw some charts
     window.response = response;
+
+    $('#modal .loading').hide();
+    $('#tsver').show();
 
     // many things use this
     window.daterange = window.response.data.map( function(row){return new Date(row.time)} ); 
