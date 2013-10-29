@@ -282,6 +282,10 @@ class ETL(object):
 
     #queues of users to hit dynamo for
     new_fbids = set([])  # fbids in events/edges that aren't in the users table
+
+    primary_fbids = set([])  # fbids in events that aren't in the users table yet
+    secondary_fbids = set([])  # edges that aren't in the users table
+
     old_fbids = set([])  # fbids in the users table that we suspect have changed
     edge_fbids = set([]) # fbids in the users table that we don't have edge info for
 
@@ -359,7 +363,7 @@ class ETL(object):
 
         self.pcur.execute( """
             SELECT campaign_id, name FROM campaigns WHERE campaign_id IN
-                (SELECT DISTINCT(campaign_id) FROM events WHERE type='button_load')
+                (SELECT DISTINCT(campaign_id) FROM events)
             ORDER BY campaign_id DESC
             """)
         roots = [row['campaign_id'] for row in self.pcur.fetchall()]

@@ -98,8 +98,6 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
         self.application.pcur.execute(q)
         ctx['campaigns'] = self.application.pcur.fetchall()
 
-        import pdb;pdb.set_trace()
-
         return self.render('clientsum.html', **ctx)
 
 
