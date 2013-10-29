@@ -5,6 +5,7 @@ from boto.s3.connection import S3Connection
 
 import datetime
 import MySQLdb
+import MySQLdb.cursors
 from time import strftime, time
 from collections import defaultdict
 
@@ -304,7 +305,8 @@ class ETL(object):
 
         debug('Connecting to RDS..')
         from keys import rds
-        self.mconn = MySQLdb.connect( **rds)
+        self.mconn = MySQLdb.connect( cursorclass=MySQLdb.cursors.DictCursor, **rds)
+        self.mcur = self.mconn.cursor()
 
         from keys import aws
         self.dconn = boto.dynamodb.connect_to_region('us-east-1', **aws)
@@ -316,6 +318,8 @@ class ETL(object):
     def extract(self):
         """ main for syncing with RDS """
         from table_to_redshift import main as rds2rs
+
+        self.mkchains()
 
         for table, table_id in [
             ('visits', 'visit_id'), 
@@ -361,12 +365,14 @@ class ETL(object):
         after campaigns have been loaded to avoid race conditions
         """
 
-        self.pcur.execute( """
-            SELECT campaign_id, name FROM campaigns WHERE campaign_id IN
-                (SELECT DISTINCT(campaign_id) FROM events)
-            ORDER BY campaign_id DESC
-            """)
-        roots = [row['campaign_id'] for row in self.pcur.fetchall()]
+        self.mcur.execute( """
+        SELECT t1.campaign_id 
+        FROM campaign_properties AS t1 
+            LEFT JOIN campaign_properties AS t2 ON t1.campaign_id=t2.fallback_campaign_id 
+        WHERE t2.fallback_campaign_id IS NULL;
+        """)
+
+        roots = [row['campaign_id'] for row in self.mcur.fetchall()]
 
         for root_id in roots:
             debug('Wiping root {}'.format(root_id))
@@ -387,12 +393,13 @@ class ETL(object):
             parent_id = root_id 
             while fallback_id:
                 # crawl down the chain
-                debug('crawling root {}, on child {}'.format(root_id, fallback_id))
 
                 self.pcur.execute("""
                 SELECT fallback_campaign_id FROM campaign_properties WHERE campaign_id=%s
                 """, (parent_id,))
                 fallback_id = self.pcur.fetchone()['fallback_campaign_id']
+
+                debug('crawling root {}, on child {}'.format(root_id, fallback_id))
 
                 self.pcur.execute("""
                 INSERT INTO campchain VALUES (%s,%s,%s)
@@ -483,7 +490,6 @@ class ETL(object):
                     ON users.fbid=edges.fbid_source
                 WHERE users.fbid IS NULL
             """)
-
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
         info("Found {} unknown fbids".format(len(fbids)))
