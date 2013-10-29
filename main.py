@@ -163,7 +163,7 @@ class ClientSummary(AuthMixin, tornado.web.RequestHandler):
                 (SELECT campchain.root_id, campaigns.campaign_id, campaigns.name 
                     FROM campaigns, campchain
                     WHERE campchain.parent_id=campaigns.campaign_id
-                    AND client_id=2
+                    AND client_id=%s
                 ) AS meta
 
             WHERE stats.root_id=meta.campaign_id
