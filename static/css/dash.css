@@ -167,3 +167,9 @@ button.more {
     left: 30px;
     }
 
+/* superuser controls */
+
+#clientpicker {
+    float:right;
+    margin: 30px;
+    }

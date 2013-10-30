@@ -29,6 +29,17 @@
 
 
 {% block body %}
+
+{% if superuser %}
+ <select id="clientpicker" onchange="mksummary()">
+ {% for client_id, name in clients %}
+   <option value="{{client_id}}" >{{name}}</option>
+ {% end %}
+ </select>
+{% end %}
+
+
+
 <div id="bounds">
 
     <table class="floathead" id="sumtable">

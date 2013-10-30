@@ -17,10 +17,16 @@ function init() {
 
 function mksummary() {
     // initial load of summary data
-    $.get("/tabledata/", function (response) {
+    
+    var client_id =  $('#clientpicker').length == 1 ? $('#clientpicker option:selected').val() : 0;
+
+    $.get("/tabledata/", {'client':client_id}, function (response) {
 
         // turn off our loading gif
         $('.loading').hide();
+
+        // clear old data if this is a superuser change
+        $('tbody').remove();
 
         window.response = JSON.parse(response); // TODO: this should automatically work
 

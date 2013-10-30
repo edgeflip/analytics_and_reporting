@@ -36,8 +36,8 @@ class App(tornado.web.Application):
         handlers = [
             (r"/", MainHandler),  # main client template
             (r"/edgeplorer/?", Edgeplorer),  # internal fbid explorer template
-            (r"/tabledata/", ClientSummary),  # client summary data
-            (r"/alldata/", AllData),
+            (r"/tabledata/", ClientSummary),  # client summary data for all campaigns
+            (r"/alldata/", AllData),  # hourly data for a particular campaign
             (r"/login/", Login),
             (r"/logout/", Logout),
         ]
@@ -137,8 +137,17 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
         ctx = {
             'STATIC_URL':'/static/',
             'user': self.get_current_user(),
+            'superuser': self.superuser,
             'updated': self.application.updated,
         }
+
+        # if it's a superuser, look up the clients to populate the chooser
+        if self.superuser:
+            self.application.mcur.execute("""
+                SELECT client_id, name FROM clients ORDER BY client_id DESC
+            """)
+            clients = [row for row in self.application.mcur.fetchall()]
+            ctx['clients'] = clients
 
         return self.render('clientdash.html', **ctx)
 
@@ -146,6 +155,15 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
 class ClientSummary(AuthMixin, tornado.web.RequestHandler):
     @tornado.web.authenticated
     def get(self, client=2):  # at some point, grab client by looking at the auth'd user
+
+        client = int(self.get_argument('client'))  # let junk 500
+
+        if not client:
+            # client sent 0, should look up by user
+            client = 2
+        else:
+            # check authorization for arbitrary client ids
+            if not self.superuser: raise HTTPError(403)
 
         # very similar to the sums per campaign, but join on root campaign
         self.application.pcur.execute("""
@@ -177,6 +195,8 @@ class AllData(AuthMixin, tornado.web.RequestHandler):
     @tornado.web.authenticated
     def post(self): 
         camp_id = self.get_argument('campaign')
+
+        #TODO: check that the signed in user is authorized to pull data for this campaign
 
         # first, grab data for the bigger chart, grouped and summed by day
         self.application.pcur.execute("""
