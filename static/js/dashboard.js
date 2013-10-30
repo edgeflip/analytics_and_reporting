@@ -17,6 +17,8 @@ function init() {
 
 function mksummary() {
     // initial load of summary data
+
+    $('#clientpicker').attr('disabled', 'disabled');
     
     var client_id =  $('#clientpicker').length == 1 ? $('#clientpicker option:selected').val() : 0;
 
@@ -27,6 +29,7 @@ function mksummary() {
 
         // clear old data if this is a superuser change
         $('tbody').remove();
+        $('#clientpicker').removeAttr('disabled');
 
         window.response = JSON.parse(response); // TODO: this should automatically work
 
