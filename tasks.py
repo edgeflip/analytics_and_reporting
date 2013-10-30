@@ -386,9 +386,10 @@ class ETL(object):
             fallback_id = self.pcur.fetchone()['fallback_campaign_id']
 
             # create row for root:
-            self.pcur.execute("""
-            INSERT INTO campchain VALUES (%s,%s,%s)
-            """, (root_id, None, fallback_id))
+            if not fallback_id:
+                self.pcur.execute("""
+                INSERT INTO campchain VALUES (%s,%s,%s)
+                """, (root_id, root_id, fallback_id))
 
             parent_id = root_id 
             while fallback_id:
@@ -411,6 +412,7 @@ class ETL(object):
             self.pconn.commit()
 
 
+    # COUNT(DISTINCT t.visit_id) AS visits,
     def mkstats(self):
         megaquery = """
     CREATE TABLE _clientstats AS
