@@ -175,22 +175,29 @@ class Edgedash(AuthMixin, tornado.web.RequestHandler):
 
         # at some point let the UI configure the timespan but whatevs for right now
         tstart = self.get_argument('tstart', datetime.today() - timedelta(days=1))
-        tend = self.get_argument('tend', datetime.today())
+        # tend = self.get_argument('tend', datetime.today())
 
         # hrm, kinda want to group by campaign_id also
         self.application.pcur.execute("""
-        SELECT type, COUNT(event_id), DATE_TRUNC('hour', event_datetime) AS hour, campaign_id
-        FROM events 
+        SELECT type, COUNT(event_id), DATE_TRUNC('hour', event_datetime) AS hour, events.campaign_id, campaigns.name
+        FROM events, campaigns
         WHERE event_datetime > %s
-        GROUP BY hour, type, campaign_id
+        AND campaigns.campaign_id=events.campaign_id
+        GROUP BY hour, type, events.campaign_id, campaigns.name
         """, (tstart,))
 
-        data = [dict(row) for row in self.application.pcur.fetchall()]
+        def mangle(row):
+            row = dict(row)
+            row['hour'] = row['hour'].isoformat()
+            return row
+
+        data = [mangle(row) for row in self.application.pcur.fetchall()]
 
         return self.finish({'data':data})
 
 
 class ClientSummary(AuthMixin, tornado.web.RequestHandler):
+
     @tornado.web.authenticated
     def get(self, client=2):  # at some point, grab client by looking at the auth'd user
 
