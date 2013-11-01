@@ -4,6 +4,8 @@ import MySQLdb
 from time import strftime
 from collections import defaultdict
 
+from datetime import datetime, timedelta
+
 import tornado.httpserver
 import tornado.ioloop
 import tornado.options
@@ -36,6 +38,7 @@ class App(tornado.web.Application):
         handlers = [
             (r"/", MainHandler),  # main client template
             (r"/edgeplorer/?", Edgeplorer),  # internal fbid explorer template
+            (r"/edgedash/?", Edgedash),  # internal dashboard
             (r"/tabledata/", ClientSummary),  # client summary data for all campaigns
             (r"/alldata/", AllData),  # hourly data for a particular campaign
             (r"/login/", Login),
@@ -150,6 +153,41 @@ class MainHandler(AuthMixin, tornado.web.RequestHandler):
             ctx['clients'] = clients
 
         return self.render('clientdash.html', **ctx)
+
+
+class Edgedash(AuthMixin, tornado.web.RequestHandler):
+    @tornado.web.authenticated
+    @authorized
+    def get(self):
+        # render a base template
+        ctx = {
+            'STATIC_URL':'/static/',
+            'user': self.get_current_user(),
+            'superuser': self.superuser,
+            }
+
+        return self.render('internaldash.html', **ctx)
+
+    @tornado.web.authenticated
+    @authorized
+    def post(self):
+        # load various data sets I suppose.
+
+        # at some point let the UI configure the timespan but whatevs for right now
+        tstart = self.get_argument('tstart', datetime.today() - timedelta(days=1))
+        tend = self.get_argument('tend', datetime.today())
+
+        # hrm, kinda want to group by campaign_id also
+        self.application.pcur.execute("""
+        SELECT type, COUNT(event_id), DATE_TRUNC('hour', event_datetime) AS hour, campaign_id
+        FROM events 
+        WHERE event_datetime > %s
+        GROUP BY hour, type, campaign_id
+        """, (tstart,))
+
+        data = [dict(row) for row in self.application.pcur.fetchall()]
+
+        return self.finish({'data':data})
 
 
 class ClientSummary(AuthMixin, tornado.web.RequestHandler):
