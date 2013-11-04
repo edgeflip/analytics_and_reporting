@@ -522,7 +522,7 @@ class ETL(object):
             """)
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
         info("Found {} unknown primary fbids".format(len(fbids)))
-        self.primary_fbids = self.new_fbids.union(set(fbids))
+        self.primary_fbids = self.primary_fbids.union(set(fbids))
 
         self.pcur.execute("""
             SELECT DISTINCT(edges.fbid_source) AS fbid FROM users
@@ -533,7 +533,7 @@ class ETL(object):
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
         info("Found {} unknown secondary fbids".format(len(fbids)))
-        self.secondary_fbids = self.new_fbids.union(set(fbids))
+        self.secondary_fbids = self.secondary_fbids.union(set(fbids))
 
         # probably missing, but potentially we need to scan for this user again
         self.pcur.execute("""
