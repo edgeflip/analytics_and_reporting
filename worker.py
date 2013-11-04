@@ -41,13 +41,20 @@ class App(ETL, tornado.web.Application):
  
     @mail_tracebacks
     def fromRDS(self): 
-        # keep our stats realtime
+        """
+        Pretty basic ETL sort of loop for grabbing tables out of RDS
+        """
         self.extract()
         P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
         P.start()
 
     @mail_tracebacks
     def fromDynamo(self):
+        """
+        Crawl for fbids from RDS records and spider out into dynamo.. because
+        we need to stream records out at a steady pace, we queue things up
+        according to various priorities
+        """
 
         self.queue_edges()
         self.queue_users()
@@ -79,7 +86,6 @@ def main():
     tornado.options.parse_command_line()
 
     if options.mkCSV:
-        # running as a batch job, don't daemonize
         from tasks import mkCSV, mkemailCSV
         app = App(options.debug)
         mkCSV(app)
@@ -99,9 +105,6 @@ def main():
         if options.fromRDS:
             app.fromRDS()
 
-        # http_server = tornado.httpserver.HTTPServer(app)
-        # http_server.listen(options.port)
-        # info( 'Serving on port %d' % options.port )
         tornado.ioloop.IOLoop.instance().start()
 
 
