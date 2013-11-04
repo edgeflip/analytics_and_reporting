@@ -613,12 +613,20 @@ class ETL(object):
             else:
                 info( "found {} edges from fbid {}".format( len(result.response['Items']), fbid))
 
-            edges =[ ("({},{},{},{},{},{},{},{},{},{},{},{},'{}')".format(
+            edges = []
+            for edge in result.response['Items']:
+                """ 
+                some, relatively rare, dynamo records only have px3 data, so wall_comms, post_comms, etc
+                are missing..  the workaround is to make a defaultdict with 0s ? tho maybe NULL would be better
+                """
+                d = defaultdict(lambda:0)
+                d.update(edge)
+                edge = d
+                edges.append( "({},{},{},{},{},{},{},{},{},{},{},{},'{}')".format(
                             edge['fbid_source'], edge['fbid_target'], edge['wall_comms'], edge['post_comms'], 
                             edge['tags'], edge['wall_posts'], edge['mut_friends'], edge['stat_likes'], 
                             edge['photos_other'], edge['post_likes'], edge['photos_target'], edge['stat_comms'], 
                             datetime.datetime.fromtimestamp( edge['updated'])) )
-                    for edge in result.response['Items']]
 
             # insert what we got
             self.pcur.execute("""
