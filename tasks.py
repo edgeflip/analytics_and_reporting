@@ -486,7 +486,12 @@ class ETL(object):
                 RIGHT JOIN visits 
                     ON visits.fbid=users.fbid 
                 WHERE users.fbid IS NULL 
-            UNION
+            """)
+        fbids = [row['fbid'] for row in self.pcur.fetchall()]
+        info("Found {} unknown primary fbids".format(len(fbids)))
+        self.primary_fbids = self.new_fbids.union(set(fbids))
+
+        self.pcur.execute("""
             SELECT DISTINCT(edges.fbid_source) AS fbid FROM users
                 RIGHT JOIN edges
                     ON users.fbid=edges.fbid_source
@@ -494,9 +499,8 @@ class ETL(object):
             """)
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
-        info("Found {} unknown fbids".format(len(fbids)))
-
-        self.new_fbids = self.new_fbids.union(set(fbids))
+        info("Found {} unknown secondary fbids".format(len(fbids)))
+        self.secondary_fbids = self.new_fbids.union(set(fbids))
 
         # probably missing, but potentially we need to scan for this user again
         self.pcur.execute("""
@@ -516,8 +520,8 @@ class ETL(object):
 
     def extract_user(self):
         """ Grab a fbid off of the queue and get it out of dynamo """
-        if len(self.new_fbids) < 1: return
-        fbid = self.new_fbids.pop()
+        if len(self.primary_fbids) < 1 and len(self.secondary_fbids) < 1: return
+        fbid = self.primary_fbids.pop() if len(self.primary_fbids) > 0 else self.secondary_fbids.pop()
 
         # null fbids :\
         if not fbid: return
