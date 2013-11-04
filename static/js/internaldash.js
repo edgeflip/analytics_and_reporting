@@ -6,27 +6,32 @@ function init() {
 
         window.response = response;
 
+        var height = 300;
+        var width = 800;
+
         var chart = d3.select('#graph').append('svg')
-            .attr('width', 800)
-            .attr('height', 800)
+            .attr('width', width)
+            .attr('height', height)
 
-        var tdata = response.data.map( function(row){return new Date(row.hour)})
+        // var tdata = response.data.map( function(row){return new Date(row.hour)})
         var x = d3.scale.linear()
-            .domain([d3.min(tdata), d3.max(tdata)])
-            .range([0,600])
+            .domain( d3.extent(response.data, function(row) {return new Date(row.hour)}) )
+            .range([0,width])
 
-        var ydata = response.data.map( function(row){return new Date(row.count)})
-        var y = d3.scale.linear()
-            .domain([d3.min(ydata), d3.max(ydata)])
-            .range([0,800])
+        var y = d3.scale.log()
+            .domain( d3.extent(response.data, function(row) {return row.count}) )
+            .range([0,height])
+
+        var keys = d3.set( response.data.map( function(row) {return row.type}) ).values().sort(d3.ascending);
+        var z = d3.scale.linear().range(['#F00', '#00F']).domain([0,keys.length])
 
         chart.selectAll("rect").data(response.data)
             .enter().append("rect")
-            .attr('x', function(d) {return x(new Date(d.hour))})
-            .attr('y', function(d) {return 800- (y(d.count))})
+            .attr('x', function(d) {return x(new Date(d.hour)) + keys.indexOf(d.type)})
+            .attr('y', function(d) {return height- (y(d.count))})
             .attr('width', 2)
             .attr('height', function(d,i) {return y(d.count)})
-
+            .attr('fill', function(d,i) {return z(keys.indexOf(d.type))})
         })
     }
 
