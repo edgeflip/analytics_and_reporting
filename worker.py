@@ -99,9 +99,9 @@ def main():
         if options.fromRDS:
             app.fromRDS()
 
-        http_server = tornado.httpserver.HTTPServer(app)
-        http_server.listen(options.port)
-        info( 'Serving on port %d' % options.port )
+        # http_server = tornado.httpserver.HTTPServer(app)
+        # http_server.listen(options.port)
+        # info( 'Serving on port %d' % options.port )
         tornado.ioloop.IOLoop.instance().start()
 
 

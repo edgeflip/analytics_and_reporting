@@ -352,8 +352,6 @@ class ETL(object):
         """ main for syncing with RDS """
         from table_to_redshift import main as rds2rs
 
-        self.mkchains()
-
         for table, table_id in [
             ('visits', 'visit_id'), 
             ('campaigns', 'campaign_id'),
