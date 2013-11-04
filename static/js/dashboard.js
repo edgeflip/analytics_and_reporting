@@ -232,8 +232,9 @@ function mkgraph(element, response) {
     yAxis.render();
 
     // permanent X min and maxes
-    $('#xMin').text( d3.min(response.data.map(function(row) {return new Date(row.time)})).toLocaleDateString());
-    $('#xMax').text( d3.max(response.data.map(function(row) {return new Date(row.time)})).toLocaleDateString());
+    var extents = d3.extent( response.data, function(row) {return new Date(row.time)})
+    $('#xMin').text( extents[0].toLocaleDateString());
+    $('#xMax').text( extents[1].toLocaleDateString());
 
     // window Y min and max
     graph.onUpdate( function() {
