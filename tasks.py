@@ -388,6 +388,7 @@ class ETL(object):
 
         self.mkchains()
         self.mkstats()
+        info('RDS extraction complete, waiting for next run')
 
 
     def mkchains(self):
@@ -449,7 +450,7 @@ class ETL(object):
     SELECT
         t.campaign_id,
         date_trunc('hour', t.updated) as hour,
-        SUM(CASE WHEN t.type='button_load' THEN 1 ELSE 0 END) AS visits,
+        SUM(CASE WHEN t.type IN ('button_load', 'faces_page_load') THEN 1 ELSE 0 END) AS visits,
         SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
         SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) AS auths,
         COUNT(DISTINCT CASE WHEN t.type='authorized' THEN fbid ELSE NULL END) AS uniq_auths,
