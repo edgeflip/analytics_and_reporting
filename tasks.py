@@ -1,22 +1,55 @@
 from logging import debug, info, warning, error
 import cStringIO
 import csv
-from boto.s3.connection import S3Connection
-
-import datetime
-import MySQLdb
 from time import strftime, time
 from collections import defaultdict
+import datetime
+import functools
 
+from boto.s3.connection import S3Connection
+import boto.dynamodb
+import MySQLdb
+import MySQLdb.cursors
+import psycopg2
+import psycopg2.extras
+
+from tornado.web import HTTPError
 import tornado.httpserver
 import tornado.ioloop
 import tornado.options
 import tornado.web
 
-import psycopg2
-import psycopg2.extras
-import boto.dynamodb
-from tornado.web import HTTPError
+
+def mail_tracebacks(method):
+    """
+    Decorator to forward tracebacks on to concerned parties
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        #check for debug mode
+        try:
+            return method(self, *args, **kwargs)
+        except:
+            import traceback
+            traceback.print_exc()
+
+            # if debug mode is off, email the stack trace
+            from tornado.options import options
+            if options.debug: raise
+
+            err = traceback.format_exc()
+
+            import email
+            msg = email.Message.Message()
+            msg['Subject'] = 'UNHANDLED EXCEPTION'
+            msg.set_payload(err)
+
+            import smtplib
+            smtp = smtplib.SMTP()
+            smtp.connect()
+            smtp.sendmail('error@edgeflip.com', ['japhy@edgeflip.com',], msg.as_string())
+
+    return wrapper
 
 
 def mkCSV(application, t=False, client_id=2):
@@ -282,6 +315,10 @@ class ETL(object):
 
     #queues of users to hit dynamo for
     new_fbids = set([])  # fbids in events/edges that aren't in the users table
+
+    primary_fbids = set([])  # fbids in events that aren't in the users table yet
+    secondary_fbids = set([])  # edges that aren't in the users table
+
     old_fbids = set([])  # fbids in the users table that we suspect have changed
     edge_fbids = set([]) # fbids in the users table that we don't have edge info for
 
@@ -300,7 +337,8 @@ class ETL(object):
 
         debug('Connecting to RDS..')
         from keys import rds
-        self.mconn = MySQLdb.connect( **rds)
+        self.mconn = MySQLdb.connect( cursorclass=MySQLdb.cursors.DictCursor, **rds)
+        self.mcur = self.mconn.cursor()
 
         from keys import aws
         self.dconn = boto.dynamodb.connect_to_region('us-east-1', **aws)
@@ -309,9 +347,12 @@ class ETL(object):
  
         debug('Done.')
 
+    @mail_tracebacks
     def extract(self):
         """ main for syncing with RDS """
         from table_to_redshift import main as rds2rs
+
+        self.mkchains()
 
         for table, table_id in [
             ('visits', 'visit_id'), 
@@ -357,12 +398,14 @@ class ETL(object):
         after campaigns have been loaded to avoid race conditions
         """
 
-        self.pcur.execute( """
-            SELECT campaign_id, name FROM campaigns WHERE campaign_id IN
-                (SELECT DISTINCT(campaign_id) FROM events WHERE type='button_load')
-            ORDER BY campaign_id DESC
-            """)
-        roots = [row['campaign_id'] for row in self.pcur.fetchall()]
+        self.mcur.execute( """
+        SELECT t1.campaign_id 
+        FROM campaign_properties AS t1 
+            LEFT JOIN campaign_properties AS t2 ON t1.campaign_id=t2.fallback_campaign_id 
+        WHERE t2.fallback_campaign_id IS NULL;
+        """)
+
+        roots = [row['campaign_id'] for row in self.mcur.fetchall()]
 
         for root_id in roots:
             debug('Wiping root {}'.format(root_id))
@@ -376,19 +419,21 @@ class ETL(object):
             fallback_id = self.pcur.fetchone()['fallback_campaign_id']
 
             # create row for root:
-            self.pcur.execute("""
-            INSERT INTO campchain VALUES (%s,%s,%s)
-            """, (root_id, None, fallback_id))
+            if not fallback_id:
+                self.pcur.execute("""
+                INSERT INTO campchain VALUES (%s,%s,%s)
+                """, (root_id, root_id, fallback_id))
 
             parent_id = root_id 
             while fallback_id:
                 # crawl down the chain
-                debug('crawling root {}, on child {}'.format(root_id, fallback_id))
 
                 self.pcur.execute("""
                 SELECT fallback_campaign_id FROM campaign_properties WHERE campaign_id=%s
                 """, (parent_id,))
                 fallback_id = self.pcur.fetchone()['fallback_campaign_id']
+
+                debug('crawling root {}, on child {}'.format(root_id, fallback_id))
 
                 self.pcur.execute("""
                 INSERT INTO campchain VALUES (%s,%s,%s)
@@ -463,6 +508,7 @@ class ETL(object):
         debug('Done.')
 
 
+    @mail_tracebacks
     def queue_users(self):
         t = time()
 
@@ -473,18 +519,21 @@ class ETL(object):
                 RIGHT JOIN visits 
                     ON visits.fbid=users.fbid 
                 WHERE users.fbid IS NULL 
-            UNION
+            """)
+        fbids = [row['fbid'] for row in self.pcur.fetchall()]
+        info("Found {} unknown primary fbids".format(len(fbids)))
+        self.primary_fbids = self.primary_fbids.union(set(fbids))
+
+        self.pcur.execute("""
             SELECT DISTINCT(edges.fbid_source) AS fbid FROM users
                 RIGHT JOIN edges
                     ON users.fbid=edges.fbid_source
                 WHERE users.fbid IS NULL
             """)
 
-
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
-        info("Found {} unknown fbids".format(len(fbids)))
-
-        self.new_fbids = self.new_fbids.union(set(fbids))
+        info("Found {} unknown secondary fbids".format(len(fbids)))
+        self.secondary_fbids = self.secondary_fbids.union(set(fbids))
 
         # probably missing, but potentially we need to scan for this user again
         self.pcur.execute("""
@@ -502,10 +551,11 @@ class ETL(object):
         info( 'Queued users for extraction in {}'.format(time()-t))
 
 
+    @mail_tracebacks
     def extract_user(self):
         """ Grab a fbid off of the queue and get it out of dynamo """
-        if len(self.new_fbids) < 1: return
-        fbid = self.new_fbids.pop()
+        if len(self.primary_fbids) < 1 and len(self.secondary_fbids) < 1: return
+        fbid = self.primary_fbids.pop() if len(self.primary_fbids) > 0 else self.secondary_fbids.pop()
 
         # null fbids :\
         if not fbid: return
@@ -516,6 +566,7 @@ class ETL(object):
         info( 'Extracted fbid {} from Dynamo'.format(fbid))
 
 
+    @mail_tracebacks
     def refresh_user(self):
         """ Take a fbid (probably blank) and check that it looks good """
         if len(self.old_fbids) < 1: return
@@ -574,6 +625,7 @@ class ETL(object):
         return data
 
 
+    @mail_tracebacks
     def queue_edges(self):
         self.pcur.execute("""
             SELECT DISTINCT fbid FROM visits 
@@ -587,7 +639,7 @@ class ETL(object):
 
         info("{} fbids queued for edge extraction".format(len(self.edge_fbids)))
 
-
+    @mail_tracebacks
     def extract_edge(self):
         if len(self.edge_fbids) < 1: return
         fbid = self.edge_fbids.pop()
@@ -601,12 +653,20 @@ class ETL(object):
             else:
                 info( "found {} edges from fbid {}".format( len(result.response['Items']), fbid))
 
-            edges =[ ("({},{},{},{},{},{},{},{},{},{},{},{},'{}')".format(
+            edges = []
+            for edge in result.response['Items']:
+                """ 
+                some, relatively rare, dynamo records only have px3 data, so wall_comms, post_comms, etc
+                are missing..  the workaround is to make a defaultdict with 0s ? tho maybe NULL would be better
+                """
+                d = defaultdict(lambda:0)
+                d.update(edge)
+                edge = d
+                edges.append( "({},{},{},{},{},{},{},{},{},{},{},{},'{}')".format(
                             edge['fbid_source'], edge['fbid_target'], edge['wall_comms'], edge['post_comms'], 
                             edge['tags'], edge['wall_posts'], edge['mut_friends'], edge['stat_likes'], 
                             edge['photos_other'], edge['post_likes'], edge['photos_target'], edge['stat_comms'], 
                             datetime.datetime.fromtimestamp( edge['updated'])) )
-                    for edge in result.response['Items']]
 
             # insert what we got
             self.pcur.execute("""
@@ -629,3 +689,4 @@ class ETL(object):
 
         info( 'Successfully updated edges table for fbid {}'.format(fbid))
         self.pconn.commit()
+

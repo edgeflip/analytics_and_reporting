@@ -18,12 +18,8 @@ def connect_s3():
 
 
 def create_conn():
-   f = open("creds/redcreds.txt", "r")
-   d = f.read().split('\n')
-   f.close()
-   conn = psycopg2.connect(host=d[0], database=d[1], port=d[2], user=d[1], password=d[3])
-   conn.autocommit = True
-   return conn
+    from keys import redshift
+    return psycopg2.connect( **redshift)
 
 
 def _map(val):
