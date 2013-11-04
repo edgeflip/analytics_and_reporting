@@ -5,7 +5,7 @@ import tornado.ioloop
 import tornado.options
 import tornado.web
 
-from tasks import ETL
+from tasks import ETL, mail_tracebacks
 
 
 class App(ETL, tornado.web.Application):
@@ -39,15 +39,16 @@ class App(ETL, tornado.web.Application):
 
         tornado.web.Application.__init__(self, handlers, **settings)
  
- 
+    @mail_tracebacks
     def fromRDS(self): 
         # keep our stats realtime
         self.extract()
         P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
         P.start()
 
-
+    @mail_tracebacks
     def fromDynamo(self):
+
         self.queue_edges()
         self.queue_users()
         P = tornado.ioloop.PeriodicCallback(self.queue_users, 1000 * 60 * 15)
@@ -58,10 +59,11 @@ class App(ETL, tornado.web.Application):
         # top priority, grab new users
         P = tornado.ioloop.PeriodicCallback(self.extract_user, 1000 * .8)
         P.start()
+        # and edge info
+        P = tornado.ioloop.PeriodicCallback(self.extract_edge, 2000)
+        P.start()
         # slightly less priority, updating users
         P = tornado.ioloop.PeriodicCallback(self.refresh_user, 1000 * 5)
-        P.start()
-        P = tornado.ioloop.PeriodicCallback(self.extract_edge, 2000)
         P.start()
 
 

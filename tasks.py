@@ -1,23 +1,55 @@
 from logging import debug, info, warning, error
 import cStringIO
 import csv
-from boto.s3.connection import S3Connection
-
-import datetime
-import MySQLdb
-import MySQLdb.cursors
 from time import strftime, time
 from collections import defaultdict
+import datetime
+import functools
 
+from boto.s3.connection import S3Connection
+import boto.dynamodb
+import MySQLdb
+import MySQLdb.cursors
+import psycopg2
+import psycopg2.extras
+
+from tornado.web import HTTPError
 import tornado.httpserver
 import tornado.ioloop
 import tornado.options
 import tornado.web
 
-import psycopg2
-import psycopg2.extras
-import boto.dynamodb
-from tornado.web import HTTPError
+
+def mail_tracebacks(method):
+    """
+    Decorator to forward tracebacks on to concerned parties
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        #check for debug mode
+        try:
+            return method(self, *args, **kwargs)
+        except:
+            import traceback
+            traceback.print_exc()
+
+            # if debug mode is off, email the stack trace
+            from tornado.options import options
+            if options.debug: raise
+
+            err = traceback.format_exc()
+
+            import email
+            msg = email.Message.Message()
+            msg['Subject'] = 'UNHANDLED EXCEPTION'
+            msg.set_payload(err)
+
+            import smtplib
+            smtp = smtplib.SMTP()
+            smtp.connect()
+            smtp.sendmail('error@edgeflip.com', ['japhy@edgeflip.com',], msg.as_string())
+
+    return wrapper
 
 
 def mkCSV(application, t=False, client_id=2):
@@ -315,6 +347,7 @@ class ETL(object):
  
         debug('Done.')
 
+    @mail_tracebacks
     def extract(self):
         """ main for syncing with RDS """
         from table_to_redshift import main as rds2rs
@@ -412,7 +445,6 @@ class ETL(object):
             self.pconn.commit()
 
 
-    # COUNT(DISTINCT t.visit_id) AS visits,
     def mkstats(self):
         megaquery = """
     CREATE TABLE _clientstats AS
@@ -476,6 +508,7 @@ class ETL(object):
         debug('Done.')
 
 
+    @mail_tracebacks
     def queue_users(self):
         t = time()
 
@@ -518,6 +551,7 @@ class ETL(object):
         info( 'Queued users for extraction in {}'.format(time()-t))
 
 
+    @mail_tracebacks
     def extract_user(self):
         """ Grab a fbid off of the queue and get it out of dynamo """
         if len(self.primary_fbids) < 1 and len(self.secondary_fbids) < 1: return
@@ -532,6 +566,7 @@ class ETL(object):
         info( 'Extracted fbid {} from Dynamo'.format(fbid))
 
 
+    @mail_tracebacks
     def refresh_user(self):
         """ Take a fbid (probably blank) and check that it looks good """
         if len(self.old_fbids) < 1: return
@@ -590,6 +625,7 @@ class ETL(object):
         return data
 
 
+    @mail_tracebacks
     def queue_edges(self):
         self.pcur.execute("""
             SELECT DISTINCT fbid FROM visits 
@@ -603,7 +639,7 @@ class ETL(object):
 
         info("{} fbids queued for edge extraction".format(len(self.edge_fbids)))
 
-
+    @mail_tracebacks
     def extract_edge(self):
         if len(self.edge_fbids) < 1: return
         fbid = self.edge_fbids.pop()
@@ -653,4 +689,5 @@ class ETL(object):
 
         info( 'Successfully updated edges table for fbid {}'.format(fbid))
         self.pconn.commit()
+
 
