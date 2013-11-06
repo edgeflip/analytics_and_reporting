@@ -114,8 +114,9 @@ class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
         debug(users)
 
         self.application.pcur.execute("""
-        SELECT events.* FROM events,visits 
+        SELECT events.* FROM events,visits,visitors
         WHERE events.visit_id=visits.visit_id 
+            AND visits.visitor_id=visitors.visitor_id
             AND fbid=%s 
         ORDER BY event_datetime ASC;
         """, (fbid,))
