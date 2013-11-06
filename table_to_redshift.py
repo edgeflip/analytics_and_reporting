@@ -8,12 +8,8 @@ import logging
 
 
 def connect_s3():
-    f = open('creds/s3creds.txt', 'r')
-    f1 = f.read().split('\n')
-    f.close()
-    first = f1[0]
-    second = f1[1]
-    conn = S3Connection(first, second)
+    from keys import aws
+    conn = S3Connection(aws['aws_access_key_id'], aws['aws_secret_access_key'])
     return conn
 
 
@@ -69,7 +65,7 @@ def write2csv(table, cur):
 
 def up2s3(table): 
     s3conn = connect_s3()
-    red = s3conn.get_bucket('redxfer') 
+    red = s3conn.get_bucket('redshiftxfer') 
     k = red.new_key(table)
     k.set_contents_from_filename('%s.csv' % table)
     logging.info("Uploaded %s to s3" % table)
@@ -77,8 +73,9 @@ def up2s3(table):
 
 def main(table, redconn=None):
     start = time.time()
-    dbcreds = open('creds/dbcreds.txt', 'r').read().split('\n')
-    dbconn = mysql.connect(dbcreds[0], dbcreds[1], dbcreds[2], dbcreds[3])
+
+    from keys import rds
+    dbconn = mysql.connect( **rds)
     cur = dbconn.cursor()  
 
     # get the schema of the table
@@ -111,11 +108,11 @@ def main(table, redconn=None):
  
     # create the table with the columns query now generated
     
-    s3creds = open('creds/s3creds.txt', 'r').read().split('\n')
-    access_key = s3creds[0]
-    secret_key = s3creds[1]
+    from keys import aws
+    access_key = aws['aws_access_key_id']
+    secret_key = aws['aws_secret_access_key']
     try:
-        redconn.execute("COPY _{0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
+        redconn.execute("COPY _{0} FROM 's3://redshiftxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
     except:
         # redshiftconn.commit()  # eh but really we want to rollback and redo the CREATE TABLE
 
@@ -141,7 +138,7 @@ def main(table, redconn=None):
         up2s3(table)
         # atomicity insurance
         time.sleep(10)
-        redconn.execute("COPY _{0} FROM 's3://redxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
+        redconn.execute("COPY _{0} FROM 's3://redshiftxfer/{0}' CREDENTIALS 'aws_access_key_id={1};aws_secret_access_key={2}' delimiter '|'".format(table, access_key, secret_key))
  
     redshiftconn.commit()
    
