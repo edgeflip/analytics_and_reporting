@@ -354,6 +354,7 @@ class ETL(object):
 
         for table, table_id in [
             ('visits', 'visit_id'), 
+            ('visitors', 'visitor_id'), 
             ('campaigns', 'campaign_id'),
             ('events', 'event_id'),
             ('clients', 'client_id'),
@@ -489,7 +490,9 @@ class ETL(object):
             )
         ) t
 
-    INNER JOIN (SELECT fbid, visit_id FROM visits) v
+    INNER JOIN (SELECT visitors.fbid AS fbid, visits.visit_id AS visit_id FROM visits, visitors
+        WHERE visits.visitor_id=visitors.visitor_id
+        ) v
         USING (visit_id)
     GROUP BY t.campaign_id, hour
         """
@@ -512,17 +515,17 @@ class ETL(object):
         t = time()
 
         # distinct fbids from visits missing from users
-        # union: secondaries that we don't have user records for
         self.pcur.execute("""
-            SELECT DISTINCT(visits.fbid) AS fbid FROM users 
-                RIGHT JOIN visits 
-                    ON visits.fbid=users.fbid 
+            SELECT DISTINCT(visitors.fbid) AS fbid FROM users 
+                RIGHT JOIN visitors 
+                    ON visitors.fbid=users.fbid 
                 WHERE users.fbid IS NULL 
             """)
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
         info("Found {} unknown primary fbids".format(len(fbids)))
         self.primary_fbids = self.primary_fbids.union(set(fbids))
 
+        # secondaries that we don't have user records for
         self.pcur.execute("""
             SELECT DISTINCT(edges.fbid_source) AS fbid FROM users
                 RIGHT JOIN edges
@@ -537,10 +540,10 @@ class ETL(object):
         # probably missing, but potentially we need to scan for this user again
         self.pcur.execute("""
             SELECT DISTINCT(users.fbid) FROM users
-                INNER JOIN visits ON users.fbid=visits.fbid
+                INNER JOIN visitors ON users.fbid=visitors.fbid
                 WHERE users.email IS NULL
                 AND users.fname IS NOT NULL
-                AND visits.fbid IS NOT NULL
+                AND visitors.fbid IS NOT NULL
             """)
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
@@ -627,7 +630,7 @@ class ETL(object):
     @mail_tracebacks
     def queue_edges(self):
         self.pcur.execute("""
-            SELECT DISTINCT fbid FROM visits 
+            SELECT DISTINCT fbid FROM visitors 
             WHERE fbid NOT IN (SELECT DISTINCT fbid_target FROM edges)
             AND fbid NOT IN (SELECT DISTINCT fbid FROM missingedges)
             ORDER BY updated DESC
