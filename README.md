@@ -1,4 +1,10 @@
-analytics_and_reporting
-=======================
+INSTALL
+=======
+* virtualenv env
+* source env/bin/activate
+* pip install -r requirements.txt
+* python main.py --help
 
-Repo for analytics and reporting scripts
+LAUNCH
+======
+python main.py
