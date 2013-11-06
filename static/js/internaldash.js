@@ -28,10 +28,21 @@ function init() {
         chart.selectAll("rect").data(response.data)
             .enter().append("rect")
             .attr('x', function(d) {return x(new Date(d.hour)) + keys.indexOf(d.type)})
-            .attr('y', function(d) {return height- (y(d.count))})
+            .attr('y', function(d) {return height- (y(d.count))}) // actually.. shouldn't this be a flat line?
             .attr('width', 2)
             .attr('height', function(d,i) {return y(d.count)})
             .attr('fill', function(d,i) {return z(keys.indexOf(d.type))})
+
+        var line = d3.svg.line()
+            .x(function(d) { return x(new Date(d.hour)); })
+            .y(function(d) { return height - y(d.count) })
+            .interpolate("basis");
+
+        chart.selectAll("path").data(response.data)
+            .enter().append('path')
+            .attr('d', line)
+
+
         })
     }
 
