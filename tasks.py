@@ -3,6 +3,7 @@ import cStringIO
 import csv
 from time import strftime, time
 from collections import defaultdict
+from hashlib import md5
 import datetime
 import functools
 
@@ -41,7 +42,7 @@ def mail_tracebacks(method):
 
             import email
             msg = email.Message.Message()
-            msg['Subject'] = 'UNHANDLED EXCEPTION'
+            msg['Subject'] = 'UNHANDLED EXCEPTION {}'.format(md5(err).hexdigest())
             msg.set_payload(err)
 
             import smtplib
