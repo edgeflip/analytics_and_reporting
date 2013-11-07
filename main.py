@@ -200,13 +200,13 @@ class Edgedash(AuthMixin, tornado.web.RequestHandler):
 class ClientSummary(AuthMixin, tornado.web.RequestHandler):
 
     @tornado.web.authenticated
-    def get(self, client=2):  # at some point, grab client by looking at the auth'd user
+    def get(self):  # at some point, grab client by looking at the auth'd user
 
         client = int(self.get_argument('client'))  # let junk 500
 
         if not client:
-            # client sent 0, should look up by user
-            client = 2
+            # browser sent 0, look up by cookie
+            client = self.client
         else:
             # check authorization for arbitrary client ids
             if not self.superuser: raise HTTPError(403)
@@ -242,7 +242,7 @@ class AllData(AuthMixin, tornado.web.RequestHandler):
     def post(self): 
         camp_id = self.get_argument('campaign')
 
-        #TODO: check that the signed in user is authorized to pull data for this campaign
+        #minor TODO: check that the signed in user is authorized to pull data for this campaign
 
         # first, grab data for the bigger chart, grouped and summed by day
         self.application.pcur.execute("""

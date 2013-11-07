@@ -3,6 +3,7 @@ import base64
 import json
 import functools
 from hashlib import sha256
+from logging import debug, info
 
 from django.utils.crypto import pbkdf2
 # from django.contrib.auth import PBKDF2PasswordHasher
@@ -21,22 +22,21 @@ class Login(tornado.web.RequestHandler):
         login = self.get_argument('login')  # this will error if there's no login arg, iirc
         password = self.get_argument('password')
 
-        #legacy magicks
-        if (login == 'virginia') and (password=='sharing'):
-            self.set_secure_cookie('user', login)  
-            self.set_secure_cookie('superuser', 'false')  
-            return self.redirect('/')
-
-        # check that this user exists, get password string to compare
+        # check that this user exists, get password string to compare, and client_id
         exists = self.application.mcur.execute("""
-            SELECT password, is_superuser FROM auth_user WHERE username=%s
+            SELECT password, is_superuser, client_id
+            FROM auth_user
+                LEFT JOIN auth_user_groups ON auth_user_groups.user_id=auth_user.id
+                LEFT JOIN clients_auth_groups ON auth_user_groups.group_id=clients_auth_groups.group_id
+            WHERE username=%s
             """, (login,))
 
-        if exists != 1:
+        debug(exists)
+        if exists < 1:
             return self.render("login.html", error='Wrong username.')
 
         # unpack django structures
-        bighash, superuser = self.application.mcur.fetchone()
+        bighash, superuser, client_id = self.application.mcur.fetchone()
         algo, iterations, salt, passhash = bighash.split('$')
         superuser = 'true' if superuser == 1 else 'false'  # json for the cookie
 
@@ -47,6 +47,7 @@ class Login(tornado.web.RequestHandler):
         # looks good
         self.set_secure_cookie('user', login)  
         self.set_secure_cookie('superuser', superuser)  
+        self.set_secure_cookie('client', json.dumps(client_id))  
         return self.redirect('/')  # should actually redirect to self.get_argument('next')
 
     # swiped mostly from django.contrib.auth.hashers.PBKDF2PasswordHasher
@@ -66,7 +67,11 @@ class AuthMixin(object):
 
     @property
     def superuser(self):
-        return json.loads( self.get_secure_cookie('superuser'))
+        return json.loads(self.get_secure_cookie('superuser'))
+
+    @property
+    def client(self):
+        return json.loads(self.get_secure_cookie('client'))
 
 
 def authorized(method):
