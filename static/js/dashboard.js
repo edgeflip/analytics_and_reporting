@@ -1,4 +1,4 @@
-$(document).ready(init)
+$(document).ready(init);
 
 function init() {
     // first pageview, get summary data and draw main table
@@ -6,10 +6,10 @@ function init() {
 
     // default sorting metric
     window.metric = 'visits';
-    $('#sumtable th').click(sort); 
+    $('#sumtable th').click(sort);
 
     // though we bind the sort handler to the entire th, style the actual buttons
-    $('.sorter').button( {'icons':{'secondary':'ui-icon-arrow-2-n-s'}, 'text':true})
+    $('.sorter').button( {'icons':{'secondary':'ui-icon-arrow-2-n-s'}, 'text':true});
     }
 
 
@@ -35,33 +35,33 @@ function mksummary() {
 
         // we're manually adding column headers in the template right now, TODO, send this serverside
         var columns = ['name', 'visits', 'clicks', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
-        var table = d3.select('#sumtable')
+        var table = d3.select('#sumtable');
 
         // build rows
-        var body = table.append("tbody")
+        var body = table.append("tbody");
         var rows = body.selectAll("tr").data(window.response)
             .enter()
             .append("tr")
             .attr("class", "child")
-            .attr("id", function(d) {return d.root_id});
+            .attr("id", function(d) {return d.root_id;});
 
         // build cells per row
         rows.selectAll("td").data(
             /* so for each row, we end up wanting an array of values, in column order */
             function(row) {
                 // columns.map makes a nice [] of datapoints per row
-                return columns.map(function(column) {return row[column]})
+                return columns.map(function(column) {return row[column];});
             })
             .enter()
             .append("td")
-            .text(function(d){return d})
-            .attr("class", "datapoint")
+            .text(function(d){return d;})
+            .attr("class", "datapoint");
 
         // and a chart-toggler at the end
         rows.append("td")
             .append("button")
             .attr("class", "charter")
-            .attr("root-id", function(d){return d.root_id});
+            .attr("root-id", function(d){return d.root_id;});
 
         // make them jquery buttons
         $('.charter').button( {'icons':{'primary':'ui-icon-image'}, 'text':false});
@@ -74,12 +74,10 @@ function mksummary() {
             .data(columns)
             .enter()
             .append("td")
-            .text( function(metric,i) {return i==0?'TOTALS':d3.sum(window.response.map(function(d){return d[metric]})) })
+            .text( function(metric,i) {return i===0?'TOTALS':d3.sum(window.response.map(function(d){return d[metric];}));})
             .attr("class", "datapoint");
 
-        // like d3.sum(response.map(function(d,i) {console.log(d);return d.visits}))
-
-        })
+        });
     }
 
 
@@ -93,10 +91,10 @@ function mkchart () {
     window.campaign_id = $(this).attr('root-id');
 
     // open a blank modal so the user knows the button click registered
-    $('#modal').dialog({'modal':true, 'width':1000}) // pass height if you need to
+    $('#modal').dialog({'modal':true, 'width':1000});  // pass height if you need to
     $('#modal').on( "dialogclose", function() {
         // clear old data
-        $('.chart').children().remove()
+        $('.chart').children().remove();
         $('#hourlytable tbody').children().remove();
         $('#legend').children().remove();
         $('#slider').children('a').remove();
@@ -122,13 +120,13 @@ function on_hourly (response) {
     $('#tsver').show();
 
     // many things use this
-    window.daterange = window.response.data.map( function(row){return new Date(row.time)} ); 
+    window.daterange = window.response.data.map( function(row){return new Date(row.time);} );
 
     $('#hourlygraph').children().remove();
     var graph = mkgraph('#graph', response);
 
     // reveal chart container
-    $('#chart_container').show()
+    $('#chart_container').show();
 
 
     // the control for revealing TSV data
@@ -148,40 +146,42 @@ function mkgraph(element, response) {
         width: 600,
         height: 300,
         renderer: 'line',
+
+        // very ugly, couldn't get the clojure working right
         series: [{
                 name: "Visits",
-                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.visits}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.visits};}),
                 color: palette.color(),
             },{
                 name: "Clicks",
-                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.clicks}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.clicks};}),
                 color: palette.color(),
             },{
                 name: "Unique Auths",
-                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.uniq_auths}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.uniq_auths};}),
                 color: palette.color(),
             },{
                 name: "Faces Shown",
-                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.shown}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.shown};}),
                 color: palette.color(),
             },{
                 name: "Shares",
-                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.shares}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.shares};}),
                 color: palette.color(),
             },{
                 name: "Audience",
-                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.audience}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.audience};}),
                 color: palette.color(),
             },{
                 name: "Clickbacks",
-                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.clickbacks}}),
+                data: response.data.map(function(row) {return {x:new Date(row.time).getTime()/1000, y:row.clickbacks};}),
                 color: palette.color(),
             },]
         });
 
     window.graph = graph;
 
-    new Rickshaw.Graph.HoverDetail({ graph: graph, yFormatter: function (x) {return x} });
+    new Rickshaw.Graph.HoverDetail({ graph: graph, yFormatter: function (x) {return x;} });
 
     var legend = new Rickshaw.Graph.Legend( {
         graph: graph,
@@ -207,18 +207,18 @@ function mkgraph(element, response) {
 
     // new Rickshaw.Graph.Axis.Time( { graph: graph, timeUnit:time.unit('day') } );
     // var xAxis = new Rickshaw.Graph.Axis.Time({ 
-    var xAxis = new Rickshaw.Graph.Axis.X({ 
+    var xAxis = new Rickshaw.Graph.Axis.X({
         graph: graph,
         ticks: 4,
         orientation: 'bottom',
         element: document.getElementById('xAxis'),
         tickFormat: function(x) {
             // find range to display either dates or times .. ideally calc this not for every tick (once per update)
-            var stacktimes = graph.series[0].stack.map( function(row) {return row.x})
+            var stacktimes = graph.series[0].stack.map( function(row) {return row.x;});
             var tdelta = d3.max(stacktimes) - d3.min(stacktimes);
 
-            var d = new Date(x*1000)
-            return tdelta > 86400 ? d.toLocaleDateString() : d.toLocaleTimeString(); 
+            var d = new Date(x*1000);
+            return tdelta > 86400 ? d.toLocaleDateString() : d.toLocaleTimeString();
             }
         });
     xAxis.render();
@@ -232,13 +232,13 @@ function mkgraph(element, response) {
     yAxis.render();
 
     // permanent X min and maxes
-    var extents = d3.extent( response.data, function(row) {return new Date(row.time)})
+    var extents = d3.extent( response.data, function(row) {return new Date(row.time);});
     $('#xMin').text( extents[0].toLocaleDateString());
     $('#xMax').text( extents[1].toLocaleDateString());
 
     // window Y min and max
     graph.onUpdate( function() {
-        yMax = d3.max(graph.series.map( function(row) {return d3.max(row.stack.map( function(r) {return r.y}))}));
+        yMax = d3.max( graph.series.map( function(row) { return d3.max( row.stack.map( function(r) {return r.y;}));}));
         $('#yMax').text(yMax);
         });
 
@@ -266,7 +266,7 @@ function sort() {
     $('th').removeClass('ascend descend');
 
     // reset button styles
-    $('.sorter').button( {'icons':{'secondary':'ui-icon-arrow-2-n-s'}, 'text':true})
+    $('.sorter').button( {'icons':{'secondary':'ui-icon-arrow-2-n-s'}, 'text':true});
 
     // set new styles
     $('.tableFloatingHeaderOriginal #'+metric).addClass(sortstyle);
@@ -280,7 +280,7 @@ function sort() {
 
     window.metric = metric;
 
-    d3.selectAll("tr.child").sort(function(a,b) {return window.sorter(a[metric],b[metric])} );
+    d3.selectAll("tr.child").sort(function(a,b) {return window.sorter(a[metric],b[metric]);});
     }
 
 
@@ -290,10 +290,10 @@ function tsv_data(response) {
 
     // we're manually adding column headers in the template right now, TODO, send this serverside
     var columns = ['time', 'visits', 'clicks', 'uniq_auths', 'shown', 'shares', 'audience', 'clickbacks'];
-    var table = d3.select('#hourlytable')
+    var table = d3.select('#hourlytable');
 
     // build rows
-    var body = table.append("tbody")
+    var body = table.append("tbody");
     var rows = body.selectAll("tr").data(window.response.data)
         .enter()
         .append("tr");
@@ -303,12 +303,12 @@ function tsv_data(response) {
         /* so for each row, we end up wanting an array of values, in column order */
         function(row) {
             // columns.map makes a nice [] of datapoints per row
-            return columns.map(function(column) {return row[column]})
+            return columns.map(function(column) {return row[column];});
         })
         .enter()
         .append("td")
-        .text(function(d){return d+'\t'})
-        .attr("class", "datapoint")
+        .text(function(d){return d+'\t';})
+        .attr("class", "datapoint");
 
     // toggle visibility .. kinda awkward
     $('#chart_container').hide();
