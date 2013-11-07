@@ -7,12 +7,6 @@ import csv, os, time
 import logging
 
 
-
-def create_conn():
-    from keys import redshift
-    return psycopg2.connect( **redshift)
-
-
 def _map(val):
     #redshift_vals = ['integer', 'bigint', 'decimal', 'real', 'double precision', 'boolean', 'char', 'varchar', 'date', 'timestamp']
     redshift_vals = {
@@ -80,7 +74,8 @@ def main(table, redconn=None):
     description = cur.fetchall()
     columns = create_query(description)
 
-    redshiftconn = create_conn()
+    from keys import redshift
+    redshiftconn = psycopg2.connect( **redshift)
     redconn = redshiftconn.cursor()
 
     # connect to redshift and copy the file that we just uploaded to s3 to redshift
