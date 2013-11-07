@@ -99,6 +99,10 @@ class AuthMixin(object):
 
     @property
     def client(self):
+        """
+        Essentially "caching" the client_id for this user in a cookie to
+        save a database hit on incoming requests
+        """
         return json.loads(self.get_secure_cookie('client'))
 
 

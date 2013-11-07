@@ -2,7 +2,6 @@ from logging import debug, info, warning
 import json
 import MySQLdb
 from time import strftime
-from collections import defaultdict
 
 from datetime import datetime, timedelta
 
@@ -73,6 +72,7 @@ class App(tornado.web.Application):
         self.mcur = self.mconn.cursor()
         
         debug('Done.')
+
 
     def update(self):
         """ 
@@ -159,7 +159,7 @@ class AllData(AuthMixin, tornado.web.RequestHandler):
 
         #minor TODO: check that the signed in user is authorized to pull data for this campaign
 
-        # first, grab data for the bigger chart, grouped and summed by day
+        # grab data for the chart, grouped and summed by day
         self.application.pcur.execute("""
         SELECT DATE_TRUNC('hour', hour) as time,
             SUM(visits) AS visits,
