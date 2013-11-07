@@ -32,11 +32,11 @@ def mail_tracebacks(method):
             return method(self, *args, **kwargs)
         except:
             import traceback
-            traceback.print_exc()
-
             # if debug mode is off, email the stack trace
             from tornado.options import options
             if options.debug: raise
+            else: traceback.print_exc()
+
 
             err = traceback.format_exc()
 
