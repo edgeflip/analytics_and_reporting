@@ -60,8 +60,7 @@ class App(tornado.web.Application):
 
 
     def connect(self):
-        """make db connections, would be cool to time this out"""
-
+        """set up database connections"""
         debug('Connecting to redshift..')
         from keys import redshift
         self.pconn = psycopg2.connect( **redshift)
@@ -76,12 +75,123 @@ class App(tornado.web.Application):
         debug('Done.')
 
     def update(self):
-        """ Someday, sync this with the data moving, somehow """
+        """ 
+        There is a line in the dashboard template that shows 'Data last updated
+        at X'.  Someday, somehow sync that up with the worker processes, but for
+        now...
+        """
         self.updated = strftime('%x %X')
+
+
+
+class MainHandler(AuthMixin, tornado.web.RequestHandler):
+
+    @tornado.web.authenticated
+    def get(self):
+
+        ctx = {
+            'STATIC_URL':'/static/',
+            'user': self.get_current_user(),
+            'superuser': self.superuser,
+            'updated': self.application.updated,
+        }
+
+        # if it's a superuser, look up the clients to populate the chooser
+        if self.superuser:
+            self.application.mcur.execute("""
+                SELECT client_id, name FROM clients ORDER BY client_id DESC
+            """)
+            clients = [row for row in self.application.mcur.fetchall()]
+            ctx['clients'] = clients
+
+        return self.render('clientdash.html', **ctx)
+
+
+
+class ClientSummary(AuthMixin, tornado.web.RequestHandler):
+    """
+    Data for the initial pageview, a summary of client stats grouped by campaign
+    """
+
+    @tornado.web.authenticated
+    def get(self):
+        client = int(self.get_argument('client'))  # let junk 500
+
+        if not client:
+            # browser sent 0, look up by cookie
+            client = self.client
+        else:
+            # check authorization for arbitrary client ids
+            if not self.superuser: raise HTTPError(403)
+
+        # very similar to the sums per campaign, but join on root campaign
+        self.application.pcur.execute("""
+            SELECT meta.root_id, meta.name, visits, clicks, auths, uniq_auths,
+                        shown, shares, audience, clickbacks
+            FROM
+                (SELECT campchain.root_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,
+                        SUM(uniq_auths) AS uniq_auths, SUM(shown) AS shown, SUM(shares) AS shares,
+                        SUM(audience) AS audience, SUM(clickbacks) AS clickbacks
+                    FROM clientstats, campchain
+                    WHERE campchain.parent_id=clientstats.campaign_id
+                    GROUP BY root_id
+                ) AS stats,
+
+                (SELECT campchain.root_id, campaigns.campaign_id, campaigns.name 
+                    FROM campaigns, campchain
+                    WHERE campchain.parent_id=campaigns.campaign_id
+                    AND client_id=%s
+                ) AS meta
+
+            WHERE stats.root_id=meta.campaign_id
+            ORDER BY meta.root_id DESC;
+        """, (client,))
+
+        return self.finish(json.dumps([dict(row) for row in self.application.pcur.fetchall()]))
+
+
+class AllData(AuthMixin, tornado.web.RequestHandler):
+    """ Data for a particular campaign, used by the chart view """
+
+    @tornado.web.authenticated
+    def post(self): 
+        camp_id = self.get_argument('campaign')
+
+        #minor TODO: check that the signed in user is authorized to pull data for this campaign
+
+        # first, grab data for the bigger chart, grouped and summed by day
+        self.application.pcur.execute("""
+        SELECT DATE_TRUNC('hour', hour) as time,
+            SUM(visits) AS visits,
+            SUM(clicks) AS clicks,
+            SUM(auths) AS auths,
+            SUM(uniq_auths) AS uniq_auths,
+            SUM(shown) AS shown,
+            SUM(shares) AS shares,
+            SUM(audience) AS audience,
+            SUM(clickbacks) AS clickbacks
+            
+        FROM clientstats,campchain 
+        WHERE clientstats.campaign_id=campchain.parent_id
+        AND campchain.root_id=%s
+        GROUP BY time
+        ORDER BY time ASC
+        """, (camp_id,))
+
+        def mangle(row):
+            row = dict(row)
+            row['time'] = row['time'].isoformat()
+            return row
+
+        data = [mangle(row) for row in self.application.pcur.fetchall()]
+        self.finish({'data':data})
 
 
 from auth import authorized
 class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
+    """
+    Internal tool that takes a fbid and looks up relevant user/visit/event records
+    """
 
     @tornado.web.authenticated
     @authorized
@@ -132,31 +242,12 @@ class Edgeplorer(AuthMixin, tornado.web.RequestHandler):
         self.finish( {'users':users, 'events':events, 'edges':edges})
 
 
-
-class MainHandler(AuthMixin, tornado.web.RequestHandler):
-
-    @tornado.web.authenticated
-    def get(self):
-
-        ctx = {
-            'STATIC_URL':'/static/',
-            'user': self.get_current_user(),
-            'superuser': self.superuser,
-            'updated': self.application.updated,
-        }
-
-        # if it's a superuser, look up the clients to populate the chooser
-        if self.superuser:
-            self.application.mcur.execute("""
-                SELECT client_id, name FROM clients ORDER BY client_id DESC
-            """)
-            clients = [row for row in self.application.mcur.fetchall()]
-            ctx['clients'] = clients
-
-        return self.render('clientdash.html', **ctx)
-
-
 class Edgedash(AuthMixin, tornado.web.RequestHandler):
+    """ 
+    A very half baked visualization of all events by type 
+    see internaldash.js for the front end
+    """
+
     @tornado.web.authenticated
     @authorized
     def get(self):
@@ -195,83 +286,6 @@ class Edgedash(AuthMixin, tornado.web.RequestHandler):
         data = [mangle(row) for row in self.application.pcur.fetchall()]
 
         return self.finish({'data':data})
-
-
-class ClientSummary(AuthMixin, tornado.web.RequestHandler):
-
-    @tornado.web.authenticated
-    def get(self):  # at some point, grab client by looking at the auth'd user
-
-        client = int(self.get_argument('client'))  # let junk 500
-
-        if not client:
-            # browser sent 0, look up by cookie
-            client = self.client
-        else:
-            # check authorization for arbitrary client ids
-            if not self.superuser: raise HTTPError(403)
-
-        # very similar to the sums per campaign, but join on root campaign
-        self.application.pcur.execute("""
-            SELECT meta.root_id, meta.name, visits, clicks, auths, uniq_auths,
-                        shown, shares, audience, clickbacks
-            FROM
-                (SELECT campchain.root_id, SUM(visits) AS visits, SUM(clicks) AS clicks, SUM(auths) AS auths,
-                        SUM(uniq_auths) AS uniq_auths, SUM(shown) AS shown, SUM(shares) AS shares,
-                        SUM(audience) AS audience, SUM(clickbacks) AS clickbacks
-                    FROM clientstats, campchain
-                    WHERE campchain.parent_id=clientstats.campaign_id
-                    GROUP BY root_id
-                ) AS stats,
-
-                (SELECT campchain.root_id, campaigns.campaign_id, campaigns.name 
-                    FROM campaigns, campchain
-                    WHERE campchain.parent_id=campaigns.campaign_id
-                    AND client_id=%s
-                ) AS meta
-
-            WHERE stats.root_id=meta.campaign_id
-            ORDER BY meta.root_id DESC;
-        """, (client,))
-
-        return self.finish(json.dumps([dict(row) for row in self.application.pcur.fetchall()]))
-
-
-class AllData(AuthMixin, tornado.web.RequestHandler):
-    @tornado.web.authenticated
-    def post(self): 
-        camp_id = self.get_argument('campaign')
-
-        #minor TODO: check that the signed in user is authorized to pull data for this campaign
-
-        # first, grab data for the bigger chart, grouped and summed by day
-        self.application.pcur.execute("""
-        SELECT DATE_TRUNC('hour', hour) as time,
-            SUM(visits) AS visits,
-            SUM(clicks) AS clicks,
-            SUM(auths) AS auths,
-            SUM(uniq_auths) AS uniq_auths,
-            SUM(shown) AS shown,
-            SUM(shares) AS shares,
-            SUM(audience) AS audience,
-            SUM(clickbacks) AS clickbacks
-            
-        FROM clientstats,campchain 
-        WHERE clientstats.campaign_id=campchain.parent_id
-        AND campchain.root_id=%s
-        GROUP BY time
-        ORDER BY time ASC
-        """, (camp_id,))
-
-        def mangle(row):
-            row = dict(row)
-            row['time'] = row['time'].isoformat()
-            return row
-
-        data = [mangle(row) for row in self.application.pcur.fetchall()]
-
-        # day = self.get_argument('day', None)
-        self.finish({'data':data})
 
 
 def main():
