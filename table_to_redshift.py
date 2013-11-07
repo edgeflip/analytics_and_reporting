@@ -7,11 +7,6 @@ import csv, os, time
 import logging
 
 
-def connect_s3():
-    from keys import aws
-    conn = S3Connection(aws['aws_access_key_id'], aws['aws_secret_access_key'])
-    return conn
-
 
 def create_conn():
     from keys import redshift
@@ -49,7 +44,7 @@ def create_query(d):
 
 def write2csv(table, cur):
     logging.debug('Creating CSV for {}'.format(table))
-    l = 10000
+    l = 20000
     o = 0 
     cur.execute("select * from {0} limit {1} offset {2}".format(table, l, o))
     with open('%s.csv' % table, 'wb') as csvfile:
@@ -64,8 +59,10 @@ def write2csv(table, cur):
 
 
 def up2s3(table): 
-    s3conn = connect_s3()
+    from keys import aws
+    s3conn = S3Connection(aws['aws_access_key_id'], aws['aws_secret_access_key'])
     red = s3conn.get_bucket('redshiftxfer') 
+
     k = red.new_key(table)
     k.set_contents_from_filename('%s.csv' % table)
     logging.info("Uploaded %s to s3" % table)
