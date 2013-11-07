@@ -5,12 +5,18 @@ import functools
 from hashlib import sha256
 from logging import debug, info
 
+# kind of silly, django is in requirements.txt just for this:
 from django.utils.crypto import pbkdf2
-# from django.contrib.auth import PBKDF2PasswordHasher
+# from django.contrib.auth import PBKDF2PasswordHasher  # fails because of missing settings.py
 
 class Logout(tornado.web.RequestHandler):
     def get(self, *args):
+        # clear whatever cookies have been set
         self.clear_cookie("user")
+        self.clear_cookie("superuser")
+        self.clear_cookie("client")
+
+        # redirect to /login/, nothing else is visible to anonymous users
         self.redirect('/login/')
 
 
@@ -19,6 +25,11 @@ class Login(tornado.web.RequestHandler):
         self.render("login.html", error=None) 
 
     def post(self):
+        """
+        Take login/password args from the browser and validate them against
+        Django tables in RDS
+        """
+
         login = self.get_argument('login')  # this will error if there's no login arg, iirc
         password = self.get_argument('password')
 
@@ -33,6 +44,9 @@ class Login(tornado.web.RequestHandler):
 
         debug(exists)
         if exists < 1:
+            """ in the case of users who belong to multiple clients, this logic
+            will break down - but so will the UX, so punt the whole issue
+            """
             return self.render("login.html", error='Wrong username.')
 
         # unpack django structures
@@ -50,7 +64,7 @@ class Login(tornado.web.RequestHandler):
         self.set_secure_cookie('client', json.dumps(client_id))  
         return self.redirect('/')  # should actually redirect to self.get_argument('next')
 
-    # swiped mostly from django.contrib.auth.hashers.PBKDF2PasswordHasher
+    # swiped almost exactly from django.contrib.auth.hashers.PBKDF2PasswordHasher
     def encode(self, password, salt, iterations=None):
         assert password is not None
         assert salt and '$' not in salt
@@ -62,6 +76,10 @@ class Login(tornado.web.RequestHandler):
 
 
 class AuthMixin(object):
+    """ 
+    Add this to RequestHandler objects that will require auth, and decorate 
+    the appropriate methods wth @tornado.web.authenticated
+    """
     def get_current_user(self):
         return self.get_secure_cookie('user')
 
