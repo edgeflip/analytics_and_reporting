@@ -80,7 +80,17 @@ class AuthMixin(object):
     Add this to RequestHandler objects that will require auth, and decorate 
     the appropriate methods wth @tornado.web.authenticated
     """
+
     def get_current_user(self):
+        try:
+            # make sure, if we add cookies, that malformed-but-still-logged-in sessions get bounced
+            assert self.get_secure_cookie('user')
+            assert self.get_secure_cookie('superuser')
+            assert self.get_secure_cookie('client')
+        except AssertionError:
+            return None
+
+
         return self.get_secure_cookie('user')
 
     @property
