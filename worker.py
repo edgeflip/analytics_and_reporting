@@ -5,7 +5,8 @@ import tornado.ioloop
 import tornado.options
 import tornado.web
 
-from tasks import ETL, mail_tracebacks
+from tasks import ETL
+from errors import mail_tracebacks
 
 
 class App(ETL, tornado.web.Application):

@@ -34,6 +34,7 @@ class App(tornado.web.Application):
         """
         map URLs to Handlers, with regex patterns
         """
+        from errors import Errorer
         handlers = [
             (r"/", MainHandler),  # main client template
             (r"/edgeplorer/?", Edgeplorer),  # internal fbid explorer template
@@ -42,6 +43,7 @@ class App(tornado.web.Application):
             (r"/alldata/", AllData),  # hourly data for a particular campaign
             (r"/login/", Login),
             (r"/logout/", Logout),
+            (r"/chicken_little/", Errorer),
         ]
 
         # build connections to redshift, RDS

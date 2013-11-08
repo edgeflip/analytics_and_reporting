@@ -3,9 +3,7 @@ import cStringIO
 import csv
 from time import strftime, time
 from collections import defaultdict
-from hashlib import md5
 import datetime
-import functools
 
 from boto.s3.connection import S3Connection
 import boto.dynamodb
@@ -14,44 +12,7 @@ import MySQLdb.cursors
 import psycopg2
 import psycopg2.extras
 
-from tornado.web import HTTPError
-import tornado.httpserver
-import tornado.ioloop
-import tornado.options
-import tornado.web
-
-
-def mail_tracebacks(method):
-    """
-    Decorator to forward tracebacks on to concerned parties
-    """
-    @functools.wraps(method)
-    def wrapper(self, *args, **kwargs):
-        #check for debug mode
-        try:
-            return method(self, *args, **kwargs)
-        except:
-            import traceback
-            # if debug mode is off, email the stack trace
-            from tornado.options import options
-            if options.debug: raise
-            else: traceback.print_exc()
-
-
-            err = traceback.format_exc()
-
-            import email
-            msg = email.Message.Message()
-            msg['Subject'] = 'UNHANDLED EXCEPTION {}'.format(md5(err).hexdigest())
-            msg.set_payload(err)
-
-            import smtplib
-            smtp = smtplib.SMTP()
-            smtp.connect()
-            smtp.sendmail('error@edgeflip.com', ['japhy@edgeflip.com',], msg.as_string())
-
-    return wrapper
-
+from errors import mail_tracebacks
 
 def mkCSV(application, t=False, client_id=2):
     """ Grab event data for the hour preceding t """
