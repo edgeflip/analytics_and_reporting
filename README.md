@@ -17,9 +17,9 @@ python main.py --port=8080
 
 The dashboard and it's various views.  Fire it up and see:
 
-* http://localhost:8080/
-* http://localhost:8080/edgedash/
-* http://localhost:8080/edgeplorer/
+* [The client dashboard](http://dashboard.edgeflip.com/)
+* [A simple tool to query for things by fbid](http://dashboard.edgeflip.com/edgeplorer/)
+* [A very crude internal dashboard](http://dashboard.edgeflip.com/edgedash/)
 
 Logging in as a client will give a dashboard for that particular client.  Logging in
 as a superuser (probably `edgeflip`) will let you choose from available clients.
