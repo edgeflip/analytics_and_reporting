@@ -32,6 +32,8 @@ python worker.py --fromDynamo
 
 The import process from RDS is similar to a cron job;  every X minutes, it will iterate
 through a list of tables, copy them to redshift through S3, and generate new statistics.
+Much of the heavy lifting is done with `table_to_redshift.py`, which can also be used
+as a command line tool by itself.
 
 The import process from Dynamo needs to run as some sort of daemon;  every X minutes it
 scans Redshift tables to queue up users and edges that need to be extracted from Dynamo,
