@@ -7,6 +7,15 @@ from logging import debug, info, warning
 
 import tornado.web
 
+"""
+Uncaught exceptions are sent via email to the list of RECIPIENTS below, 
+with a hash of the traceback to help gmail keep threads straight.
+
+IMPORTANT: debug mode (--debug=True from the command line) turns this off!
+"""
+
+
+
 RECIPIENTS = ['japhy@edgeflip.com',]
 
 

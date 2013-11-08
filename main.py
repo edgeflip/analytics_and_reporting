@@ -293,9 +293,24 @@ class Edgedash(AuthMixin, tornado.web.RequestHandler):
 def main():
     from tornado.options import define, options
     define("port", default=8001, help="run on the given port", type=int)
-    define("debug", default=False, help="debug mode", type=bool)
+    define("debug", default=True, help="debug mode", type=bool)
 
     tornado.options.parse_command_line()
+
+    # also send logs through syslog to get them into graylog
+    if not options.debug:
+        """
+        This will send things through syslogd, and into /var/log/syslog by default.
+        to get them into graylog, you probably need to tinker with rsyslog or syslog-ng
+        settings. see: http://dev.nuclearrooster.com/2011/04/05/forwarding-rsyslog-to-graylog2/
+        for simple examples
+        """
+        import logging
+        import logging.handlers
+        logger = logging.getLogger() 
+        handler = logging.handlers.SysLogHandler(address='/dev/log')
+        handler.setFormatter(tornado.log.LogFormatter(color=False))
+        logger.addHandler(handler)
 
     http_server = tornado.httpserver.HTTPServer( App(options.debug) )
     http_server.listen(options.port)

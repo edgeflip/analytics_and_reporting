@@ -77,13 +77,26 @@ class App(ETL, tornado.web.Application):
 
 def main():
     from tornado.options import define, options
-    define("debug", default=False, help="debug mode", type=bool)
+    define("debug", default=True, help="debug mode", type=bool)
     define("fromRDS", default=False, help="ETL process for data from RDS")
     define("fromDynamo", default=False, help="ETL process for data from Dynamo")
     define("mkCSV", default=False, help="generate and upload client CSV file")
     define("mkVAEmail", default=False, help="generate and email VA a CSV of stats with sources")
 
     tornado.options.parse_command_line()
+
+    # also send logs through syslog to get them into graylog
+    if not options.debug:
+        """
+        see main.py for notes on system configuration
+        """
+        import logging
+        import logging.handlers
+        logger = logging.getLogger()
+        handler = logging.handlers.SysLogHandler(address='/dev/log')
+        handler.setFormatter(tornado.log.LogFormatter(color=False))
+        logger.addHandler(handler)
+
 
     if options.mkCSV:
         from tasks import mkCSV, mkemailCSV
