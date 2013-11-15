@@ -16,7 +16,7 @@ IMPORTANT: debug mode (--debug=True from the command line) turns this off!
 
 
 
-RECIPIENTS = ['japhy@edgeflip.com',]
+RECIPIENTS = ['devops@edgeflip.com',]
 
 
 def mail_tracebacks(method):
