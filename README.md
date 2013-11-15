@@ -4,8 +4,8 @@ INSTALL
 * `source env/bin/activate`
 * `pip install -r requirements.txt`
 * `ln -s keys_dev.py keys.py`
-* python main.py --help
-* python worker.py --help
+* `python main.py --help`
+* `python worker.py --help`
 
 Once you've made a virtualenv and set up your credentials, there
 are two processes which handle everything: `main.py` and `worker.py`
@@ -13,7 +13,7 @@ are two processes which handle everything: `main.py` and `worker.py`
 
 LAUNCH DASHBOARD
 ================
-python main.py --port=8080
+`python main.py --port=8080`
 
 The dashboard and it's various views.  Fire it up and see:
 
@@ -27,13 +27,13 @@ as a superuser (probably `edgeflip`) will let you choose from available clients.
 
 LAUNCH IMPORTERS
 ================
-python worker.py --fromRDS
-python worker.py --fromDynamo
+`python worker.py --fromRDS`
+`python worker.py --fromDynamo`
 
 The import process from RDS is similar to a cron job;  every X minutes, it will iterate
-through a list of tables, copy them to redshift through S3, and generate new statistics.
-Much of the heavy lifting is done with `table_to_redshift.py`, which can also be used
-as a command line tool by itself.
+through a list of tables, copy them to redshift through S3, and generate new statistics
+in the table `clientstats`.  Much of the heavy lifting is done with `table_to_redshift.py`, 
+which can also be used as a command line tool by itself (look at __main__). 
 
 The import process from Dynamo needs to run as some sort of daemon;  every X minutes it
 scans Redshift tables to queue up users and edges that need to be extracted from Dynamo,
@@ -70,3 +70,10 @@ This is set to True by default, which does the following things:
 
 Ie, in production, launch things with --debug=False
 
+
+"DEPLOYING"
+===========
+`ssh ubuntu@ec2-54-227-240-222.compute-1.amazonaws.com -i edgeflip.pem`
+`screen -rd`
+`git pull origin master`
+`ctrl + a, ctrl +c, !!` x 3
