@@ -33,16 +33,16 @@ def mkCSV(application, t=False, client_id=2):
 
     # EVENTS
     # get campaign_id, activity_id
-    rs.execute( """    
+    rs.execute( """
     SELECT e.event_datetime AS time, v.session_id, v.fbid, e.friend_fbid, e.type, root.root_id, e.activity_id
-    FROM events AS e, visits AS v, campchain as root 
-        WHERE e.visit_id=v.visit_id 
+    FROM events AS e, visits AS v, campchain as root
+        WHERE e.visit_id=v.visit_id
         AND DATE_TRUNC('hour', time) = %s
         AND e.campaign_id IN
         (SELECT DISTINCT(campaign_id) FROM campaigns WHERE client_id=%s)
-        AND e.type IN ('session_start', 'authorized', 'shared', 'clickback') 
+        AND e.type IN ('session_start', 'authorized', 'shared', 'clickback')
         AND root.parent_id IS NOT NULL AND e.campaign_id=root.parent_id
-    ORDER BY time DESC 
+    ORDER BY time DESC
     """, (hour,client_id))
 
     # then make some csvs
@@ -132,11 +132,11 @@ def mkemailCSV(application, client_id=2):
     bucket = S3.get_bucket('ef-client-data')
 
     rs.execute("""
-        SELECT DISTINCT fname,lname,email 
-        FROM users,visits,events,campaigns 
-        WHERE users.fbid=visits.fbid 
-            AND visits.visit_id=events.visit_id 
-            AND events.campaign_id=campaigns.campaign_id 
+        SELECT DISTINCT fname,lname,email
+        FROM users,visits,events,campaigns
+        WHERE users.fbid=visits.fbid
+            AND visits.visit_id=events.visit_id
+            AND events.campaign_id=campaigns.campaign_id
             AND campaigns.client_id=%s
         """,(client_id,))
 
@@ -295,7 +295,7 @@ class ETL(object):
         debug('Connecting to redshift..')
         from keys import redshift
         self.pconn = psycopg2.connect( **redshift)
-        self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor) 
+        self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor)
 
         debug('Connecting to RDS..')
         from keys import rds
@@ -306,7 +306,7 @@ class ETL(object):
         self.dconn = boto.dynamodb.connect_to_region('us-east-1', **aws)
         # This table gets used in a few places pretty steadily, "cache" it in here
         self.usertable = self.dconn.get_table('prod.users')
- 
+
         debug('Done.')
 
     @mail_tracebacks
@@ -315,12 +315,13 @@ class ETL(object):
         from table_to_redshift import main as rds2rs
 
         for table, table_id in [
-            ('visits', 'visit_id'), 
-            ('visitors', 'visitor_id'), 
+            ('visits', 'visit_id'),
+            ('visitors', 'visitor_id'),
             ('campaigns', 'campaign_id'),
             ('events', 'event_id'),
             ('clients', 'client_id'),
             ('campaign_properties', 'campaign_property_id'),
+            ('user_clients', 'user_client_id'),
             ('clientstats', False),
             ]:
             try:
@@ -340,7 +341,7 @@ class ETL(object):
                 debug('Done.')  # poor man's timer
 
                 self.pcur.execute( """
-                    INSERT INTO {table} SELECT * FROM _{table} 
+                    INSERT INTO {table} SELECT * FROM _{table}
                     WHERE {table_id} > (SELECT max({table_id}) FROM {table})
                     """.format(table=table, table_id=table_id))
                 self.pconn.commit()
@@ -361,9 +362,9 @@ class ETL(object):
         """
 
         self.mcur.execute( """
-        SELECT t1.campaign_id 
-        FROM campaign_properties AS t1 
-            LEFT JOIN campaign_properties AS t2 ON t1.campaign_id=t2.fallback_campaign_id 
+        SELECT t1.campaign_id
+        FROM campaign_properties AS t1
+            LEFT JOIN campaign_properties AS t2 ON t1.campaign_id=t2.fallback_campaign_id
         WHERE t2.fallback_campaign_id IS NULL;
         """)
 
@@ -386,7 +387,7 @@ class ETL(object):
                 INSERT INTO campchain VALUES (%s,%s,%s)
                 """, (root_id, root_id, fallback_id))
 
-            parent_id = root_id 
+            parent_id = root_id
             while fallback_id:
                 # crawl down the chain
 
@@ -424,14 +425,14 @@ class ETL(object):
 
     FROM
         (
-            SELECT e1.visit_id, 
-                e1.campaign_id, 
-                e1.content_id, 
+            SELECT e1.visit_id,
+                e1.campaign_id,
+                e1.content_id,
                 e1.friend_fbid,
-                e1.type, 
-                e1.content, 
-                e1.activity_id, 
-                NULL AS cb_visit_id, 
+                e1.type,
+                e1.content,
+                e1.activity_id,
+                NULL AS cb_visit_id,
                 e1.updated
             FROM events e1
                 WHERE type <> 'clickback'
@@ -446,7 +447,7 @@ class ETL(object):
                 e2.activity_id,
                 e2.visit_id AS cb_visit_id,
                 e2.updated
-            FROM events e2 
+            FROM events e2
             LEFT JOIN events e3 USING (activity_id)
                 WHERE e2.type='clickback' AND e3.type='shared'
             )
@@ -462,7 +463,7 @@ class ETL(object):
         debug('Calculating client stats')
         self.pcur.execute(megaquery)
         self.pconn.commit()
-        debug( 'beginning DELETE / INSERT on clientstats') 
+        debug( 'beginning DELETE / INSERT on clientstats')
         self.pcur.execute("DELETE FROM clientstats WHERE 1")
         self.pcur.execute("INSERT INTO clientstats SELECT * FROM _clientstats WHERE 1")
         self.pconn.commit()
@@ -478,10 +479,10 @@ class ETL(object):
 
         # distinct fbids from visits missing from users
         self.pcur.execute("""
-            SELECT DISTINCT(visitors.fbid) AS fbid FROM users 
-                RIGHT JOIN visitors 
-                    ON visitors.fbid=users.fbid 
-                WHERE users.fbid IS NULL 
+            SELECT DISTINCT(visitors.fbid) AS fbid FROM users
+                RIGHT JOIN visitors
+                    ON visitors.fbid=users.fbid
+                WHERE users.fbid IS NULL
             """)
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
         info("Found {} unknown primary fbids".format(len(fbids)))
@@ -559,7 +560,7 @@ class ETL(object):
             # cast timestamps from seconds since epoch to dates and times
             if 'birthday' in dyndata and dyndata['birthday']:
                 dyndata['birthday'] = datetime.date.fromtimestamp( dyndata['birthday'])
-            else: 
+            else:
                 dyndata['birthday'] = None
 
             if 'updated' in dyndata and dyndata['updated']:
@@ -581,8 +582,8 @@ class ETL(object):
             INSERT INTO users
             (fbid, fname, lname, email, gender, birthday, city, state, updated)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (fbid, data['fname'], data['lname'], data['email'], 
-                    data['gender'], data['birthday'], data['city'], data['state'], 
+            """, (fbid, data['fname'], data['lname'], data['email'],
+                    data['gender'], data['birthday'], data['city'], data['state'],
                     data['updated'])
             )
 
@@ -592,7 +593,7 @@ class ETL(object):
     @mail_tracebacks
     def queue_edges(self):
         self.pcur.execute("""
-            SELECT DISTINCT fbid FROM visitors 
+            SELECT DISTINCT fbid FROM visitors
             WHERE fbid NOT IN (SELECT DISTINCT fbid_target FROM edges)
             AND fbid NOT IN (SELECT DISTINCT fbid FROM missingedges)
             ORDER BY updated DESC
@@ -619,7 +620,7 @@ class ETL(object):
 
             edges = []
             for edge in result.response['Items']:
-                """ 
+                """
                 some, relatively rare, dynamo records only have px3 data, so wall_comms, post_comms, etc
                 are missing..  the workaround is to make a defaultdict with 0s ? tho maybe NULL would be better
                 """
@@ -627,19 +628,19 @@ class ETL(object):
                 d.update(edge)
                 edge = d
                 edges.append( "({},{},{},{},{},{},{},{},{},{},{},{},'{}')".format(
-                            edge['fbid_source'], edge['fbid_target'], edge['wall_comms'], edge['post_comms'], 
-                            edge['tags'], edge['wall_posts'], edge['mut_friends'], edge['stat_likes'], 
-                            edge['photos_other'], edge['post_likes'], edge['photos_target'], edge['stat_comms'], 
+                            edge['fbid_source'], edge['fbid_target'], edge['wall_comms'], edge['post_comms'],
+                            edge['tags'], edge['wall_posts'], edge['mut_friends'], edge['stat_likes'],
+                            edge['photos_other'], edge['post_likes'], edge['photos_target'], edge['stat_comms'],
                             datetime.datetime.fromtimestamp( edge['updated'])) )
 
             # insert what we got
             self.pcur.execute("""
                     INSERT INTO edges
-                    (fbid_source, fbid_target, wall_comms, post_comms, 
-                        tags, wall_posts, mut_friends, stat_likes, 
-                        photos_other, post_likes, photos_target, stat_comms, 
+                    (fbid_source, fbid_target, wall_comms, post_comms,
+                        tags, wall_posts, mut_friends, stat_likes,
+                        photos_other, post_likes, photos_target, stat_comms,
                         updated )
-                    VALUES 
+                    VALUES
                     """ + ",".join(edges),
                     )
 
@@ -649,7 +650,7 @@ class ETL(object):
             warning('fbid {} not found in dynamo edges'.format(fbid))
             self.pcur.execute("INSERT INTO missingedges (fbid) VALUES (%s)", (fbid,))
             self.pconn.commit()
-            return 
+            return
 
         info( 'Successfully updated edges table for fbid {}'.format(fbid))
         self.pconn.commit()
