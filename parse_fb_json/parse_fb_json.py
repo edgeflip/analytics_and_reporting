@@ -64,6 +64,17 @@ class Feed(object):
                 link_line = "\t".join([f.encode('utf8', 'ignore') for f in link_fields])
                 outfile_links.write(link_line + "\n")
 
+    def write_labels(outfile_posts, outfile_links, delim="\t"):
+        # these MUST match field order above
+        post_fields = ['user_id', 'post_id', 'post_ts', 'post_type', 'post_app', 'post_from',
+                       'post_link', 'post_link_domain',
+                       'post_story', 'post_description', 'post_caption', 'post_message']
+        outfile_posts.write(delim.join(post_fields) + "\n")
+
+        link_fields = ['post_id', 'user_id', 'to', 'like', 'comment']
+        outfile_links.write(delim.join(link_fields) + "\n")
+
+
 class FeedPost(object):
     def __init__(self, post_json):
         self.post_id = str(post_json['id'])
@@ -104,6 +115,8 @@ if __name__ == '__main__':
 
     outfile_posts = open(args.post_file, 'wb')
     outfile_links = open(args.link_file, 'wb')
+
+    Feed.write_labels(outfile_posts, outfile_links)
 
     for i, feed in enumerate(feed_json_iter()):
         if (i % 1000 == 0):
