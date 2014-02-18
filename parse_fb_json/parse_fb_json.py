@@ -3,6 +3,7 @@ import sys
 import json
 from boto.s3.connection import S3Connection
 from urlparse import urlparse
+import argparse
 
 
 AWS_ACCESS_KEY = "AKIAJDPO2KQRLOJBQP3Q"
@@ -96,8 +97,13 @@ class FeedPost(object):
 
 if __name__ == '__main__':
 
-    outfile_posts = open(sys.argv[1], 'wb')
-    outfile_links = open(sys.argv[2], 'wb')
+    parser = argparse.ArgumentParser(description='Eat up the FB sync data and put it into a tsv')
+    parser.add_argument('post_file', type=str, help='output file for feed posts')
+    parser.add_argument('link_file', type=str, help='output file for user-post links (like, comm, etc.')
+    args = parser.parse_args()
+
+    outfile_posts = open(args.post_file, 'wb')
+    outfile_links = open(args.link_file, 'wb')
 
     for i, feed in enumerate(feed_json_iter()):
         if (i % 1000 == 0):
