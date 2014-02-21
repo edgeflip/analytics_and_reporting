@@ -34,7 +34,7 @@ def feed_json_iter(bucket_names=AWS_BUCKET_NAMES):
                 continue
 
             sys.stderr.write("\t%d/%d read feed json with %d posts from %s\n" % (k, len(bucket_keys), len(feed_json_list), key.name))
-            yield Feed(prim_id, feed_json_list)
+            yield Feed(sec_id, feed_json_list)
 
 class Feed(object):
     def __init__(self, user_id, feed_json_list):
