@@ -13,6 +13,7 @@ import psycopg2
 import psycopg2.extras
 
 from errors import mail_tracebacks
+from redshift_utils import deploy_table, drop_table_if_exists
 
 def mkCSV(application, t=False, client_id=2):
     """ Grab event data for the hour preceding t """
@@ -322,33 +323,10 @@ class ETL(object):
             ('clients', 'client_id'),
             ('campaign_properties', 'campaign_property_id'),
             ('user_clients', 'user_client_id'),
-            ('clientstats', False),
-            ]:
-            try:
-                debug('Dropping table _{}'.format(table))
-                self.pcur.execute( "DROP TABLE _{}".format(table))
-                self.pconn.commit()
-            except Exception as e:
-                # usually just "table doesn't exist"
-                warning( '{}'.format(e))
-                self.pconn.rollback()
-
-            if not table_id: continue
-
-            try:
-                debug('Uploading {} ..'.format(table))
-                rds2rs(table, self.pcur)
-                debug('Done.')  # poor man's timer
-
-                self.pcur.execute( """
-                    INSERT INTO {table} SELECT * FROM _{table}
-                    WHERE {table_id} > (SELECT max({table_id}) FROM {table})
-                    """.format(table=table, table_id=table_id))
-                self.pconn.commit()
-            except Exception as e:
-                warning( '{}'.format(e))
-                self.pconn.rollback()
-                raise
+        ]:
+            debug('Uploading {} ..'.format(table))
+            rds2rs(table)
+            debug('Done.')  # poor man's timer
 
         self.mkchains()
         self.mkstats()
@@ -409,8 +387,10 @@ class ETL(object):
 
 
     def mkstats(self):
+        staging_table = 'clientstats_staging'
+        drop_table_if_exists(staging_table, self.pconn, self.pcur)
         megaquery = """
-    CREATE TABLE _clientstats AS
+    CREATE TABLE {0} AS
     SELECT
         t.campaign_id,
         date_trunc('hour', t.updated) as hour,
@@ -458,15 +438,13 @@ class ETL(object):
         ) v
         USING (visit_id)
     GROUP BY t.campaign_id, hour
-        """
+        """.format(staging_table)
 
         debug('Calculating client stats')
-        self.pcur.execute(megaquery)
-        self.pconn.commit()
-        debug( 'beginning DELETE / INSERT on clientstats')
-        self.pcur.execute("DELETE FROM clientstats WHERE 1")
-        self.pcur.execute("INSERT INTO clientstats SELECT * FROM _clientstats WHERE 1")
-        self.pconn.commit()
+        with self.pconn:
+            self.pcur.execute(megaquery)
+        debug('beginning deploy table on clientstats')
+        deploy_table('clientstats', 'clientstats_staging', 'clientstats_old', self.pcur, self.pconn)
 
         self.updated = strftime('%x %X')
 
