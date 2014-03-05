@@ -2,6 +2,7 @@
 import sys
 import os
 import json
+import logging
 from boto.s3.connection import S3Connection
 from urlparse import urlparse
 from tempfile import mkstemp
@@ -18,27 +19,29 @@ AWS_BUCKET_NAMES = [ "feed_crawler_%d" % i for i in range(5) ]
 
 
 
+logger = logging.getLogger(__name__)
+
 def get_conn_s3(key=AWS_ACCESS_KEY, sec=AWS_SECRET_KEY):
     return S3Connection(key, sec)
 
 def feed_json_iter(bucket_names=AWS_BUCKET_NAMES):
     conn = get_conn_s3()
     for b, bucket_name in enumerate(bucket_names):
-        sys.stderr.write("reading bucket %d/%d (%s)\n" % (b, len(bucket_names), bucket_name))
+        logger.debug("reading bucket %d/%d (%s)\n" % (b, len(bucket_names), bucket_name))
 
         for k, key in enumerate(conn.get_bucket(bucket_name).list()):
             # name should have format primary_secondary; e.g., "100000008531200_1000760833"
             prim_id, sec_id = map(int, key.name.split("_"))
             feed_raw = key.get_contents_as_string()
-            #sys.stderr.write("\tread %d from %s\n" % (len(feed_raw), key.name))
+            #logger.debug("\tread %d from %s\n" % (len(feed_raw), key.name))
 
             try:
                 feed_json_list = json.loads(feed_raw)['data']
             except KeyError:
-                sys.stderr.write("no data in feed %s\n" % key.name)
+                logger.debug("no data in feed %s\n" % key.name)
                 continue
 
-            sys.stderr.write("\t%d read feed json with %d posts from %s\n" % (k, len(feed_json_list), key.name))
+            logger.debug("\t%d read feed json with %d posts from %s\n" % (k, len(feed_json_list), key.name))
             yield Feed(sec_id, feed_json_list)
 
 class Feed(object):
@@ -49,8 +52,8 @@ class Feed(object):
             try:
                 self.posts.append(FeedPost(post_json))
             except:
-                sys.stderr.write("error parsing: " + str(post_json) + "\n\n")
-                sys.stderr.write("full feed: " + str(feed_json_list) + "\n\n")
+                logger.debug("error parsing: " + str(post_json) + "\n\n")
+                logger.deubg("full feed: " + str(feed_json_list) + "\n\n")
                 raise
 
     #def write(self, outfile_posts, outfile_links, delim="\t"):
@@ -163,14 +166,14 @@ if __name__ == '__main__':
     pool = multiprocessing.Pool(args.workers)
     #for i, (fn_posts, fn_links) in enumerate(pool.imap(handle_feed, feed_json_iter())):
     #    if (i % 1000 == 0):
-    #        sys.stderr.write("\t%d\n" % i)
+    #        logger.debug.write("\t%d\n" % i)
     #    outfile_posts.write(open(fn_posts).read())
     #    os.remove(fn_posts)
     #    outfile_links.write(open(fn_links).read())
     #    os.remove(fn_links)
     for i, (post_lines, link_lines) in enumerate(pool.imap(handle_feed, feed_json_iter())):
         if (i % 1000 == 0):
-            sys.stderr.write("\t%d\n" % i)
+            logger.debug("\t%d\n" % i)
         outfile_posts.write(post_lines)
         outfile_links.write(link_lines)
 
