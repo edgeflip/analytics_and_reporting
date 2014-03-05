@@ -53,21 +53,43 @@ class Feed(object):
                 sys.stderr.write("full feed: " + str(feed_json_list) + "\n\n")
                 raise
 
-    def write(self, outfile_posts, outfile_links, delim="\t"):
+    #def write(self, outfile_posts, outfile_links, delim="\t"):
+    #    for p in self.posts:
+    #        post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
+    #                  p.post_link, p.post_link_domain,
+    #                  p.post_story, p.post_description, p.post_caption, p.post_message]
+    #        post_line = delim.join([f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields])
+    #        outfile_posts.write(post_line + "\n")
+    #
+    #        for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
+    #            has_to = "1" if user_id in p.to_ids else ""
+    #            has_like = "1" if user_id in p.like_ids else ""
+    #            has_comm = "1" if user_id in p.comment_ids else ""
+    #            link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
+    #            link_line = "\t".join([f.encode('utf8', 'ignore') for f in link_fields])
+    #            outfile_links.write(link_line + "\n")
+
+    def get_posts_str(self, delim="\t"):
+        lines = []
         for p in self.posts:
             post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
                       p.post_link, p.post_link_domain,
                       p.post_story, p.post_description, p.post_caption, p.post_message]
             post_line = delim.join([f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields])
-            outfile_posts.write(post_line + "\n")
+            lines.append(post_line)
+        return "\n".join(lines) + "\n"
 
+    def get_links_str(self, delim="\t"):
+        lines = []
+        for p in self.posts:
             for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
-                has_to =  "1" if user_id in p.to_ids else ""
+                has_to = "1" if user_id in p.to_ids else ""
                 has_like = "1" if user_id in p.like_ids else ""
                 has_comm = "1" if user_id in p.comment_ids else ""
                 link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
                 link_line = "\t".join([f.encode('utf8', 'ignore') for f in link_fields])
-                outfile_links.write(link_line + "\n")
+                lines.append(link_line)
+        return "\n".join(lines) + "\n"
 
     @staticmethod
     def write_labels(outfile_posts, outfile_links, delim="\t"):
@@ -108,13 +130,16 @@ class FeedPost(object):
             self.comment_ids.update([user['id'] for user in post_json['comments']['data']])
 
 def handle_feed(feed):
-    fd_posts, filename_posts = mkstemp()
-    fd_links, filename_links = mkstemp()
-    with open(filename_posts, 'wb') as outfile_posts, open(filename_links, 'wb') as outfile_links:
-        feed.write(outfile_posts, outfile_links)
-    os.close(fd_posts)
-    os.close(fd_links)
-    return filename_posts, filename_links
+    #fd_posts, filename_posts = mkstemp()
+    #fd_links, filename_links = mkstemp()
+    #with open(filename_posts, 'wb') as outfile_posts, open(filename_links, 'wb') as outfile_links:
+    #    feed.write(outfile_posts, outfile_links)
+    #os.close(fd_posts)
+    #os.close(fd_links)
+    #return filename_posts, filename_links
+    post_lines = feed.get_posts_str()
+    link_lines = feed.get_links_str()
+    return post_lines, link_lines
 
 
 
@@ -136,13 +161,18 @@ if __name__ == '__main__':
     Feed.write_labels(outfile_posts, outfile_links)
 
     pool = multiprocessing.Pool(args.workers)
-    for i, (fn_posts, fn_links) in enumerate(pool.imap(handle_feed, feed_json_iter())):
+    #for i, (fn_posts, fn_links) in enumerate(pool.imap(handle_feed, feed_json_iter())):
+    #    if (i % 1000 == 0):
+    #        sys.stderr.write("\t%d\n" % i)
+    #    outfile_posts.write(open(fn_posts).read())
+    #    os.remove(fn_posts)
+    #    outfile_links.write(open(fn_links).read())
+    #    os.remove(fn_links)
+    for i, (post_lines, link_lines) in enumerate(pool.imap(handle_feed, feed_json_iter())):
         if (i % 1000 == 0):
             sys.stderr.write("\t%d\n" % i)
-        outfile_posts.write(open(fn_posts).read())
-        os.remove(fn_posts)
-        outfile_links.write(open(fn_links).read())
-        os.remove(fn_links)
+        outfile_posts.write(post_lines)
+        outfile_links.write(link_lines)
 
         if (args.maxfeeds is not None) and (i >= args.maxfeeds):
             sys.exit("bailing")
