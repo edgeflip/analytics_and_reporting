@@ -51,7 +51,7 @@ class Feed(object):
         for post_json in feed_json_list:
             try:
                 self.posts.append(FeedPost(post_json))
-            except:
+            except Exception:
                 logger.debug("error parsing: " + str(post_json) + "\n\n")
                 logger.deubg("full feed: " + str(feed_json_list) + "\n\n")
                 raise
@@ -78,7 +78,7 @@ class Feed(object):
             post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
                       p.post_link, p.post_link_domain,
                       p.post_story, p.post_description, p.post_caption, p.post_message]
-            post_line = delim.join([f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields])
+            post_line = delim.join(f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields)
             lines.append(post_line)
         return "\n".join(lines) + "\n"
 
@@ -90,7 +90,7 @@ class Feed(object):
                 has_like = "1" if user_id in p.like_ids else ""
                 has_comm = "1" if user_id in p.comment_ids else ""
                 link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
-                link_line = "\t".join([f.encode('utf8', 'ignore') for f in link_fields])
+                link_line = "\t".join(f.encode('utf8', 'ignore') for f in link_fields)
                 lines.append(link_line)
         return "\n".join(lines) + "\n"
 
@@ -125,11 +125,11 @@ class FeedPost(object):
         self.to_ids = set()
         self.like_ids = set()
         self.comment_ids = set()
-        if ('to' in post_json):
+        if 'to' in post_json:
             self.to_ids.update([user['id'] for user in post_json['to']['data']])
-        if ('likes' in post_json):
+        if 'likes' in post_json:
             self.like_ids.update([user['id'] for user in post_json['likes']['data']])
-        if ('comments' in post_json):
+        if 'comments' in post_json:
             self.comment_ids.update([user['id'] for user in post_json['comments']['data']])
 
 def handle_feed(feed):
@@ -165,14 +165,14 @@ if __name__ == '__main__':
 
     pool = multiprocessing.Pool(args.workers)
     #for i, (fn_posts, fn_links) in enumerate(pool.imap(handle_feed, feed_json_iter())):
-    #    if (i % 1000 == 0):
+    #    if i % 1000 == 0:
     #        logger.debug.write("\t%d\n" % i)
     #    outfile_posts.write(open(fn_posts).read())
     #    os.remove(fn_posts)
     #    outfile_links.write(open(fn_links).read())
     #    os.remove(fn_links)
     for i, (post_lines, link_lines) in enumerate(pool.imap(handle_feed, feed_json_iter())):
-        if (i % 1000 == 0):
+        if i % 1000 == 0:
             logger.debug("\t%d\n" % i)
         outfile_posts.write(post_lines)
         outfile_links.write(link_lines)
