@@ -15,6 +15,8 @@ import psycopg2.extras
 from errors import mail_tracebacks
 from redshift_utils import deploy_table, drop_table_if_exists
 
+MAX_RETRIES = 12
+
 def mkCSV(application, t=False, client_id=2):
     """ Grab event data for the hour preceding t """
     rs = application.pcur  # redshift cursor, need better naming convention
@@ -455,13 +457,14 @@ class ETL(object):
     def queue_users(self):
         t = time()
 
-        # distinct fbids from visits missing from users
+        # distinct primaries missing from users
+        # TODO: remove visitors join once we fix user_clients to contain all primary fbids
         self.pcur.execute("""
-            SELECT DISTINCT(visitors.fbid) AS fbid FROM users
-                RIGHT JOIN visitors
-                    ON visitors.fbid=users.fbid
-                WHERE users.fbid IS NULL
-            """)
+            SELECT DISTINCT(COALESCE(visitors.fbid, user_clients.fbid)) AS fbid FROM users
+            RIGHT JOIN visitors ON visitors.fbid=users.fbid
+            RIGHT JOIN user_clients ON user_clients.fbid=users.fbid
+            WHERE users.fbid IS NULL
+        """)
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
         info("Found {} unknown primary fbids".format(len(fbids)))
         self.primary_fbids = self.primary_fbids.union(set(fbids))
@@ -507,6 +510,35 @@ class ETL(object):
 
         self.pconn.commit()
         info( 'Extracted fbid {} from Dynamo'.format(fbid))
+
+
+    def extract_user_primary(self):
+        self.extract_user_batch(self.primary_fbids, 10)
+
+    def extract_user_secondary(self):
+        self.extract_user_batch(self.secondary_fbids, 100)
+
+
+    @mail_tracebacks
+    def extract_user_batch(self, collection, batch_size):
+        batch = set()
+        while collection and len(batch) < batch_size:
+            batch.add(collection.pop())
+
+        info('Created fbid batch {} from Dynamo'.format(batch))
+
+        with self.pconn:
+            for fbid in batch:
+                if fbid:
+                    try:
+                        self.seek_user(fbid)
+                    except StandardError as e:
+                        # Complain, 'requeue', and fix the current transaction
+                        # so the batch can proceed
+                        warning('Error processing fbid {}'.format(fbid))
+                        collection.add(fbid)
+                        self.pconn.commit()
+        info('Batch complete')
 
 
     @mail_tracebacks
@@ -570,15 +602,26 @@ class ETL(object):
 
     @mail_tracebacks
     def queue_edges(self):
+        # get primaries that don't have edges yet and we haven't given up on
+        # TODO: remove visitors join once we fix user_clients to contain all primary fbids
         self.pcur.execute("""
-            SELECT DISTINCT fbid FROM visitors
-            WHERE fbid NOT IN (SELECT DISTINCT fbid_target FROM edges)
-            AND fbid NOT IN (SELECT DISTINCT fbid FROM missingedges)
-            ORDER BY updated DESC
-            """)
+            SELECT DISTINCT users.fbid from users
+            LEFT JOIN visitors on (users.fbid = visitors.fbid)
+            LEFT JOIN user_clients on (users.fbid = user_clients.fbid)
+            LEFT JOIN missingedges on (
+                missingedges.fbid = users.fbid and
+                (missingedges.next_try is null or missingedges.retries >= %s or missingedges.next_try > getdate())
+            )
+            LEFT JOIN edges on (edges.fbid_target = users.fbid)
+            WHERE
+                edges.fbid_target is null
+                AND missingedges.fbid is null
+                AND COALESCE(visitors.fbid, user_clients.fbid) is not null
+            ORDER BY users.updated DESC
+            """, (MAX_RETRIES,))
 
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
-        self.edge_fbids = self.edge_fbids.union( set(fbids))
+        self.edge_fbids.update(fbids)
 
         info("{} fbids queued for edge extraction".format(len(self.edge_fbids)))
 
@@ -626,7 +669,15 @@ class ETL(object):
 
         except boto.dynamodb.exceptions.DynamoDBKeyNotFoundError:
             warning('fbid {} not found in dynamo edges'.format(fbid))
-            self.pcur.execute("INSERT INTO missingedges (fbid) VALUES (%s)", (fbid,))
+            self.pcur.execute("SELECT retries FROM missingedges WHERE fbid = %s", (fbid,))
+            result = self.pcur.fetchone()
+            # either schedule a retry with exponential backoff or give up
+            if result and result[0] < MAX_RETRIES:
+                self.pcur.execute("UPDATE missingedges set retries = retries + 1, next_try = dateadd(m, power(2, retries)::int, getdate()) where fbid = %s", (fbid,))
+            elif not result:
+                self.pcur.execute("INSERT INTO missingedges (fbid, retries, next_try) VALUES (%s, 1, getdate())", (fbid,))
+            else:
+                self.pcur.execute("UPDATE missingedges set next_try = null where fbid = %s", (fbid,))
             self.pconn.commit()
             return
 
