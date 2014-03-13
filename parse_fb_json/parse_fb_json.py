@@ -8,6 +8,7 @@ from urlparse import urlparse
 import tempfile
 import argparse
 import multiprocessing
+import time
 
 
 
@@ -125,6 +126,24 @@ def handle_feed(key):
     return post_lines, link_lines
 
 
+class Timer(object):
+    def __init__(self):
+        self.start = time.time()
+        self.ends = []
+    def end(self):
+        self.ends.append(time.time())
+        return self.ends[-1] - ([self.start] + self.ends)[-2]
+    def get_splits(self):
+        splits = []
+        s = self.start
+        for e in self.ends:
+            splits.append(e - s)
+            s = e
+        return splits
+    def report_splits_avg(self, prefix=""):
+        splits = self.get_splits()
+        return prefix + "avg time over %d trials: %.1f secs" % (len(self.ends), sum(splits)/len(splits))
+
 
 
 ###################################
@@ -137,6 +156,9 @@ if __name__ == '__main__':
     parser.add_argument('--workers', type=int, help='number of workers to multiprocess', default=1)
     parser.add_argument('--maxfeeds', type=int, help='bail after x feeds are done', default=None)
     parser.add_argument('--logfile', type=str, help='for debugging', default=None)
+    parser.add_argument('--prof_trials', type=int, help='run x times with incr workers', default=1)
+    parser.add_argument('--prof_incr', type=int, help='profile worker decrement', default=5)
+
     args = parser.parse_args()
 
     if args.logfile is not None:
@@ -147,14 +169,24 @@ if __name__ == '__main__':
 
     Feed.write_labels(outfile_posts, outfile_links)
 
-    sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), args.workers))
-    pool = multiprocessing.Pool(args.workers)
-    for i, (post_lines, link_lines) in enumerate(pool.imap(handle_feed, key_iter())):
-        if i % 100 == 0:
-            sys.stderr.write("\t%d\n" % i)
-        outfile_posts.write(post_lines)
-        outfile_links.write(link_lines)
+    worker_counts = range(args.workers, 1, -1*args.prof_incr) + [1] if (args.prof_trials > 1) else [args.workers]
+    sys.stderr.write("worker counts: %s\n" % str(worker_counts))
 
-        if (args.maxfeeds is not None) and (i >= args.maxfeeds):
-            sys.exit("bailing")
+    for worker_count in worker_counts:
+        tim = Timer()
+        for t in range(args.prof_trials):
+            sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
+            pool = multiprocessing.Pool(worker_count)
+            for i, (post_lines, link_lines) in enumerate(pool.imap(handle_feed, key_iter())):
+                if i % 100 == 0:
+                    sys.stderr.write("\t%d\n" % i)
+                outfile_posts.write(post_lines)
+                outfile_links.write(link_lines)
 
+                if (args.maxfeeds is not None) and (i >= args.maxfeeds):
+                    #sys.exit("bailing")
+                    break
+            elapsed = tim.end()
+            sys.stderr.write("\t%.1f elapsed\n" % elapsed)
+        if (args.prof_trials > 1):
+            sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
