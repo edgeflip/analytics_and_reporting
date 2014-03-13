@@ -188,5 +188,6 @@ if __name__ == '__main__':
                     break
             elapsed = tim.end()
             sys.stderr.write("\t%.1f elapsed\n" % elapsed)
+            pool.terminate()
         if (args.prof_trials > 1):
             sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
