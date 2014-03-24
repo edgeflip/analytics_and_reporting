@@ -1,7 +1,7 @@
 from logging import debug, info
 import psycopg2
 
-DOES_NOT_EXIST_MESSAGE_TEMPLATE = 'relation "{0}" does not exist'
+DOES_NOT_EXIST_MESSAGE_TEMPLATE = '"{0}" does not exist'
 
 def deploy_table(table, staging_table, old_table, cursor, connection):
     # insurance in case the old table didn't get dropped before
