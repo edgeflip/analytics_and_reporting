@@ -120,7 +120,10 @@ class FeedPost(object):
             self.comment_ids.update([user['id'] for user in post_json['comments']['data']])
 
 def handle_feed(key):
-    feed = FeedS3(key)
+    try:
+        feed = FeedS3(key)
+    except KeyError:
+        return None
     post_lines = feed.get_posts_str()
     link_lines = feed.get_links_str()
     return post_lines, link_lines
@@ -177,11 +180,15 @@ if __name__ == '__main__':
         for t in range(args.prof_trials):
             sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
             pool = multiprocessing.Pool(worker_count)
-            for i, (post_lines, link_lines) in enumerate(pool.imap(handle_feed, key_iter())):
+            for i, lines_tup in enumerate(pool.imap(handle_feed, key_iter())):
                 if i % 100 == 0:
                     sys.stderr.write("\t%d\n" % i)
-                outfile_posts.write(post_lines)
-                outfile_links.write(link_lines)
+                if lines_tup is None:
+                    continue
+                else:
+                    post_lines, link_lines = lines_tup
+                    outfile_posts.write(post_lines)
+                    outfile_links.write(link_lines)
 
                 if (args.maxfeeds is not None) and (i >= args.maxfeeds):
                     #sys.exit("bailing")
@@ -191,3 +198,8 @@ if __name__ == '__main__':
             pool.terminate()
         if (args.prof_trials > 1):
             sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
+
+
+
+#zzz need to insulate against empty data exception
+#zzz need to have stop/start mechanism
