@@ -46,28 +46,6 @@ class Feed(object):
                 logger.deubg("full feed: " + str(feed_json_list) + "\n\n")
                 raise
 
-    # def get_posts_str(self, delim="\t"):
-    #     lines = []
-    #     for p in self.posts:
-    #         post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
-    #                   p.post_link, p.post_link_domain,
-    #                   p.post_story, p.post_description, p.post_caption, p.post_message]
-    #         post_line = delim.join(f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields)
-    #         lines.append(post_line)
-    #     return "\n".join(lines) + "\n"
-
-    # def get_links_str(self, delim="\t"):
-    #     lines = []
-    #     for p in self.posts:
-    #         for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
-    #             has_to = "1" if user_id in p.to_ids else ""
-    #             has_like = "1" if user_id in p.like_ids else ""
-    #             has_comm = "1" if user_id in p.comment_ids else ""
-    #             link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
-    #             link_line = "\t".join(f.encode('utf8', 'ignore') for f in link_fields)
-    #             lines.append(link_line)
-    #     return "\n".join(lines) + "\n"
-
     def write(self, path_posts, path_links, delim="\t"):
         count_posts = 0
         with open(path_posts, 'wb') as outfile_posts:
@@ -172,15 +150,9 @@ def process_feeds(out_dir, worker_count, max_feeds):
     sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(worker_count)
 
-    feed_arg_iter = imap(None, key_iter(), repeat(out_dir))
-
-    # for i, stuff in enumerate(feed_arg_iter):
-    #     sys.stderr.write(str(stuff) + "\n")
-    #     if i > 10:
-    #         break
-
     post_line_count_tot = 0
     link_line_count_tot = 0
+    feed_arg_iter = imap(None, key_iter(), repeat(out_dir))
     for i, counts_tup in enumerate(pool.imap(handle_feed, feed_arg_iter)):
         if i % 100 == 0:
             sys.stderr.write("\t%d feeds, %d posts, %d links\n" % (i, post_line_count_tot, link_line_count_tot))
@@ -226,13 +198,13 @@ def profile_process_feeds(out_dir, max_worker_count, max_feeds, profile_trials, 
         sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
 
 
+
+
 ###################################
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Eat up the FB sync data and put it into a tsv')
-    # parser.add_argument('post_file', type=str, help='out file for feed posts')
-    # parser.add_argument('link_file', type=str, help='out file for user-post links (like, comm)')
     parser.add_argument('out_dir', type=str, help='base dir for output files')
     parser.add_argument('--workers', type=int, help='number of workers to multiprocess', default=1)
     parser.add_argument('--maxfeeds', type=int, help='bail after x feeds are done', default=None)
@@ -244,9 +216,6 @@ if __name__ == '__main__':
 
     if args.logfile is not None:
         logging.basicConfig(filename=args.logfile, level=logging.DEBUG)
-
-    # outfile_posts = open(args.post_file, 'wb')
-    # outfile_links = open(args.link_file, 'wb')
 
     # Feed.write_labels(outfile_posts, outfile_links)
 
@@ -260,3 +229,4 @@ if __name__ == '__main__':
 #zzz todo: do test of unordered vs ordered pool.imap()
 #zzz todo: add an overwrite option
 #zzz todo: add --combine post-processing option
+#zzz todo: write labels somewhere
