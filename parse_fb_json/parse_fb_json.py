@@ -8,6 +8,8 @@ from urlparse import urlparse
 import tempfile
 import argparse
 import multiprocessing
+from itertools import imap, repeat
+import os.path
 import time
 
 
@@ -34,7 +36,7 @@ def key_iter(bucket_names=AWS_BUCKET_NAMES):
 
 class Feed(object):
     def __init__(self, user_id, feed_json_list):
-        self.user_id = str(user_id)
+        self.user_id = user_id
         self.posts = []
         for post_json in feed_json_list:
             try:
@@ -44,27 +46,51 @@ class Feed(object):
                 logger.deubg("full feed: " + str(feed_json_list) + "\n\n")
                 raise
 
-    def get_posts_str(self, delim="\t"):
-        lines = []
-        for p in self.posts:
-            post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
-                      p.post_link, p.post_link_domain,
-                      p.post_story, p.post_description, p.post_caption, p.post_message]
-            post_line = delim.join(f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields)
-            lines.append(post_line)
-        return "\n".join(lines) + "\n"
+    # def get_posts_str(self, delim="\t"):
+    #     lines = []
+    #     for p in self.posts:
+    #         post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
+    #                   p.post_link, p.post_link_domain,
+    #                   p.post_story, p.post_description, p.post_caption, p.post_message]
+    #         post_line = delim.join(f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields)
+    #         lines.append(post_line)
+    #     return "\n".join(lines) + "\n"
 
-    def get_links_str(self, delim="\t"):
-        lines = []
-        for p in self.posts:
-            for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
-                has_to = "1" if user_id in p.to_ids else ""
-                has_like = "1" if user_id in p.like_ids else ""
-                has_comm = "1" if user_id in p.comment_ids else ""
-                link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
-                link_line = "\t".join(f.encode('utf8', 'ignore') for f in link_fields)
-                lines.append(link_line)
-        return "\n".join(lines) + "\n"
+    # def get_links_str(self, delim="\t"):
+    #     lines = []
+    #     for p in self.posts:
+    #         for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
+    #             has_to = "1" if user_id in p.to_ids else ""
+    #             has_like = "1" if user_id in p.like_ids else ""
+    #             has_comm = "1" if user_id in p.comment_ids else ""
+    #             link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
+    #             link_line = "\t".join(f.encode('utf8', 'ignore') for f in link_fields)
+    #             lines.append(link_line)
+    #     return "\n".join(lines) + "\n"
+
+    def write(self, path_posts, path_links, delim="\t"):
+        count_posts = 0
+        with open(path_posts, 'wb') as outfile_posts:
+            for p in self.posts:
+                post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
+                               p.post_link, p.post_link_domain,
+                               p.post_story, p.post_description, p.post_caption, p.post_message]
+                post_line = delim.join(f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields)
+                outfile_posts.write(post_line + "\n")
+                count_posts += 1
+
+        count_links = 0
+        with open(path_links, 'wb') as outfile_links:
+            for p in self.posts:
+                for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
+                    has_to = "1" if user_id in p.to_ids else ""
+                    has_like = "1" if user_id in p.like_ids else ""
+                    has_comm = "1" if user_id in p.comment_ids else ""
+                    link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
+                    link_line = delim.join(f.encode('utf8', 'ignore') for f in link_fields)
+                    outfile_links.write(link_line + "\n")
+                    count_links += 1
+        return (count_posts, count_links)
 
     @staticmethod
     def write_labels(outfile_posts, outfile_links, delim="\t"):
@@ -78,10 +104,7 @@ class Feed(object):
         outfile_links.write(delim.join(link_fields) + "\n")
 
 class FeedS3(Feed):
-    def __init__(self, key):
-        # name should have format primary_secondary; e.g., "100000008531200_1000760833"
-        prim_id, sec_id = map(int, key.name.split("_"))
-
+    def __init__(self, fbid, key):
         with tempfile.TemporaryFile() as fp:
             key.get_contents_to_file(fp)
             fp.seek(0)
@@ -91,7 +114,7 @@ class FeedS3(Feed):
                 logger.debug("no data in feed %s\n" % key.name)
                 raise
         logger.debug("\tread feed json with %d posts from %s\n" % (len(feed_json_list), key.name))
-        super(FeedS3, self).__init__(sec_id, feed_json_list)
+        super(FeedS3, self).__init__(fbid, feed_json_list)
 
 class FeedPost(object):
     def __init__(self, post_json):
@@ -119,27 +142,54 @@ class FeedPost(object):
         if 'comments' in post_json:
             self.comment_ids.update([user['id'] for user in post_json['comments']['data']])
 
-def handle_feed(key):
-    try:
-        feed = FeedS3(key)
-    except KeyError:
-        return None
-    post_lines = feed.get_posts_str()
-    link_lines = feed.get_links_str()
-    return post_lines, link_lines
+def handle_feed(args):
+    key, out_dir = args
 
-def process_feeds(worker_count, max_feeds=None):
+    # name should have format primary_secondary; e.g., "100000008531200_1000760833"
+    prim_id, sec_id = key.name.split("_")
+
+    # For each primary (token owner), we create a directory, each secondary crawled with that
+    # token is a file.  If the file already exists, we skip that feed.
+    out_dir_prim = os.path.join(out_dir, prim_id)
+    if not os.path.exists(out_dir_prim):
+        os.makedirs(out_dir_prim)
+
+    out_file_path_posts = os.path.join(out_dir_prim, sec_id + "_posts.tsv")
+    out_file_path_links = os.path.join(out_dir_prim, sec_id + "_links.tsv")
+
+    if os.path.isfile(out_file_path_posts) or os.path.isfile(out_file_path_links):
+        logging.debug("skipping existing prim %s, sec %s" % (prim_id, sec_id))
+        return None
+    else:
+        try:
+            feed = FeedS3(sec_id, key)
+        except KeyError:  # gets logged and reraised upstream
+            return None
+        post_line_count, link_line_count = feed.write(out_file_path_posts, out_file_path_links)
+        return (post_line_count, link_line_count)
+
+def process_feeds(out_dir, worker_count, max_feeds):
     sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(worker_count)
-    for i, lines_tup in enumerate(pool.imap(handle_feed, key_iter())):
+
+    feed_arg_iter = imap(None, key_iter(), repeat(out_dir))
+
+    # for i, stuff in enumerate(feed_arg_iter):
+    #     sys.stderr.write(str(stuff) + "\n")
+    #     if i > 10:
+    #         break
+
+    post_line_count_tot = 0
+    link_line_count_tot = 0
+    for i, counts_tup in enumerate(pool.imap(handle_feed, feed_arg_iter)):
         if i % 100 == 0:
-            sys.stderr.write("\t%d\n" % i)
-        if lines_tup is None:
+            sys.stderr.write("\t%d feeds, %d posts, %d links\n" % (i, post_line_count_tot, link_line_count_tot))
+        if counts_tup is None:
             continue
         else:
-            post_lines, link_lines = lines_tup
-            outfile_posts.write(post_lines)
-            outfile_links.write(link_lines)
+            post_lines, link_lines = counts_tup
+            post_line_count_tot += post_lines
+            link_line_count_tot += link_lines
 
         if (max_feeds is not None) and (i >= max_feeds):
             #sys.exit("bailing")
@@ -165,13 +215,13 @@ class Timer(object):
         splits = self.get_splits()
         return prefix + "avg time over %d trials: %.1f secs" % (len(self.ends), sum(splits)/len(splits))
 
-def profile_process_feeds(max_worker_count, max_feeds, profile_trials, profile_incr):
+def profile_process_feeds(out_dir, max_worker_count, max_feeds, profile_trials, profile_incr):
     worker_counts = range(max_worker_count, 1, -1*profile_incr) + [1]
     sys.stderr.write("worker counts: %s\n" % str(worker_counts))
     for worker_count in worker_counts:
         tim = Timer()
         for t in range(profile_trials):
-            process_feeds(worker_count, max_feeds)
+            process_feeds(worker_count, max_feeds, out_dir)
             elapsed = tim.end()
         sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
 
@@ -181,8 +231,9 @@ def profile_process_feeds(max_worker_count, max_feeds, profile_trials, profile_i
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Eat up the FB sync data and put it into a tsv')
-    parser.add_argument('post_file', type=str, help='out file for feed posts')
-    parser.add_argument('link_file', type=str, help='out file for user-post links (like, comm)')
+    # parser.add_argument('post_file', type=str, help='out file for feed posts')
+    # parser.add_argument('link_file', type=str, help='out file for user-post links (like, comm)')
+    parser.add_argument('out_dir', type=str, help='base dir for output files')
     parser.add_argument('--workers', type=int, help='number of workers to multiprocess', default=1)
     parser.add_argument('--maxfeeds', type=int, help='bail after x feeds are done', default=None)
     parser.add_argument('--logfile', type=str, help='for debugging', default=None)
@@ -194,19 +245,18 @@ if __name__ == '__main__':
     if args.logfile is not None:
         logging.basicConfig(filename=args.logfile, level=logging.DEBUG)
 
-    outfile_posts = open(args.post_file, 'wb')
-    outfile_links = open(args.link_file, 'wb')
+    # outfile_posts = open(args.post_file, 'wb')
+    # outfile_links = open(args.link_file, 'wb')
 
-    Feed.write_labels(outfile_posts, outfile_links)
+    # Feed.write_labels(outfile_posts, outfile_links)
 
     if (args.prof_trials == 1):
-        process_feeds(args.workers, args.maxfeeds)
+        process_feeds(args.out_dir, args.workers, args.maxfeeds)
     else:
-        profile_process_feeds(args.workers, args.maxfeeds, args.prof_trials, args.prof_incr)
+        profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.prof_trials, args.prof_incr)
 
 
-
-
-
-
-#zzz need to have stop/start mechanism
+#zzz todo: need to have stop/start mechanism
+#zzz todo: do test of unordered vs ordered pool.imap()
+#zzz todo: add an overwrite option
+#zzz todo: add --combine post-processing option
