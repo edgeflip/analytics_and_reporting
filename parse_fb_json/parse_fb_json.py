@@ -128,6 +128,24 @@ def handle_feed(key):
     link_lines = feed.get_links_str()
     return post_lines, link_lines
 
+def process_feeds(worker_count, max_feeds=None):
+    sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
+    pool = multiprocessing.Pool(worker_count)
+    for i, lines_tup in enumerate(pool.imap(handle_feed, key_iter())):
+        if i % 100 == 0:
+            sys.stderr.write("\t%d\n" % i)
+        if lines_tup is None:
+            continue
+        else:
+            post_lines, link_lines = lines_tup
+            outfile_posts.write(post_lines)
+            outfile_links.write(link_lines)
+
+        if (max_feeds is not None) and (i >= max_feeds):
+            #sys.exit("bailing")
+            break
+    pool.terminate()
+    return i
 
 class Timer(object):
     def __init__(self):
@@ -147,6 +165,15 @@ class Timer(object):
         splits = self.get_splits()
         return prefix + "avg time over %d trials: %.1f secs" % (len(self.ends), sum(splits)/len(splits))
 
+def profile_process_feeds(max_worker_count, max_feeds, profile_trials, profile_incr):
+    worker_counts = range(max_worker_count, 1, -1*profile_incr) + [1]
+    sys.stderr.write("worker counts: %s\n" % str(worker_counts))
+    for worker_count in worker_counts:
+        tim = Timer()
+        for t in range(profile_trials):
+            process_feeds(worker_count, max_feeds)
+            elapsed = tim.end()
+        sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
 
 
 ###################################
@@ -172,34 +199,14 @@ if __name__ == '__main__':
 
     Feed.write_labels(outfile_posts, outfile_links)
 
-    worker_counts = range(args.workers, 1, -1*args.prof_incr) + [1] if (args.prof_trials > 1) else [args.workers]
-    sys.stderr.write("worker counts: %s\n" % str(worker_counts))
-
-    for worker_count in worker_counts:
-        tim = Timer()
-        for t in range(args.prof_trials):
-            sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
-            pool = multiprocessing.Pool(worker_count)
-            for i, lines_tup in enumerate(pool.imap(handle_feed, key_iter())):
-                if i % 100 == 0:
-                    sys.stderr.write("\t%d\n" % i)
-                if lines_tup is None:
-                    continue
-                else:
-                    post_lines, link_lines = lines_tup
-                    outfile_posts.write(post_lines)
-                    outfile_links.write(link_lines)
-
-                if (args.maxfeeds is not None) and (i >= args.maxfeeds):
-                    #sys.exit("bailing")
-                    break
-            elapsed = tim.end()
-            sys.stderr.write("\t%.1f elapsed\n" % elapsed)
-            pool.terminate()
-        if (args.prof_trials > 1):
-            sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
+    if (args.prof_trials == 1):
+        process_feeds(args.workers, args.maxfeeds)
+    else:
+        profile_process_feeds(args.workers, args.maxfeeds, args.prof_trials, args.prof_incr)
 
 
 
-#zzz need to insulate against empty data exception
+
+
+
 #zzz need to have stop/start mechanism
