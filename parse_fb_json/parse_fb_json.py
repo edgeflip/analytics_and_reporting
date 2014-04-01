@@ -47,29 +47,26 @@ class Feed(object):
                 logger.deubg("full feed: " + str(feed_json_list) + "\n\n")
                 raise
 
-    def write(self, path_posts, path_links, delim="\t"):
-        count_posts = 0
-        with open(path_posts, 'wb') as outfile_posts:
-            for p in self.posts:
-                post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
-                               p.post_link, p.post_link_domain,
-                               p.post_story, p.post_description, p.post_caption, p.post_message]
-                post_line = delim.join(f.replace(delim, " ").replace("\n", " ").encode('utf8', 'ignore') for f in post_fields)
-                outfile_posts.write(post_line + "\n")
-                count_posts += 1
+    def write(self, post_path, link_path, delim="\t", overwrite=False):
+        post_lines = []
+        for p in self.posts:
+            post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
+                           p.post_link, p.post_link_domain,
+                           p.post_story, p.post_description, p.post_caption, p.post_message]
+            post_lines.append(delim.join(f.replace(delim, " ").replace("\n", " ").encode('utf8', 'ignore') for f in post_fields))
+        post_count = write_safe(post_path, post_lines, overwrite)
 
-        count_links = 0
-        with open(path_links, 'wb') as outfile_links:
-            for p in self.posts:
-                for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
-                    has_to = "1" if user_id in p.to_ids else ""
-                    has_like = "1" if user_id in p.like_ids else ""
-                    has_comm = "1" if user_id in p.comment_ids else ""
-                    link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
-                    link_line = delim.join(f.encode('utf8', 'ignore') for f in link_fields)
-                    outfile_links.write(link_line + "\n")
-                    count_links += 1
-        return (count_posts, count_links)
+        link_lines = []
+        for p in self.posts:
+            for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
+                has_to = "1" if user_id in p.to_ids else ""
+                has_like = "1" if user_id in p.like_ids else ""
+                has_comm = "1" if user_id in p.comment_ids else ""
+                link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
+                link_lines.append(delim.join(f.encode('utf8', 'ignore') for f in link_fields))
+        link_count = write_safe(link_path, link_lines, overwrite)
+
+        return (post_count, link_count)
 
     @staticmethod
     def write_labels(outfile_posts, outfile_links, delim="\t"):
@@ -148,8 +145,8 @@ def handle_feed(args):
             feed = FeedS3(sec_id, key)
         except KeyError:  # gets logged and reraised upstream
             return None
-        post_line_count, link_line_count = feed.write(out_file_path_posts, out_file_path_links)
-        return (post_line_count, link_line_count)
+        post_count, link_count = feed.write(out_file_path_posts, out_file_path_links, overwrite)
+        return (post_count, link_count)
 
 def process_feeds(out_dir, worker_count, max_feeds, overwrite):
     sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
@@ -159,7 +156,7 @@ def process_feeds(out_dir, worker_count, max_feeds, overwrite):
     link_line_count_tot = 0
     feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
     for i, counts_tup in enumerate(pool.imap_unordered(handle_feed, feed_arg_iter)):
-        if i % 100 == 0:
+        if i % 1000 == 0:
             sys.stderr.write("\t%d feeds, %d posts, %d links\n" % (i, post_line_count_tot, link_line_count_tot))
         if counts_tup is None:
             continue
@@ -224,6 +221,18 @@ def combine_output_files(out_dir, posts_path="posts.tsv", links_path="links.tsv"
                     outfile.write(infile.read())
     logging.debug("combined %d post files, %d link files" % (post_file_count, link_file_count))
 
+def write_safe(outfile_path, lines, overwrite=False):
+    #zzz this may leave temp files around if interrupted
+    write_count = 0
+    with tempfile.NamedTemporaryFile('wb', dir=os.path.dirname(outfile_path), delete=False) as temp:
+        for line in lines:
+            temp.write(line + "\n")
+            write_count += 1
+        if (not os.path.isfile(outfile_path)) or overwrite:
+            os.rename(temp.name, outfile_path)
+            return write_count
+        else:
+            return False
 
 
 
@@ -256,5 +265,4 @@ if __name__ == '__main__':
         combine_output_files(args.out_dir)
 
 
-#zzz todo: write to temp files first then rename
 #zzz todo: do something more intelligent with \n and \t in text
