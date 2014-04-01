@@ -159,8 +159,8 @@ def process_feeds(out_dir, worker_count, max_feeds, overwrite):
     time_start = time.time()
     for i, counts_tup in enumerate(pool.imap_unordered(handle_feed, feed_arg_iter)):
         if i % 1000 == 0:
-            time_delt = timedelta(seconds=time.time()-time_start)
-            sys.stderr.write("\t%s %d feeds, %d posts, %d links\n" % (time_delt, i, post_line_count_tot, link_line_count_tot))
+            time_delt = timedelta(seconds=int(time.time()-time_start))
+            sys.stderr.write("\t%s %d feeds, %d posts, %d links\n" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
         if counts_tup is None:
             continue
         else:
