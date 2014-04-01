@@ -48,7 +48,7 @@ class Feed(object):
                 logger.deubg("full feed: " + str(feed_json_list) + "\n\n")
                 raise
 
-    def write(self, post_path, link_path, delim="\t", overwrite=False):
+    def write(self, post_path, link_path, overwrite=False, delim="\t"):
         post_lines = []
         for p in self.posts:
             post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
@@ -158,7 +158,7 @@ def process_feeds(out_dir, worker_count, max_feeds, overwrite):
     feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
     time_start = time.time()
     for i, counts_tup in enumerate(pool.imap_unordered(handle_feed, feed_arg_iter)):
-        if i % 1000 == 0:
+        if i % 100 == 0:
             time_delt = timedelta(seconds=int(time.time()-time_start))
             sys.stderr.write("\t%s %d feeds, %d posts, %d links\n" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
         if counts_tup is None:
@@ -235,7 +235,7 @@ def write_safe(outfile_path, lines, overwrite=False):
             os.rename(temp.name, outfile_path)
             return write_count
         else:
-            return False
+            raise Exception("cannot rename temp file")
 
 
 
