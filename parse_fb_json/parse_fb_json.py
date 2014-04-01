@@ -54,7 +54,7 @@ class Feed(object):
                 post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
                                p.post_link, p.post_link_domain,
                                p.post_story, p.post_description, p.post_caption, p.post_message]
-                post_line = delim.join(f.replace(delim, " ").encode('utf8', 'ignore') for f in post_fields)
+                post_line = delim.join(f.replace(delim, " ").replace("\n", " ").encode('utf8', 'ignore') for f in post_fields)
                 outfile_posts.write(post_line + "\n")
                 count_posts += 1
 
@@ -257,3 +257,4 @@ if __name__ == '__main__':
 
 
 #zzz todo: write to temp files first then rename
+#zzz todo: do something more intelligent with \n and \t in text
