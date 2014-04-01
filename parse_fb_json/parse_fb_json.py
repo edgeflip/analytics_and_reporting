@@ -17,7 +17,8 @@ import time
 
 AWS_ACCESS_KEY = "AKIAJDPO2KQRLOJBQP3Q"
 AWS_SECRET_KEY = "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"
-AWS_BUCKET_NAMES = [ "feed_crawler_%d" % i for i in range(5) ]
+# AWS_BUCKET_NAMES = [ "feed_crawler_%d" % i for i in range(5) ]
+AWS_BUCKET_NAMES = [ "user_feeds_%d" % i for i in range(5) ]
 
 
 
@@ -120,6 +121,11 @@ class FeedPost(object):
         if 'comments' in post_json:
             self.comment_ids.update([user['id'] for user in post_json['comments']['data']])
 
+def out_file_paths(out_dir, prim_id, sec_id):
+    out_file_path_posts = os.path.join(out_dir, prim_id, sec_id + "_posts.tsv")
+    out_file_path_links = os.path.join(out_dir, prim_id, sec_id + "_links.tsv")
+    return (out_file_path_posts, out_file_path_links)
+
 def handle_feed(args):
     key, out_dir, overwrite = args
 
@@ -131,9 +137,7 @@ def handle_feed(args):
     out_dir_prim = os.path.join(out_dir, prim_id)
     if not os.path.exists(out_dir_prim):
         os.makedirs(out_dir_prim)
-
-    out_file_path_posts = os.path.join(out_dir_prim, sec_id + "_posts.tsv")
-    out_file_path_links = os.path.join(out_dir_prim, sec_id + "_links.tsv")
+    out_file_path_posts, out_file_path_links = out_file_paths(out_dir, prim_id, sec_id)
 
     if (os.path.isfile(out_file_path_posts) or os.path.isfile(out_file_path_links)) and \
             (not overwrite):
@@ -199,6 +203,28 @@ def profile_process_feeds(out_dir, max_worker_count, max_feeds, overwrite,
             elapsed = tim.end()
         sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
 
+def combine_output_files(out_dir, posts_path="posts.tsv", links_path="links.tsv"):
+    post_file_count = 0
+    link_file_count = 0
+    with open(posts_path, 'wb') as outfile_posts, open(links_path, 'wb') as outfile_links:
+        Feed.write_labels(outfile_posts, outfile_links)
+
+        for dirpath, dirnames, filenames in os.walk(out_dir):
+            for filename in filenames:
+                logging.debug("combining " + os.path.join(dirpath, filename))
+                if filename.endswith("_posts.tsv"):  # must match format in out_file_paths()
+                    outfile = outfile_posts
+                    post_file_count += 1
+                elif filename.endswith("_links.tsv"):  # must match format in out_file_paths()
+                    outfile = outfile_links
+                    link_file_count += 1
+                else:
+                    continue
+                with open(os.path.join(dirpath, filename)) as infile:
+                    outfile.write(infile.read())
+    logging.debug("combined %d post files, %d link files" % (post_file_count, link_file_count))
+
+
 
 
 
@@ -214,14 +240,11 @@ if __name__ == '__main__':
     parser.add_argument('--logfile', type=str, help='for debugging', default=None)
     parser.add_argument('--prof_trials', type=int, help='run x times with incr workers', default=1)
     parser.add_argument('--prof_incr', type=int, help='profile worker decrement', default=5)
-
-
+    parser.add_argument('--combine', action='store_true', help='create a single post and link file')
     args = parser.parse_args()
 
     if args.logfile is not None:
         logging.basicConfig(filename=args.logfile, level=logging.DEBUG)
-
-    # Feed.write_labels(outfile_posts, outfile_links)
 
     if (args.prof_trials == 1):
         process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite)
@@ -229,7 +252,8 @@ if __name__ == '__main__':
         profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
                               args.prof_trials, args.prof_incr)
 
+    if args.combine:
+        combine_output_files(args.out_dir)
 
-#zzz todo: add an overwrite option
-#zzz todo: add --combine post-processing option
-#zzz todo: write labels somewhere
+
+#zzz todo: write to temp files first then rename
