@@ -121,7 +121,7 @@ class FeedPost(object):
             self.comment_ids.update([user['id'] for user in post_json['comments']['data']])
 
 def handle_feed(args):
-    key, out_dir = args
+    key, out_dir, overwrite = args
 
     # name should have format primary_secondary; e.g., "100000008531200_1000760833"
     prim_id, sec_id = key.name.split("_")
@@ -135,7 +135,8 @@ def handle_feed(args):
     out_file_path_posts = os.path.join(out_dir_prim, sec_id + "_posts.tsv")
     out_file_path_links = os.path.join(out_dir_prim, sec_id + "_links.tsv")
 
-    if os.path.isfile(out_file_path_posts) or os.path.isfile(out_file_path_links):
+    if (os.path.isfile(out_file_path_posts) or os.path.isfile(out_file_path_links)) and \
+            (not overwrite):
         logging.debug("skipping existing prim %s, sec %s" % (prim_id, sec_id))
         return None
     else:
@@ -146,13 +147,13 @@ def handle_feed(args):
         post_line_count, link_line_count = feed.write(out_file_path_posts, out_file_path_links)
         return (post_line_count, link_line_count)
 
-def process_feeds(out_dir, worker_count, max_feeds):
+def process_feeds(out_dir, worker_count, max_feeds, overwrite):
     sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(worker_count)
 
     post_line_count_tot = 0
     link_line_count_tot = 0
-    feed_arg_iter = imap(None, key_iter(), repeat(out_dir))
+    feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
     for i, counts_tup in enumerate(pool.imap_unordered(handle_feed, feed_arg_iter)):
         if i % 100 == 0:
             sys.stderr.write("\t%d feeds, %d posts, %d links\n" % (i, post_line_count_tot, link_line_count_tot))
@@ -187,13 +188,14 @@ class Timer(object):
         splits = self.get_splits()
         return prefix + "avg time over %d trials: %.1f secs" % (len(self.ends), sum(splits)/len(splits))
 
-def profile_process_feeds(out_dir, max_worker_count, max_feeds, profile_trials, profile_incr):
+def profile_process_feeds(out_dir, max_worker_count, max_feeds, overwrite,
+                          profile_trials, profile_incr):
     worker_counts = range(max_worker_count, 1, -1*profile_incr) + [1]
     sys.stderr.write("worker counts: %s\n" % str(worker_counts))
     for worker_count in worker_counts:
         tim = Timer()
         for t in range(profile_trials):
-            process_feeds(worker_count, max_feeds, out_dir)
+            process_feeds(worker_count, max_feeds, out_dir, overwrite)
             elapsed = tim.end()
         sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
 
@@ -208,9 +210,11 @@ if __name__ == '__main__':
     parser.add_argument('out_dir', type=str, help='base dir for output files')
     parser.add_argument('--workers', type=int, help='number of workers to multiprocess', default=1)
     parser.add_argument('--maxfeeds', type=int, help='bail after x feeds are done', default=None)
+    parser.add_argument('--overwrite', action='store_true', help='overwrite previous runs')
     parser.add_argument('--logfile', type=str, help='for debugging', default=None)
     parser.add_argument('--prof_trials', type=int, help='run x times with incr workers', default=1)
     parser.add_argument('--prof_incr', type=int, help='profile worker decrement', default=5)
+
 
     args = parser.parse_args()
 
@@ -220,13 +224,12 @@ if __name__ == '__main__':
     # Feed.write_labels(outfile_posts, outfile_links)
 
     if (args.prof_trials == 1):
-        process_feeds(args.out_dir, args.workers, args.maxfeeds)
+        process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite)
     else:
-        profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.prof_trials, args.prof_incr)
+        profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
+                              args.prof_trials, args.prof_incr)
 
 
-#zzz todo: need to have stop/start mechanism
-#zzz todo: do test of unordered vs ordered pool.imap()
 #zzz todo: add an overwrite option
 #zzz todo: add --combine post-processing option
 #zzz todo: write labels somewhere
