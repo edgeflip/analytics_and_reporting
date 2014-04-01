@@ -18,13 +18,14 @@ from datetime import timedelta
 
 AWS_ACCESS_KEY = "AKIAJDPO2KQRLOJBQP3Q"
 AWS_SECRET_KEY = "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"
-# AWS_BUCKET_NAMES = [ "feed_crawler_%d" % i for i in range(5) ]
 AWS_BUCKET_NAMES = [ "user_feeds_%d" % i for i in range(5) ]
 
-
-
-
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.propagate = False
+
+
+
 
 def get_conn_s3(key=AWS_ACCESS_KEY, sec=AWS_SECRET_KEY):
     return S3Connection(key, sec)
@@ -32,7 +33,7 @@ def get_conn_s3(key=AWS_ACCESS_KEY, sec=AWS_SECRET_KEY):
 def key_iter(bucket_names=AWS_BUCKET_NAMES):
     conn = get_conn_s3()
     for b, bucket_name in enumerate(bucket_names):
-        logger.debug("reading bucket %d/%d (%s)\n" % (b, len(bucket_names), bucket_name))
+        logger.debug("reading bucket %d/%d (%s)" % (b, len(bucket_names), bucket_name))
         for key in conn.get_bucket(bucket_name).list():
             yield key
 
@@ -44,8 +45,8 @@ class Feed(object):
             try:
                 self.posts.append(FeedPost(post_json))
             except Exception:
-                logger.debug("error parsing: " + str(post_json) + "\n\n")
-                logger.deubg("full feed: " + str(feed_json_list) + "\n\n")
+                logger.debug("error parsing: " + str(post_json))
+                # logger.debug("full feed: " + str(feed_json_list))
                 raise
 
     def write(self, post_path, link_path, overwrite=False, delim="\t"):
@@ -85,12 +86,14 @@ class FeedS3(Feed):
         with tempfile.TemporaryFile() as fp:
             key.get_contents_to_file(fp)
             fp.seek(0)
+            feed_json = json.load(fp)
             try:
-                feed_json_list = json.load(fp)['data']
+                feed_json_list = feed_json['data']
             except KeyError:
-                logger.debug("no data in feed %s\n" % key.name)
+                logger.debug("no data in feed %s" % key.name)
+                logger.debug(str(feed_json))
                 raise
-        logger.debug("\tread feed json with %d posts from %s\n" % (len(feed_json_list), key.name))
+        logger.debug("\tread feed json with %d posts from %s" % (len(feed_json_list), key.name))
         super(FeedS3, self).__init__(fbid, feed_json_list)
 
 class FeedPost(object):
@@ -150,7 +153,7 @@ def handle_feed(args):
         return (post_count, link_count)
 
 def process_feeds(out_dir, worker_count, max_feeds, overwrite):
-    sys.stderr.write("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
+    logger.info("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(worker_count)
 
     post_line_count_tot = 0
@@ -160,7 +163,7 @@ def process_feeds(out_dir, worker_count, max_feeds, overwrite):
     for i, counts_tup in enumerate(pool.imap_unordered(handle_feed, feed_arg_iter)):
         if i % 100 == 0:
             time_delt = timedelta(seconds=int(time.time()-time_start))
-            sys.stderr.write("\t%s %d feeds, %d posts, %d links\n" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
+            logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
         if counts_tup is None:
             continue
         else:
@@ -195,13 +198,13 @@ class Timer(object):
 def profile_process_feeds(out_dir, max_worker_count, max_feeds, overwrite,
                           profile_trials, profile_incr):
     worker_counts = range(max_worker_count, 1, -1*profile_incr) + [1]
-    sys.stderr.write("worker counts: %s\n" % str(worker_counts))
+    logger.info("worker counts: %s" % str(worker_counts))
     for worker_count in worker_counts:
         tim = Timer()
         for t in range(profile_trials):
             process_feeds(worker_count, max_feeds, out_dir, overwrite)
             elapsed = tim.end()
-        sys.stderr.write(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
+        logger.info(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
 
 def combine_output_files(out_dir, posts_path="posts.tsv", links_path="links.tsv"):
     post_file_count = 0
@@ -255,10 +258,19 @@ if __name__ == '__main__':
     parser.add_argument('--combine', action='store_true', help='create a single post and link file')
     args = parser.parse_args()
 
-    if args.logfile is not None:
-        logging.basicConfig(filename=args.logfile, level=logging.DEBUG)
+    hand_s = logging.StreamHandler()
+    hand_s.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+    if args.logfile is None:
+        hand_s.setLevel(logging.DEBUG)
+    else:
+        hand_s.setLevel(logging.INFO)
+        hand_f = logging.FileHandler(args.logfile)
+        hand_f.setFormatter(logging.Formatter('%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'))
+        hand_f.setLevel(logging.DEBUG)
+        logger.addHandler(hand_f)
+    logger.addHandler(hand_s)
 
-    if (args.prof_trials == 1):
+    if args.prof_trials == 1:
         process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite)
     else:
         profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
@@ -266,6 +278,5 @@ if __name__ == '__main__':
 
     if args.combine:
         combine_output_files(args.out_dir)
-
 
 #zzz todo: do something more intelligent with \n and \t in text
