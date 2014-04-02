@@ -202,7 +202,7 @@ def profile_process_feeds(out_dir, max_worker_count, max_feeds, overwrite,
     for worker_count in worker_counts:
         tim = Timer()
         for t in range(profile_trials):
-            process_feeds(worker_count, max_feeds, out_dir, overwrite)
+            process_feeds(out_dir, worker_count, max_feeds, overwrite)
             elapsed = tim.end()
         logger.info(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
 
