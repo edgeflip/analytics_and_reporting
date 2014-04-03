@@ -153,7 +153,7 @@ def handle_feed(args):
         return (post_count, link_count)
 
 def process_feeds(out_dir, worker_count, max_feeds, overwrite):
-    logger.info("process %d farming out to %d childs\n" % (os.getpid(), worker_count))
+    logger.info("process %d farming out to %d childs" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(worker_count)
 
     post_line_count_tot = 0
@@ -161,7 +161,7 @@ def process_feeds(out_dir, worker_count, max_feeds, overwrite):
     feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
     time_start = time.time()
     for i, counts_tup in enumerate(pool.imap_unordered(handle_feed, feed_arg_iter)):
-        if i % 100 == 0:
+        if i % 1000 == 0:
             time_delt = timedelta(seconds=int(time.time()-time_start))
             logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
         if counts_tup is None:
