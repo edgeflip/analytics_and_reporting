@@ -136,8 +136,11 @@ def handle_feed(args):
     # For each primary (token owner), we create a directory, each secondary crawled with that
     # token is a file.  If the file already exists, we skip that feed.
     out_dir_prim = os.path.join(out_dir, prim_id)
-    if not os.path.exists(out_dir_prim):
+    try:
         os.makedirs(out_dir_prim)
+        logger.debug("created output sub directory: " + out_dir_prim)
+    except OSError:
+        logger.debug("output sub directory: " + out_dir_prim + " exists")
     out_file_path_posts, out_file_path_links = out_file_paths(out_dir, prim_id, sec_id)
 
     if (os.path.isfile(out_file_path_posts) or os.path.isfile(out_file_path_links)) and \
