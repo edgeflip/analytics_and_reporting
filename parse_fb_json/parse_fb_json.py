@@ -3,6 +3,7 @@ import sys
 import os
 import json
 import logging
+import psycopg2
 from boto.s3.connection import S3Connection
 from urlparse import urlparse
 import tempfile
@@ -18,24 +19,160 @@ from datetime import timedelta
 
 AWS_ACCESS_KEY = "AKIAJDPO2KQRLOJBQP3Q"
 AWS_SECRET_KEY = "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"
-AWS_BUCKET_NAMES = [ "user_feeds_%d" % i for i in range(5) ]
+S3_BUCKET_NAMES = [ "user_feeds_%d" % i for i in range(5) ]
+RS_HOST = 'wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com'
+RS_USER = 'edgeflip'
+RS_PASS = 'XzriGDp2FfVy9K'
+RS_PORT = 5439
+RS_DB = 'edgeflip'
+
+
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.propagate = False
 
 
-
-
 def get_conn_s3(key=AWS_ACCESS_KEY, sec=AWS_SECRET_KEY):
     return S3Connection(key, sec)
 
-def key_iter(bucket_names=AWS_BUCKET_NAMES):
+def key_iter(bucket_names=S3_BUCKET_NAMES):
     conn = get_conn_s3()
     for b, bucket_name in enumerate(bucket_names):
         logger.debug("reading bucket %d/%d (%s)" % (b, len(bucket_names), bucket_name))
         for key in conn.get_bucket(bucket_name).list():
             yield key
+
+
+def get_conn_redshift(host=RS_HOST, user=RS_USER, password=RS_PASS, port=RS_PORT, db=RS_DB):
+    print "connecting to Redshift"
+    conn = psycopg2.connect(host=host, user=user, password=password, port=port, database=db)
+    return conn
+
+def create_output_tables(conn=None):
+    if conn is None:
+        conn = get_conn_redshift()
+    curs = conn.cursor()
+
+    sql = """
+        CREATE TABLE posts (
+          fbid_user BIGINT NOT NULL,
+          fbid_post BIGINT NOT NULL,
+          ts TIMESTAMP NOT NULL,
+          type VARCHAR(64) NOT NULL,
+          app VARCHAR(256),
+          link VARCHAR(2048),
+          domain VARCHAR(1024),
+          story TEXT,
+          desc TEXT,
+          caption TEXT,
+          message TEXT
+        );
+    """
+    ret = curs.execute(sql)
+    logging.info("created posts table: " + str(ret))
+
+    sql = """
+        CREATE TABLE user_posts (
+          fbid_user BIGINT NOT NULL,
+          fbid_post BIGINT NOT NULL,
+          to BOOLEAN,
+          like BOOLEAN,
+          comment BOOLEAN
+        );
+    """
+    ret = curs.execute(sql)
+    logging.info("created user_posts table: " + str(ret))
+
+def write_post(curs, fbid_user, fbid_post, ts, type,
+               app=None, link=None, domain=None, story=None,
+               desc=None, caption=None, message=None):
+    sql = """INSERT INTO posts (fbid_user, fbid_post, ts, type, app, link, domain,
+                                story, desc, caption, message)
+             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+    vals = (fbid_user, fbid_post, ts, type, app, link, domain, story, desc, caption, message)
+    curs.execute(sql, vals)
+
+def write_link(curs, fbid_user, fbid_post, to, like, comment):
+    sql = """INSERT INTO user_posts (fbid_user, fbid_post, to, like, comment)
+             VALUES (%s, %s, %s, %s, %s)"""
+    vals = (fbid_user, fbid_post, to, like, comment)
+    curs.execute(sql, vals)
+
+#
+# def query_redshift_iter(sql, read_from_cache=False, write_to_cache=False, conn=None):
+#     if (read_from_cache):
+#         try:
+#             cache_file = open(filename_from_sql(sql), 'r')
+#         except IOError:
+#             cache_file = None
+#         if (cache_file is not None):
+#             read_count = 0
+#             print "reading from cache file"
+#             #for line in cache_file:
+#             #    yield line.rstrip("\n").split("\t")
+#             while True:
+#                 try:
+#                     rec = pickle.load(cache_file)
+#                 except EOFError:
+#                     break
+#                 read_count += 1
+#                 #print "read rec %d: %s" % (read_count, str(rec))
+#                 yield rec
+#             print "got %d records, no more pickles" % read_count
+#             return
+#         else:
+#             print "cache file not found"
+#
+#     if (conn is None):
+#         conn = get_conn_redshift()
+#     curs = conn.cursor()
+#     print "querying db:\n\t" + sql
+#     curs.execute(sql)
+#     if (write_to_cache):
+#         write_count = 0
+#         outfile_fd, outfile_path = tempfile.mkstemp(suffix='.tsv', prefix='tmp')
+#         outfile = os.fdopen(outfile_fd, 'w')
+#         try:
+#             for rec in curs:
+#                 #outfile.write("\t".join([str(r) for r in rec]) + "\n")
+#                 pickle.dump(rec, outfile)
+#                 write_count += 1
+#                 yield rec
+#         except:
+#             #os.close(outfile_fd)
+#             outfile.close()
+#             os.unlink(outfile_path)
+#             raise
+#         print "wrote %d records to cache file" % write_count
+#         #os.close(outfile_fd)
+#         outfile.close()
+#         print "renaming " + outfile_path + " -> " + filename_from_sql(sql)
+#         #os.rename(outfile_path, filename_from_sql(sql))
+#         shutil.move(outfile_path, filename_from_sql(sql))
+#     else:
+#         for rec in curs:
+#             yield rec
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class Feed(object):
     def __init__(self, user_id, feed_json_list):
