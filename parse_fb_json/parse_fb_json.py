@@ -160,23 +160,21 @@ def write_link(curs, fbid_user, fbid_post, to, like, comment):
 
 
 
+class FeedFromS3(object):
+    def __init__(self, fbid, key):
+        with tempfile.TemporaryFile() as fp:
+            key.get_contents_to_file(fp)
+            fp.seek(0)
+            feed_json = json.load(fp)
+            try:
+                feed_json_list = feed_json['data']
+            except KeyError:
+                logger.debug("no data in feed %s" % key.name)
+                logger.debug(str(feed_json))
+                raise
+        logger.debug("\tread feed json with %d posts from %s" % (len(feed_json_list), key.name))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-class Feed(object):
-    def __init__(self, user_id, feed_json_list):
-        self.user_id = user_id
+        self.user_id = fbid
         self.posts = []
         for post_json in feed_json_list:
             try:
@@ -218,20 +216,6 @@ class Feed(object):
         link_fields = ['post_id', 'user_id', 'to', 'like', 'comment']
         outfile_links.write(delim.join(link_fields) + "\n")
 
-class FeedS3(Feed):
-    def __init__(self, fbid, key):
-        with tempfile.TemporaryFile() as fp:
-            key.get_contents_to_file(fp)
-            fp.seek(0)
-            feed_json = json.load(fp)
-            try:
-                feed_json_list = feed_json['data']
-            except KeyError:
-                logger.debug("no data in feed %s" % key.name)
-                logger.debug(str(feed_json))
-                raise
-        logger.debug("\tread feed json with %d posts from %s" % (len(feed_json_list), key.name))
-        super(FeedS3, self).__init__(fbid, feed_json_list)
 
 class FeedPost(object):
     def __init__(self, post_json):
@@ -286,7 +270,7 @@ def handle_feed(args):
         return None
     else:
         try:
-            feed = FeedS3(sec_id, key)
+            feed = FeedFromS3(sec_id, key)
         except KeyError:  # gets logged and reraised upstream
             return None
         post_count, link_count = feed.write(out_file_path_posts, out_file_path_links, overwrite)
@@ -350,7 +334,7 @@ def combine_output_files(out_dir, posts_path="posts.tsv", links_path="links.tsv"
     post_file_count = 0
     link_file_count = 0
     with open(posts_path, 'wb') as outfile_posts, open(links_path, 'wb') as outfile_links:
-        Feed.write_labels(outfile_posts, outfile_links)
+        FeedFromS3.write_labels(outfile_posts, outfile_links)
 
         for dirpath, dirnames, filenames in os.walk(out_dir):
             for filename in filenames:
