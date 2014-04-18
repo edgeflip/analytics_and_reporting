@@ -46,13 +46,12 @@ def key_iter(bucket_names=S3_BUCKET_NAMES):
 
 
 def get_conn_redshift(host=RS_HOST, user=RS_USER, password=RS_PASS, port=RS_PORT, db=RS_DB):
-    print "connecting to Redshift"
+    logger.debug("connecting to Redshift")
     conn = psycopg2.connect(host=host, user=user, password=password, port=port, database=db)
+    logger.debug("connect success")
     return conn
 
-def create_output_tables(conn=None):
-    if conn is None:
-        conn = get_conn_redshift()
+def create_output_tables(conn, overwrite=False):
     curs = conn.cursor()
 
     sql = """
@@ -65,40 +64,59 @@ def create_output_tables(conn=None):
           link VARCHAR(2048),
           domain VARCHAR(1024),
           story TEXT,
-          desc TEXT,
+          description TEXT,
           caption TEXT,
           message TEXT
         );
     """
-    ret = curs.execute(sql)
+    logger.debug("creating posts table: " + " ".join(sql.split()))
+    try:
+        ret = curs.execute(sql)
+    except psycopg2.ProgrammingError:
+        if overwrite:
+            curs.execute("DROP TABLE posts;")
+            ret = curs.execute(sql)
+        else:
+            ret = None
     logging.info("created posts table: " + str(ret))
 
     sql = """
         CREATE TABLE user_posts (
           fbid_user BIGINT NOT NULL,
           fbid_post BIGINT NOT NULL,
-          to BOOLEAN,
-          like BOOLEAN,
-          comment BOOLEAN
+          user_to BOOLEAN,
+          user_like BOOLEAN,
+          user_comment BOOLEAN
         );
     """
-    ret = curs.execute(sql)
+    logger.debug("creating links table: " + " ".join(sql.split()))
+    try:
+        ret = curs.execute(sql)
+    except psycopg2.ProgrammingError:
+        if overwrite:
+            curs.execute("DROP TABLE user_posts")
+            ret = curs.execute(sql)
+        else:
+            ret = None
     logging.info("created user_posts table: " + str(ret))
+    conn.commit()
 
-def write_post(curs, fbid_user, fbid_post, ts, type,
+
+def write_post_db(curs, fbid_user, fbid_post, ts, type,
                app=None, link=None, domain=None, story=None,
-               desc=None, caption=None, message=None):
+               description=None, caption=None, message=None):
     sql = """INSERT INTO posts (fbid_user, fbid_post, ts, type, app, link, domain,
-                                story, desc, caption, message)
+                                story, description, caption, message)
              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-    vals = (fbid_user, fbid_post, ts, type, app, link, domain, story, desc, caption, message)
+    vals = (fbid_user, fbid_post, ts, type, app, link, domain, story, description, caption, message)
     curs.execute(sql, vals)
 
 def write_link(curs, fbid_user, fbid_post, to, like, comment):
-    sql = """INSERT INTO user_posts (fbid_user, fbid_post, to, like, comment)
+    sql = """INSERT INTO user_posts (fbid_user, fbid_post, user_to, user_like, user_comment)
              VALUES (%s, %s, %s, %s, %s)"""
     vals = (fbid_user, fbid_post, to, like, comment)
     curs.execute(sql, vals)
+
 
 #
 # def query_redshift_iter(sql, read_from_cache=False, write_to_cache=False, conn=None):
@@ -178,13 +196,13 @@ class FeedFromS3(object):
         self.posts = []
         for post_json in feed_json_list:
             try:
-                self.posts.append(FeedPost(post_json))
+                self.posts.append(FeedPostFromJson(post_json))
             except Exception:
                 logger.debug("error parsing: " + str(post_json))
                 # logger.debug("full feed: " + str(feed_json_list))
                 raise
 
-    def write(self, post_path, link_path, overwrite=False, delim="\t"):
+    def write_file(self, post_path, link_path, overwrite=False, delim="\t"):
         post_lines = []
         for p in self.posts:
             post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
@@ -206,18 +224,37 @@ class FeedFromS3(object):
         return (post_count, link_count)
 
     @staticmethod
-    def write_labels(outfile_posts, outfile_links, delim="\t"):
+    def write_file_labels(outfile_posts, outfile_links, delim="\t"):
         # these MUST match field order above
         post_fields = ['user_id', 'post_id', 'post_ts', 'post_type', 'post_app', 'post_from',
                        'post_link', 'post_link_domain',
                        'post_story', 'post_description', 'post_caption', 'post_message']
-        outfile_posts.write(delim.join(post_fields) + "\n")
+        outfile_posts.write_file(delim.join(post_fields) + "\n")
 
         link_fields = ['post_id', 'user_id', 'to', 'like', 'comment']
-        outfile_links.write(delim.join(link_fields) + "\n")
+        outfile_links.write_file(delim.join(link_fields) + "\n")
+
+    def write_db(self, conn):
+        curs = conn.cursor()
+        post_count = 0
+        for p in self.posts:
+            write_post_db(curs, self.user_id, p.post_id, p.post_ts, p.post_type,
+                          p.post_app, p.post_link, p.post_link_domain, p.post_story,
+                          p.post_description, p.post_caption, p.post_message)
+            post_count += 1
+        link_count = 0
+        for p in self.posts:
+            for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
+                has_to = user_id in p.to_ids
+                has_like = user_id in p.like_ids
+                has_comm = user_id in p.comment_ids
+                write_link(curs, user_id, p.post_id, has_to, has_like, has_comm)
+                link_count += 1
+        curs.close()
+        return (post_count, link_count)
 
 
-class FeedPost(object):
+class FeedPostFromJson(object):
     def __init__(self, post_json):
         self.post_id = str(post_json['id'])
         self.post_ts = post_json['updated_time']
@@ -248,7 +285,7 @@ def out_file_paths(out_dir, prim_id, sec_id):
     out_file_path_links = os.path.join(out_dir, prim_id, sec_id + "_links.tsv")
     return (out_file_path_posts, out_file_path_links)
 
-def handle_feed(args):
+def handle_feed_file(args):
     key, out_dir, overwrite = args
 
     # name should have format primary_secondary; e.g., "100000008531200_1000760833"
@@ -273,18 +310,38 @@ def handle_feed(args):
             feed = FeedFromS3(sec_id, key)
         except KeyError:  # gets logged and reraised upstream
             return None
-        post_count, link_count = feed.write(out_file_path_posts, out_file_path_links, overwrite)
+        post_count, link_count = feed.write_file(out_file_path_posts, out_file_path_links, overwrite)
         return (post_count, link_count)
 
-def process_feeds(out_dir, worker_count, max_feeds, overwrite):
+def handle_feed_db(args):
+    conn, key = args
+
+    # name should have format primary_secondary; e.g., "100000008531200_1000760833"
+    prim_id, sec_id = key.name.split("_")
+    try:
+        feed = FeedFromS3(sec_id, key)
+    except KeyError:  # gets logged and reraised upstream
+        return None
+    post_count, link_count = feed.write_db(conn)
+    return (post_count, link_count)
+
+
+# def process_feeds(out_dir, worker_count, max_feeds, overwrite):
+def process_feeds(worker_count, max_feeds, overwrite):
     logger.info("process %d farming out to %d childs" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(worker_count)
 
     post_line_count_tot = 0
     link_line_count_tot = 0
-    feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
+    # feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
+    conn = get_conn_redshift()
+    create_output_tables(conn, overwrite)
+
+    feed_arg_iter = imap(None, repeat(conn), key_iter())
+
     time_start = time.time()
-    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed, feed_arg_iter)):
+    # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_file, feed_arg_iter)):
+    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, feed_arg_iter)):
         if i % 1000 == 0:
             time_delt = timedelta(seconds=int(time.time()-time_start))
             logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
@@ -299,6 +356,7 @@ def process_feeds(out_dir, worker_count, max_feeds, overwrite):
             #sys.exit("bailing")
             break
     pool.terminate()
+    conn.close()
     return i
 
 class Timer(object):
@@ -334,7 +392,7 @@ def combine_output_files(out_dir, posts_path="posts.tsv", links_path="links.tsv"
     post_file_count = 0
     link_file_count = 0
     with open(posts_path, 'wb') as outfile_posts, open(links_path, 'wb') as outfile_links:
-        FeedFromS3.write_labels(outfile_posts, outfile_links)
+        FeedFromS3.write_file_labels(outfile_posts, outfile_links)
 
         for dirpath, dirnames, filenames in os.walk(out_dir):
             for filename in filenames:
@@ -356,7 +414,7 @@ def write_safe(outfile_path, lines, overwrite=False):
     write_count = 0
     with tempfile.NamedTemporaryFile('wb', dir=os.path.dirname(outfile_path), delete=False) as temp:
         for line in lines:
-            temp.write(line + "\n")
+            temp.write_file(line + "\n")
             write_count += 1
         if (not os.path.isfile(outfile_path)) or overwrite:
             os.rename(temp.name, outfile_path)
@@ -372,7 +430,7 @@ def write_safe(outfile_path, lines, overwrite=False):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Eat up the FB sync data and put it into a tsv')
-    parser.add_argument('out_dir', type=str, help='base dir for output files')
+    # parser.add_argument('out_dir', type=str, help='base dir for output files')
     parser.add_argument('--workers', type=int, help='number of workers to multiprocess', default=1)
     parser.add_argument('--maxfeeds', type=int, help='bail after x feeds are done', default=None)
     parser.add_argument('--overwrite', action='store_true', help='overwrite previous runs')
@@ -395,7 +453,9 @@ if __name__ == '__main__':
     logger.addHandler(hand_s)
 
     if args.prof_trials == 1:
-        process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite)
+        # process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite)
+        process_feeds(args.workers, args.maxfeeds, args.overwrite)
+
     else:
         profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
                               args.prof_trials, args.prof_incr)
