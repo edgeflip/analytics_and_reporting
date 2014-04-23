@@ -15,7 +15,7 @@ import psycopg2.extras
 from errors import mail_tracebacks
 from redshift_utils import deploy_table, drop_table_if_exists
 
-MAX_RETRIES = 12
+MAX_RETRIES = 4
 
 def mkCSV(application, t=False, client_id=2):
     """ Grab event data for the hour preceding t """
