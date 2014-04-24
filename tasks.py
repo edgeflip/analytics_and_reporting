@@ -458,11 +458,9 @@ class ETL(object):
         t = time()
 
         # distinct primaries missing from users
-        # TODO: remove visitors join once we fix user_clients to contain all primary fbids
         self.pcur.execute("""
-            SELECT DISTINCT(COALESCE(visitors.fbid, user_clients.fbid)) AS fbid FROM users
-            RIGHT JOIN visitors ON visitors.fbid=users.fbid
-            RIGHT JOIN user_clients ON user_clients.fbid=users.fbid
+            SELECT DISTINCT(user_clients.fbid) AS fbid FROM users
+            RIGHT JOIN user_clients using (fbid)
             WHERE users.fbid IS NULL
         """)
         fbids = [row['fbid'] for row in self.pcur.fetchall()]
