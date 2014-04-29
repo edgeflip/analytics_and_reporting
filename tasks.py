@@ -332,6 +332,7 @@ class ETL(object):
 
         self.mkchains()
         self.mkstats()
+        self.mkrollups()
         info('RDS extraction complete, waiting for next run')
 
 
@@ -387,6 +388,27 @@ class ETL(object):
             # commit each set of root updates in a single transaction
             self.pconn.commit()
 
+    def metric_expressions(self):
+        return """
+            COUNT(DISTINCT CASE WHEN t.type='heartbeat' THEN t.visit_id ELSE NULL END) AS visits,
+            SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
+            COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.visit_id ELSE NULL END) AS authorized_visits,
+            COUNT(DISTINCT CASE WHEN t.type='authorized' THEN fbid ELSE NULL END) AS uniq_users_authorized,
+            SUM(CASE WHEN (t.type='auth_fail' or t.type='oauth_declined') THEN 1 ELSE 0 END) AS auth_fails,
+            COUNT(DISTINCT CASE WHEN t.type='generated' THEN visit_id ELSE NULL END) AS visits_generated_faces,
+            COUNT(DISTINCT CASE WHEN t.type='generated' THEN fbid ELSE NULL END) AS users_generated_faces,
+            COUNT(DISTINCT CASE WHEN t.type='faces_page_rendered' THEN visit_id ELSE NULL END) AS visits_facepage_rendered,
+            COUNT(DISTINCT CASE WHEN t.type='faces_page_rendered' THEN fbid ELSE NULL END) AS users_facepage_rendered,
+            COUNT(DISTINCT CASE WHEN t.type='shown' THEN visit_id ELSE NULL END) AS visits_shown_faces,
+            COUNT(DISTINCT CASE WHEN t.type='shown' THEN fbid ELSE NULL END) AS users_shown_faces,
+            SUM(CASE WHEN t.type='shown' THEN 1 ELSE 0 END) AS total_faces_shown,
+            COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.friend_fbid ELSE NULL END) AS distinct_faces_shown,
+            COUNT(DISTINCT CASE WHEN t.type='shared' THEN visit_id ELSE NULL END) AS visits_with_shares,
+            COUNT(DISTINCT CASE WHEN t.type='shared' THEN fbid ELSE NULL END) AS users_who_shared,
+            COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) AS audience,
+            SUM(CASE WHEN t.type='shares' THEN 1 ELSE 0 END) AS total_shares,
+            SUM(CASE WHEN t.type='clickback' THEN 1 ELSE 0 END) AS clickbacks
+        """
 
     def mkstats(self):
         staging_table = 'clientstats_staging'
@@ -394,53 +416,18 @@ class ETL(object):
         megaquery = """
     CREATE TABLE {0} AS
     SELECT
-        t.campaign_id,
+        root_campaign.campaign_id,
         date_trunc('hour', t.updated) as hour,
-        SUM(CASE WHEN t.type IN ('button_load', 'faces_page_load') THEN 1 ELSE 0 END) AS visits,
-        SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
-        SUM(CASE WHEN t.type='authorized' THEN 1 ELSE 0 END) AS auths,
-        COUNT(DISTINCT CASE WHEN t.type='authorized' THEN fbid ELSE NULL END) AS uniq_auths,
-        COUNT(DISTINCT CASE WHEN t.type='shown' THEN fbid ELSE NULL END) AS shown,
-        COUNT(DISTINCT CASE WHEN t.type='shared' THEN fbid ELSE NULL END) AS shares,
-        COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) AS audience,
-        COUNT(DISTINCT CASE WHEN t.type='clickback' THEN t.cb_visit_id ELSE NULL END) AS clickbacks
-
-    FROM
-        (
-            SELECT e1.visit_id,
-                e1.campaign_id,
-                e1.content_id,
-                e1.friend_fbid,
-                e1.type,
-                e1.content,
-                e1.activity_id,
-                NULL AS cb_visit_id,
-                e1.updated
-            FROM events e1
-                WHERE type <> 'clickback'
-            UNION
-            (
-            SELECT e3.visit_id,
-                e3.campaign_id,
-                e2.content_id,
-                e3.friend_fbid,
-                e2.type,
-                e2.content,
-                e2.activity_id,
-                e2.visit_id AS cb_visit_id,
-                e2.updated
-            FROM events e2
-            LEFT JOIN events e3 USING (activity_id)
-                WHERE e2.type='clickback' AND e3.type='shared'
-            )
-        ) t
-
-    INNER JOIN (SELECT visitors.fbid AS fbid, visits.visit_id AS visit_id FROM visits, visitors
-        WHERE visits.visitor_id=visitors.visitor_id
-        ) v
-        USING (visit_id)
-    GROUP BY t.campaign_id, hour
-        """.format(staging_table)
+        {1}
+        from events t
+        inner join visits using (visit_id)
+        inner join visitors v using (visitor_id)
+        inner join campaigns using (campaign_id)
+        inner join clients cl using (client_id)
+        inner join campaign_properties using (campaign_id)
+        inner join campaigns root_campaign on (root_campaign.campaign_id = campaign_properties.root_campaign_id)
+        GROUP BY root_campaign.campaign_id, hour
+        """.format(staging_table, self.metric_expressions())
 
         debug('Calculating client stats')
         with self.pconn:
@@ -452,6 +439,31 @@ class ETL(object):
 
         debug('Done.')
 
+    def mkrollups(self):
+        staging_table = 'clientrollups_staging'
+        drop_table_if_exists(staging_table, self.pconn, self.pcur)
+        megaquery = """
+    CREATE TABLE {0} AS
+    SELECT
+        client_id,
+        {0}
+        from events t
+        inner join visits using (visit_id)
+        inner join visitors v using (visitor_id)
+        inner join campaigns using (campaign_id)
+        inner join clients cl using (client_id)
+        GROUP BY client_id
+        """.format(staging_table, self.metric_expressions())
+
+        debug('Calculating client rollups')
+        with self.pconn:
+            self.pcur.execute(megaquery)
+        debug('beginning deploy table on clientrollups')
+        deploy_table('clientrollups', 'clientrollups_staging', 'clientrollups_old', self.pcur, self.pconn)
+
+        self.updated = strftime('%x %X')
+
+        debug('Done.')
 
     @mail_tracebacks
     def queue_users(self):
