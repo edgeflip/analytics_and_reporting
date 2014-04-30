@@ -406,7 +406,7 @@ class ETL(object):
             COUNT(DISTINCT CASE WHEN t.type='shared' THEN visit_id ELSE NULL END) AS visits_with_shares,
             COUNT(DISTINCT CASE WHEN t.type='shared' THEN fbid ELSE NULL END) AS users_who_shared,
             COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) AS audience,
-            SUM(CASE WHEN t.type='shares' THEN 1 ELSE 0 END) AS total_shares,
+            SUM(CASE WHEN t.type='shared' THEN 1 ELSE 0 END) AS total_shares,
             SUM(CASE WHEN t.type='clickback' THEN 1 ELSE 0 END) AS clickbacks
         """
 
