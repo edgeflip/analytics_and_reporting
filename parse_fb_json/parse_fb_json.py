@@ -26,7 +26,7 @@ RS_PASS = 'XzriGDp2FfVy9K'
 RS_PORT = 5439
 RS_DB = 'edgeflip'
 
-
+DB_TEXT_LEN = 4096
 
 
 logger = logging.getLogger(__name__)
@@ -46,59 +46,55 @@ def key_iter(bucket_names=S3_BUCKET_NAMES):
 
 
 def get_conn_redshift(host=RS_HOST, user=RS_USER, password=RS_PASS, port=RS_PORT, db=RS_DB):
-    logger.debug("connecting to Redshift")
+    logger.debug("connecting to Redshift" + " pid " + str(os.getpid()))
     conn = psycopg2.connect(host=host, user=user, password=password, port=port, database=db)
-    logger.debug("connect success")
+    logger.debug("connect success" + " " + str(conn))
     return conn
 
-def create_output_tables(conn, overwrite=False):
-    curs = conn.cursor()
 
+def table_exists(curs, table_name):
+    sql = "SELECT EXISTS(SELECT * FROM information_schema.tables WHERE table_name=%s)"
+    curs.execute(sql, (table_name,))
+    return curs.fetchone()[0]
+
+def create_output_tables(conn):
+    curs = conn.cursor()
+    if table_exists(curs, 'posts'):  # DROP TABLE IF EXISTS is 8.2, Redshift says 8.0
+        curs.execute("DROP TABLE posts;")
     sql = """
         CREATE TABLE posts (
           fbid_user BIGINT NOT NULL,
-          fbid_post BIGINT NOT NULL,
+          fbid_post VARCHAR(64) NOT NULL,
           ts TIMESTAMP NOT NULL,
           type VARCHAR(64) NOT NULL,
           app VARCHAR(256),
           link VARCHAR(2048),
           domain VARCHAR(1024),
-          story TEXT,
-          description TEXT,
-          caption TEXT,
-          message TEXT
+          story VARCHAR(%s),
+          description VARCHAR(%s),
+          caption VARCHAR(%s),
+          message VARCHAR(%s)
         );
     """
     logger.debug("creating posts table: " + " ".join(sql.split()))
-    try:
-        ret = curs.execute(sql)
-    except psycopg2.ProgrammingError:
-        if overwrite:
-            curs.execute("DROP TABLE posts;")
-            ret = curs.execute(sql)
-        else:
-            ret = None
+    ret = curs.execute(sql, (DB_TEXT_LEN, DB_TEXT_LEN, DB_TEXT_LEN, DB_TEXT_LEN))
     logging.info("created posts table: " + str(ret))
 
+    if table_exists(curs, 'user_posts'):
+        curs.execute("DROP TABLE user_posts;")
     sql = """
         CREATE TABLE user_posts (
-          fbid_user BIGINT NOT NULL,
-          fbid_post BIGINT NOT NULL,
+          fbid_user VARCHAR(64) NOT NULL,
+          fbid_post VARCHAR(64) NOT NULL,
           user_to BOOLEAN,
           user_like BOOLEAN,
           user_comment BOOLEAN
         );
     """
     logger.debug("creating links table: " + " ".join(sql.split()))
-    try:
-        ret = curs.execute(sql)
-    except psycopg2.ProgrammingError:
-        if overwrite:
-            curs.execute("DROP TABLE user_posts")
-            ret = curs.execute(sql)
-        else:
-            ret = None
+    ret = curs.execute(sql)
     logging.info("created user_posts table: " + str(ret))
+
     conn.commit()
 
 
@@ -238,19 +234,52 @@ class FeedFromS3(object):
         curs = conn.cursor()
         post_count = 0
         for p in self.posts:
-            write_post_db(curs, self.user_id, p.post_id, p.post_ts, p.post_type,
-                          p.post_app, p.post_link, p.post_link_domain, p.post_story,
-                          p.post_description, p.post_caption, p.post_message)
+
+
+            try:
+                write_post_db(curs, self.user_id, p.post_id, p.post_ts, p.post_type,
+                              str(p.post_app), p.post_link, p.post_link_domain, p.post_story,
+                              p.post_description, p.post_caption, p.post_message)
+            except Exception as e:
+                err = "error writing post record:\n"
+                err += "\tuser:\t" + str(self.user_id) + "\n"
+                err += "\tpost:\t" + str(p.post_id) + "\n"
+                err += "\tts:\t" + str(p.post_ts) + "\n"
+                err += "\ttype:\t" + str(p.post_type) + "\n"
+                err += "\tapp:\t" + str(p.post_app) + "\n"
+                err += "\tlink:\t" + str(p.post_link) + "\n"
+                err += "\tdomain:\t" + str(p.post_link_domain) + "\n"
+
+                err += "\tstory (%d):\t %s\n" % (len(p.post_story), p.post_story)
+                err += "\tdesc (%d):\t %s\n" % (len(p.post_description), p.post_description)
+                err += "\tcaption (%d):\t %s\n" % (len(p.post_caption), p.post_caption)
+                err += "\tmessage (%d):\t %s\n" % (len(p.post_message), p.post_message)
+
+                logger.error(err)
+                raise
             post_count += 1
+
         link_count = 0
         for p in self.posts:
             for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
                 has_to = user_id in p.to_ids
                 has_like = user_id in p.like_ids
                 has_comm = user_id in p.comment_ids
-                write_link(curs, user_id, p.post_id, has_to, has_like, has_comm)
+
+                try:
+                    write_link(curs, user_id, p.post_id, has_to, has_like, has_comm)
+                except Exception as e:
+                    err = "error writing link record:\n"
+                    err += "\tuser:\t" + str(user_id) + "\n"
+                    err += "\tpost:\t" + str(p.post_id) + "\n"
+                    err += "\tto:\t" + str(has_to) + "\n"
+                    err += "\tlike:\t" + str(has_like) + "\n"
+                    err += "\tcomment:\t" + str(has_comm) + "\n"
+                    logger.error(err)
+                    raise
                 link_count += 1
         curs.close()
+        conn.commit()
         return (post_count, link_count)
 
 
@@ -265,10 +294,10 @@ class FeedPostFromJson(object):
         self.post_link = post_json.get('link', "")
         self.post_link_domain = urlparse(self.post_link).hostname if (self.post_link) else ""
 
-        self.post_story = post_json.get('story', "")
-        self.post_description = post_json.get('description', "")
-        self.post_caption = post_json.get('caption', "")
-        self.post_message = post_json.get('message', "")
+        self.post_story = post_json.get('story', "")[:DB_TEXT_LEN / 2]
+        self.post_description = post_json.get('description', "")[:DB_TEXT_LEN / 2]
+        self.post_caption = post_json.get('caption', "")[:DB_TEXT_LEN / 2]
+        self.post_message = post_json.get('message', "")[:DB_TEXT_LEN / 2]
 
         self.to_ids = set()
         self.like_ids = set()
@@ -314,34 +343,67 @@ def handle_feed_file(args):
         return (post_count, link_count)
 
 def handle_feed_db(args):
-    conn, key = args
+    key = args
+
+    # pid__conn = {}
+    #
+    # pid = os.getpid()
+    # logger.debug("pid " + str(pid) + " getting connection " + str(pid__conn))
+    # if pid not in pid__conn:
+    #     pid__conn[pid] = get_conn_redshift()
+    #
+    # conn = pid__conn[pid]
+
+
+    pid = os.getpid()
+    # logger.debug("pid " + str(pid) + " getting connection ")
+    # conn = get_global_conn()
+    logger.debug("pid " + str(pid) + ", key " + key.name + ", have conn: " + str(conn))
 
     # name should have format primary_secondary; e.g., "100000008531200_1000760833"
     prim_id, sec_id = key.name.split("_")
+
+    logger.debug("pid " + str(pid) + " have prim, sec: " + prim_id + ", " + sec_id)
+
     try:
+
+        logger.debug("pid " + str(pid) + " creating feed")
         feed = FeedFromS3(sec_id, key)
+        logger.debug("pid " + str(pid) + " got feed")
+
     except KeyError:  # gets logged and reraised upstream
+        logger.debug("pid " + str(pid) + " KeyError exception!")
         return None
+
     post_count, link_count = feed.write_db(conn)
+
+    logger.debug("pid " + str(pid) + " have post, link: " + str(post_count) + ", " + str(link_count))
+
     return (post_count, link_count)
 
+conn = None
+def set_global_conn():
+    global conn
+    conn = get_conn_redshift()
 
 # def process_feeds(out_dir, worker_count, max_feeds, overwrite):
 def process_feeds(worker_count, max_feeds, overwrite):
+
+    if overwrite:
+        conn = get_conn_redshift()
+        create_output_tables(conn)
+        conn.close()
+
     logger.info("process %d farming out to %d childs" % (os.getpid(), worker_count))
-    pool = multiprocessing.Pool(worker_count)
+    pool = multiprocessing.Pool(processes=worker_count, initializer=set_global_conn)
 
     post_line_count_tot = 0
     link_line_count_tot = 0
     # feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
-    conn = get_conn_redshift()
-    create_output_tables(conn, overwrite)
-
-    feed_arg_iter = imap(None, repeat(conn), key_iter())
-
+    # feed_arg_iter = imap(None, key_iter())
     time_start = time.time()
     # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_file, feed_arg_iter)):
-    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, feed_arg_iter)):
+    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, key_iter())):
         if i % 1000 == 0:
             time_delt = timedelta(seconds=int(time.time()-time_start))
             logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
