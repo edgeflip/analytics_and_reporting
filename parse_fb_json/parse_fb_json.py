@@ -107,6 +107,9 @@ def write_post_db(curs, fbid_user, fbid_post, ts, type,
     vals = (fbid_user, fbid_post, ts, type, app, link, domain, story, description, caption, message)
     curs.execute(sql, vals)
 
+
+
+
 def write_link(curs, fbid_user, fbid_post, to, like, comment):
     sql = """INSERT INTO user_posts (fbid_user, fbid_post, user_to, user_like, user_comment)
              VALUES (%s, %s, %s, %s, %s)"""
@@ -230,57 +233,111 @@ class FeedFromS3(object):
         link_fields = ['post_id', 'user_id', 'to', 'like', 'comment']
         outfile_links.write_file(delim.join(link_fields) + "\n")
 
+
+
+
+
+
+    # def write_db(self, conn):
+    #     curs = conn.cursor()
+    #     post_count = 0
+    #     for p in self.posts:
+    #         try:
+    #             write_post_db(curs, self.user_id, p.post_id, p.post_ts, p.post_type,
+    #                           str(p.post_app), p.post_link, p.post_link_domain, p.post_story,
+    #                           p.post_description, p.post_caption, p.post_message)
+    #         except Exception as e:
+    #             err = "error writing post record:\n"
+    #             err += "\tuser:\t" + str(self.user_id) + "\n"
+    #             err += "\tpost:\t" + str(p.post_id) + "\n"
+    #             err += "\tts:\t" + str(p.post_ts) + "\n"
+    #             err += "\ttype:\t" + str(p.post_type) + "\n"
+    #             err += "\tapp:\t" + str(p.post_app) + "\n"
+    #             err += "\tlink:\t" + str(p.post_link) + "\n"
+    #             err += "\tdomain:\t" + str(p.post_link_domain) + "\n"
+    #
+    #             err += "\tstory (%d):\t %s\n" % (len(p.post_story), p.post_story)
+    #             err += "\tdesc (%d):\t %s\n" % (len(p.post_description), p.post_description)
+    #             err += "\tcaption (%d):\t %s\n" % (len(p.post_caption), p.post_caption)
+    #             err += "\tmessage (%d):\t %s\n" % (len(p.post_message), p.post_message)
+    #
+    #             logger.error(err)
+    #             raise
+    #         post_count += 1
+    #
+    #     link_count = 0
+    #     for p in self.posts:
+    #         for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
+    #             has_to = user_id in p.to_ids
+    #             has_like = user_id in p.like_ids
+    #             has_comm = user_id in p.comment_ids
+    #
+    #             try:
+    #                 write_link(curs, user_id, p.post_id, has_to, has_like, has_comm)
+    #             except Exception as e:
+    #                 err = "error writing link record:\n"
+    #                 err += "\tuser:\t" + str(user_id) + "\n"
+    #                 err += "\tpost:\t" + str(p.post_id) + "\n"
+    #                 err += "\tto:\t" + str(has_to) + "\n"
+    #                 err += "\tlike:\t" + str(has_like) + "\n"
+    #                 err += "\tcomment:\t" + str(has_comm) + "\n"
+    #                 logger.error(err)
+    #                 raise
+    #             link_count += 1
+    #     curs.close()
+    #     conn.commit()
+    #     return (post_count, link_count)
+
+
+
+
+
+# def write_post_db(curs, fbid_user, fbid_post, ts, type,
+#                app=None, link=None, domain=None, story=None,
+#                description=None, caption=None, message=None):
+#     sql = """INSERT INTO posts (fbid_user, fbid_post, ts, type, app, link, domain,
+#                                 story, description, caption, message)
+#              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+#     vals = (fbid_user, fbid_post, ts, type, app, link, domain, story, description, caption, message)
+#     curs.execute(sql, vals)
+
     def write_db(self, conn):
         curs = conn.cursor()
-        post_count = 0
+
+        post_val_tups = []
+        link_val_tups = []
         for p in self.posts:
+            post_vals = (self.user_id, p.post_id, p.post_ts, p.post_type,
+                         str(p.post_app), p.post_link, p.post_link_domain,
+                         p.post_story, p.post_description, p.post_caption, p.post_message)
+            post_val_tups.append(post_vals)
 
-
-            try:
-                write_post_db(curs, self.user_id, p.post_id, p.post_ts, p.post_type,
-                              str(p.post_app), p.post_link, p.post_link_domain, p.post_story,
-                              p.post_description, p.post_caption, p.post_message)
-            except Exception as e:
-                err = "error writing post record:\n"
-                err += "\tuser:\t" + str(self.user_id) + "\n"
-                err += "\tpost:\t" + str(p.post_id) + "\n"
-                err += "\tts:\t" + str(p.post_ts) + "\n"
-                err += "\ttype:\t" + str(p.post_type) + "\n"
-                err += "\tapp:\t" + str(p.post_app) + "\n"
-                err += "\tlink:\t" + str(p.post_link) + "\n"
-                err += "\tdomain:\t" + str(p.post_link_domain) + "\n"
-
-                err += "\tstory (%d):\t %s\n" % (len(p.post_story), p.post_story)
-                err += "\tdesc (%d):\t %s\n" % (len(p.post_description), p.post_description)
-                err += "\tcaption (%d):\t %s\n" % (len(p.post_caption), p.post_caption)
-                err += "\tmessage (%d):\t %s\n" % (len(p.post_message), p.post_message)
-
-                logger.error(err)
-                raise
-            post_count += 1
-
-        link_count = 0
-        for p in self.posts:
             for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
                 has_to = user_id in p.to_ids
                 has_like = user_id in p.like_ids
                 has_comm = user_id in p.comment_ids
+                link_vals = (user_id, p.post_id, has_to, has_like, has_comm)
+                link_val_tups.append(link_vals)
 
-                try:
-                    write_link(curs, user_id, p.post_id, has_to, has_like, has_comm)
-                except Exception as e:
-                    err = "error writing link record:\n"
-                    err += "\tuser:\t" + str(user_id) + "\n"
-                    err += "\tpost:\t" + str(p.post_id) + "\n"
-                    err += "\tto:\t" + str(has_to) + "\n"
-                    err += "\tlike:\t" + str(has_like) + "\n"
-                    err += "\tcomment:\t" + str(has_comm) + "\n"
-                    logger.error(err)
-                    raise
-                link_count += 1
+        sql_posts = """INSERT INTO posts (fbid_user, fbid_post, ts, type, app, link, domain,
+                                          story, description, caption, message)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+        curs.executemany(sql_posts, post_val_tups)
+        post_count = len(post_val_tups)
+
+        sql_links = """INSERT INTO user_posts (fbid_user, fbid_post,
+                                               user_to, user_like, user_comment)
+                       VALUES (%s, %s, %s, %s, %s)"""
+        curs.executemany(sql_links, link_val_tups)
+        link_count = len(link_val_tups)
+
         curs.close()
         conn.commit()
         return (post_count, link_count)
+
+
+
+
 
 
 class FeedPostFromJson(object):
@@ -294,6 +351,7 @@ class FeedPostFromJson(object):
         self.post_link = post_json.get('link', "")
         self.post_link_domain = urlparse(self.post_link).hostname if (self.post_link) else ""
 
+        #todo: fix this terrible, terrible thing that limits the length of strings
         self.post_story = post_json.get('story', "")[:DB_TEXT_LEN / 2]
         self.post_description = post_json.get('description', "")[:DB_TEXT_LEN / 2]
         self.post_caption = post_json.get('caption', "")[:DB_TEXT_LEN / 2]
@@ -375,9 +433,9 @@ def handle_feed_db(args):
         logger.debug("pid " + str(pid) + " KeyError exception!")
         return None
 
+    logger.debug("pid %d writing feed" % (pid))
     post_count, link_count = feed.write_db(conn)
-
-    logger.debug("pid " + str(pid) + " have post, link: " + str(post_count) + ", " + str(link_count))
+    logger.debug("pid %d wrote %d posts, %d links" % (pid, post_count, link_count))
 
     return (post_count, link_count)
 
