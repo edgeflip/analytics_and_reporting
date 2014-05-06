@@ -12,6 +12,7 @@ import multiprocessing
 from itertools import imap, repeat
 import os.path
 import time
+import tempfile
 from datetime import timedelta
 
 
@@ -110,7 +111,7 @@ def write_post_db(curs, fbid_user, fbid_post, ts, type,
 
 
 
-def write_link(curs, fbid_user, fbid_post, to, like, comment):
+def write_link_db(curs, fbid_user, fbid_post, to, like, comment):
     sql = """INSERT INTO user_posts (fbid_user, fbid_post, user_to, user_like, user_comment)
              VALUES (%s, %s, %s, %s, %s)"""
     vals = (fbid_user, fbid_post, to, like, comment)
@@ -201,15 +202,16 @@ class FeedFromS3(object):
                 # logger.debug("full feed: " + str(feed_json_list))
                 raise
 
-    def write_file(self, post_path, link_path, overwrite=False, delim="\t"):
+    def get_post_lines(self, delim="\t"):
         post_lines = []
         for p in self.posts:
             post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
                            p.post_link, p.post_link_domain,
                            p.post_story, p.post_description, p.post_caption, p.post_message]
             post_lines.append(delim.join(f.replace(delim, " ").replace("\n", " ").encode('utf8', 'ignore') for f in post_fields))
-        post_count = write_safe(post_path, post_lines, overwrite)
+        return post_lines
 
+    def get_link_lines(self, delim="\t"):
         link_lines = []
         for p in self.posts:
             for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
@@ -218,6 +220,13 @@ class FeedFromS3(object):
                 has_comm = "1" if user_id in p.comment_ids else ""
                 link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
                 link_lines.append(delim.join(f.encode('utf8', 'ignore') for f in link_fields))
+        return link_lines
+
+    def write_file(self, post_path, link_path, overwrite=False, delim="\t"):
+        post_lines = self.get_post_lines()
+        post_count = write_safe(post_path, post_lines, overwrite)
+
+        link_lines = self.get_link_lines()
         link_count = write_safe(link_path, link_lines, overwrite)
 
         return (post_count, link_count)
@@ -439,13 +448,85 @@ def handle_feed_db(args):
 
     return (post_count, link_count)
 
+
+def set_globals():
+    set_global_conn()
+    set_global_scratch_files()
+
 conn = None
 def set_global_conn():
     global conn
     conn = get_conn_redshift()
 
+scratch_posts = None
+scratch_links = None
+def set_global_scratch_files():
+    global scratch_posts, scratch_links
+    scratch_posts = tempfile.NamedTemporaryFile(prefix='scratch_posts_')
+    scratch_links = tempfile.NamedTemporaryFile(prefix='scratch_posts_')
+    logger.debug("created sratch files %s, %s" % (scratch_posts.name, scratch_links.name))
+
+def load_global_scratch_files():
+    load_db_from_file(scratch_posts, "posts")
+    scratch_posts.close()
+    load_db_from_file(scratch_links, "user_posts")
+    scratch_links.close()
+
+def handle_feed_db_from_file(args):
+    key, load_thresh = args
+
+    pid = os.getpid()
+    logger.debug("pid " + str(pid) + ", key " + key.name + ", have conn: " + str(conn))
+
+    # name should have format primary_secondary; e.g., "100000008531200_1000760833"
+    prim_id, sec_id = key.name.split("_")
+    logger.debug("pid " + str(pid) + " have prim, sec: " + prim_id + ", " + sec_id)
+
+    try:
+        logger.debug("pid " + str(pid) + " creating feed")
+        feed = FeedFromS3(sec_id, key)
+        logger.debug("pid " + str(pid) + " got feed")
+
+    except KeyError:  # gets logged and reraised upstream
+        logger.debug("pid " + str(pid) + " KeyError exception!")
+        return None
+
+    # each worker has it's own (global) output file, bulk load it into the db
+    try:
+        handle_feed_db_from_file.write_count_feeds += 1
+    except AttributeError:
+        handle_feed_db_from_file.write_count_feeds = 1
+
+    post_count = 0
+    for line in feed.get_post_lines():
+        scratch_posts.write(line + "\n")
+        post_count += 1
+
+    link_count = 0
+    for line in feed.get_link_lines():
+        scratch_links.write(line + "\n")
+        link_count += 1
+
+    if handle_feed_db_from_file.write_count_feeds >= load_thresh:
+        logger.debug("%d/%d users processed, loading into db" % (handle_feed_db_from_file.write_count_feeds, load_thresh))
+        load_global_scratch_files()
+
+        handle_feed_db_from_file.write_count = 0
+        set_global_scratch_files()
+    else:
+        logger.debug("%d/%d users processed, delaying load" % (handle_feed_db_from_file.write_count_feeds, load_thresh))
+
+    return (post_count, link_count)
+
+def load_db_from_file(infile, table, delim="\t"):
+    curs = conn.cursor()
+    infile.seek(0)
+    ret = curs.copy_from(infile, table, sep=delim)
+    logger.debug("loaded file %s, %s" % (infile.name, str(ret)))
+
 # def process_feeds(out_dir, worker_count, max_feeds, overwrite):
-def process_feeds(worker_count, max_feeds, overwrite):
+# def process_feeds(worker_count, max_feeds, overwrite):
+def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
 
     if overwrite:
         conn = get_conn_redshift()
@@ -453,15 +534,18 @@ def process_feeds(worker_count, max_feeds, overwrite):
         conn.close()
 
     logger.info("process %d farming out to %d childs" % (os.getpid(), worker_count))
-    pool = multiprocessing.Pool(processes=worker_count, initializer=set_global_conn)
+    pool = multiprocessing.Pool(processes=worker_count, initializer=set_globals)
 
     post_line_count_tot = 0
     link_line_count_tot = 0
     # feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
     # feed_arg_iter = imap(None, key_iter())
+    feed_arg_iter = imap(None, key_iter(), repeat(load_thresh))
+
     time_start = time.time()
     # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_file, feed_arg_iter)):
-    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, key_iter())):
+    # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, key_iter())):
+    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db_from_file, feed_arg_iter)):
         if i % 1000 == 0:
             time_delt = timedelta(seconds=int(time.time()-time_start))
             logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
@@ -475,6 +559,10 @@ def process_feeds(worker_count, max_feeds, overwrite):
         if (max_feeds is not None) and (i >= max_feeds):
             #sys.exit("bailing")
             break
+
+    for ret in pool.imap_unordered(load_global_scratch_files):
+        pass
+
     pool.terminate()
     conn.close()
     return i
@@ -558,6 +646,7 @@ if __name__ == '__main__':
     parser.add_argument('--prof_trials', type=int, help='run x times with incr workers', default=1)
     parser.add_argument('--prof_incr', type=int, help='profile worker decrement', default=5)
     parser.add_argument('--combine', action='store_true', help='create a single post and link file')
+    parser.add_argument('--loadthresh', type=int, help='number of feeds to write to file before loading to db', default=50)
     args = parser.parse_args()
 
     hand_s = logging.StreamHandler()
@@ -574,7 +663,8 @@ if __name__ == '__main__':
 
     if args.prof_trials == 1:
         # process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite)
-        process_feeds(args.workers, args.maxfeeds, args.overwrite)
+        # process_feeds(args.workers, args.maxfeeds, args.overwrite)
+        process_feeds(args.workers, args.maxfeeds, args.overwrite, args.loadthresh)
 
     else:
         profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
@@ -584,3 +674,6 @@ if __name__ == '__main__':
         combine_output_files(args.out_dir)
 
 #zzz todo: do something more intelligent with \n and \t in text
+
+#zzz todo: audit (non-)use of delim for different handlers
+
