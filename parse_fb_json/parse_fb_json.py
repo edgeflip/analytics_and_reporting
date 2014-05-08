@@ -5,6 +5,7 @@ import json
 import logging
 import psycopg2
 from boto.s3.connection import S3Connection
+from boto.s3.key import Key
 from urlparse import urlparse
 import tempfile
 import argparse
@@ -12,7 +13,6 @@ import multiprocessing
 from itertools import imap, repeat
 import os.path
 import time
-import tempfile
 from datetime import timedelta
 
 
@@ -20,7 +20,8 @@ from datetime import timedelta
 
 AWS_ACCESS_KEY = "AKIAJDPO2KQRLOJBQP3Q"
 AWS_SECRET_KEY = "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"
-S3_BUCKET_NAMES = [ "user_feeds_%d" % i for i in range(5) ]
+S3_IN_BUCKET_NAMES = [ "user_feeds_%d" % i for i in range(5) ]
+S3_OUT_BUCKET_NAME = "user_feeds_parsed"
 RS_HOST = 'wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com'
 RS_USER = 'edgeflip'
 RS_PASS = 'XzriGDp2FfVy9K'
@@ -38,7 +39,7 @@ logger.propagate = False
 def get_conn_s3(key=AWS_ACCESS_KEY, sec=AWS_SECRET_KEY):
     return S3Connection(key, sec)
 
-def key_iter(bucket_names=S3_BUCKET_NAMES):
+def key_iter(bucket_names=S3_IN_BUCKET_NAMES):
     conn = get_conn_s3()
     for b, bucket_name in enumerate(bucket_names):
         logger.debug("reading bucket %d/%d (%s)" % (b, len(bucket_names), bucket_name))
@@ -108,74 +109,11 @@ def write_post_db(curs, fbid_user, fbid_post, ts, type,
     vals = (fbid_user, fbid_post, ts, type, app, link, domain, story, description, caption, message)
     curs.execute(sql, vals)
 
-
-
-
 def write_link_db(curs, fbid_user, fbid_post, to, like, comment):
     sql = """INSERT INTO user_posts (fbid_user, fbid_post, user_to, user_like, user_comment)
              VALUES (%s, %s, %s, %s, %s)"""
     vals = (fbid_user, fbid_post, to, like, comment)
     curs.execute(sql, vals)
-
-
-#
-# def query_redshift_iter(sql, read_from_cache=False, write_to_cache=False, conn=None):
-#     if (read_from_cache):
-#         try:
-#             cache_file = open(filename_from_sql(sql), 'r')
-#         except IOError:
-#             cache_file = None
-#         if (cache_file is not None):
-#             read_count = 0
-#             print "reading from cache file"
-#             #for line in cache_file:
-#             #    yield line.rstrip("\n").split("\t")
-#             while True:
-#                 try:
-#                     rec = pickle.load(cache_file)
-#                 except EOFError:
-#                     break
-#                 read_count += 1
-#                 #print "read rec %d: %s" % (read_count, str(rec))
-#                 yield rec
-#             print "got %d records, no more pickles" % read_count
-#             return
-#         else:
-#             print "cache file not found"
-#
-#     if (conn is None):
-#         conn = get_conn_redshift()
-#     curs = conn.cursor()
-#     print "querying db:\n\t" + sql
-#     curs.execute(sql)
-#     if (write_to_cache):
-#         write_count = 0
-#         outfile_fd, outfile_path = tempfile.mkstemp(suffix='.tsv', prefix='tmp')
-#         outfile = os.fdopen(outfile_fd, 'w')
-#         try:
-#             for rec in curs:
-#                 #outfile.write("\t".join([str(r) for r in rec]) + "\n")
-#                 pickle.dump(rec, outfile)
-#                 write_count += 1
-#                 yield rec
-#         except:
-#             #os.close(outfile_fd)
-#             outfile.close()
-#             os.unlink(outfile_path)
-#             raise
-#         print "wrote %d records to cache file" % write_count
-#         #os.close(outfile_fd)
-#         outfile.close()
-#         print "renaming " + outfile_path + " -> " + filename_from_sql(sql)
-#         #os.rename(outfile_path, filename_from_sql(sql))
-#         shutil.move(outfile_path, filename_from_sql(sql))
-#     else:
-#         for rec in curs:
-#             yield rec
-
-
-
-
 
 
 class FeedFromS3(object):
@@ -222,6 +160,23 @@ class FeedFromS3(object):
                 link_lines.append(delim.join(f.encode('utf8', 'ignore') for f in link_fields))
         return link_lines
 
+    def write_s3(self, bucket_name, key_name_posts, key_name_links, delim="\t"):
+        conn = get_conn_s3()
+        buck = conn.get_bucket(bucket_name)
+
+        post_lines = self.get_post_lines()
+        key_posts = Key(buck)
+        key_posts.key = key_name_posts
+        key_posts.set_contents_from_string("\n".join(post_lines))
+
+        link_lines = self.get_link_lines()
+        key_links = Key(buck)
+        key_links.key = key_name_links
+        key_links.set_contents_from_string("\n".join(link_lines))
+
+        return len(post_lines), len(link_lines)
+
+
     def write_file(self, post_path, link_path, overwrite=False, delim="\t"):
         post_lines = self.get_post_lines()
         post_count = write_safe(post_path, post_lines, overwrite)
@@ -242,73 +197,6 @@ class FeedFromS3(object):
         link_fields = ['post_id', 'user_id', 'to', 'like', 'comment']
         outfile_links.write_file(delim.join(link_fields) + "\n")
 
-
-
-
-
-
-    # def write_db(self, conn):
-    #     curs = conn.cursor()
-    #     post_count = 0
-    #     for p in self.posts:
-    #         try:
-    #             write_post_db(curs, self.user_id, p.post_id, p.post_ts, p.post_type,
-    #                           str(p.post_app), p.post_link, p.post_link_domain, p.post_story,
-    #                           p.post_description, p.post_caption, p.post_message)
-    #         except Exception as e:
-    #             err = "error writing post record:\n"
-    #             err += "\tuser:\t" + str(self.user_id) + "\n"
-    #             err += "\tpost:\t" + str(p.post_id) + "\n"
-    #             err += "\tts:\t" + str(p.post_ts) + "\n"
-    #             err += "\ttype:\t" + str(p.post_type) + "\n"
-    #             err += "\tapp:\t" + str(p.post_app) + "\n"
-    #             err += "\tlink:\t" + str(p.post_link) + "\n"
-    #             err += "\tdomain:\t" + str(p.post_link_domain) + "\n"
-    #
-    #             err += "\tstory (%d):\t %s\n" % (len(p.post_story), p.post_story)
-    #             err += "\tdesc (%d):\t %s\n" % (len(p.post_description), p.post_description)
-    #             err += "\tcaption (%d):\t %s\n" % (len(p.post_caption), p.post_caption)
-    #             err += "\tmessage (%d):\t %s\n" % (len(p.post_message), p.post_message)
-    #
-    #             logger.error(err)
-    #             raise
-    #         post_count += 1
-    #
-    #     link_count = 0
-    #     for p in self.posts:
-    #         for user_id in p.to_ids.union(p.like_ids, p.comment_ids):
-    #             has_to = user_id in p.to_ids
-    #             has_like = user_id in p.like_ids
-    #             has_comm = user_id in p.comment_ids
-    #
-    #             try:
-    #                 write_link(curs, user_id, p.post_id, has_to, has_like, has_comm)
-    #             except Exception as e:
-    #                 err = "error writing link record:\n"
-    #                 err += "\tuser:\t" + str(user_id) + "\n"
-    #                 err += "\tpost:\t" + str(p.post_id) + "\n"
-    #                 err += "\tto:\t" + str(has_to) + "\n"
-    #                 err += "\tlike:\t" + str(has_like) + "\n"
-    #                 err += "\tcomment:\t" + str(has_comm) + "\n"
-    #                 logger.error(err)
-    #                 raise
-    #             link_count += 1
-    #     curs.close()
-    #     conn.commit()
-    #     return (post_count, link_count)
-
-
-
-
-
-# def write_post_db(curs, fbid_user, fbid_post, ts, type,
-#                app=None, link=None, domain=None, story=None,
-#                description=None, caption=None, message=None):
-#     sql = """INSERT INTO posts (fbid_user, fbid_post, ts, type, app, link, domain,
-#                                 story, description, caption, message)
-#              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-#     vals = (fbid_user, fbid_post, ts, type, app, link, domain, story, description, caption, message)
-#     curs.execute(sql, vals)
 
     def write_db(self, conn):
         curs = conn.cursor()
@@ -412,16 +300,6 @@ def handle_feed_file(args):
 def handle_feed_db(args):
     key = args
 
-    # pid__conn = {}
-    #
-    # pid = os.getpid()
-    # logger.debug("pid " + str(pid) + " getting connection " + str(pid__conn))
-    # if pid not in pid__conn:
-    #     pid__conn[pid] = get_conn_redshift()
-    #
-    # conn = pid__conn[pid]
-
-
     pid = os.getpid()
     # logger.debug("pid " + str(pid) + " getting connection ")
     # conn = get_global_conn()
@@ -524,14 +402,86 @@ def load_db_from_file(infile, table, delim="\t"):
     ret = curs.copy_from(infile, table, sep=delim)
     logger.debug("loaded file %s, %s" % (infile.name, str(ret)))
 
-# def process_feeds(out_dir, worker_count, max_feeds, overwrite):
-# def process_feeds(worker_count, max_feeds, overwrite):
-def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
 
-    if overwrite:
-        conn = get_conn_redshift()
-        create_output_tables(conn)
-        conn.close()
+
+def handle_feed_s3(args):
+    key = args  #zzz todo: there's got to be a better way to handle this
+
+    pid = os.getpid()
+    logger.debug("pid " + str(pid) + ", key " + key.name + ", have conn: " + str(conn))
+
+    # name should have format primary_secondary; e.g., "100000008531200_1000760833"
+    prim_id, sec_id = key.name.split("_")
+    logger.debug("pid " + str(pid) + " have prim, sec: " + prim_id + ", " + sec_id)
+
+    try:
+        logger.debug("pid " + str(pid) + " creating feed")
+        feed = FeedFromS3(sec_id, key)
+        logger.debug("pid " + str(pid) + " got feed")
+    except KeyError:  # gets logged and reraised upstream
+        logger.debug("pid " + str(pid) + " KeyError exception!")
+        return None
+
+
+    key_name_posts = str(sec_id) + "_posts"
+    key_name_links = str(sec_id) + "_links"
+    post_count, link_count = feed.write_s3(S3_OUT_BUCKET_NAME, key_name_posts, key_name_links)
+
+    #
+    # post_count = 0
+    # for line in feed.get_post_lines():
+    #     scratch_posts.write(line + "\n")
+    #     post_count += 1
+    #
+    # link_count = 0
+    # for line in feed.get_link_lines():
+    #     scratch_links.write(line + "\n")
+    #     link_count += 1
+    #
+    # if handle_feed_db_from_file.write_count_feeds >= load_thresh:
+    #     logger.debug("%d/%d users processed, loading into db" % (handle_feed_db_from_file.write_count_feeds, load_thresh))
+    #     load_global_scratch_files()
+    #
+    #     handle_feed_db_from_file.write_count = 0
+    #     set_global_scratch_files()
+    # else:
+    #     logger.debug("%d/%d users processed, delaying load" % (handle_feed_db_from_file.write_count_feeds, load_thresh))
+
+    return (post_count, link_count)
+
+
+
+
+
+def delete_s3_bucket(conn, bucket_name):
+    buck = conn.get_bucket(bucket_name)
+    for key in buck.list():
+        key.delete()
+    conn.delete_bucket(bucket_name)
+
+def create_s3_bucket(conn, bucket_name, overwrite=False):
+    if conn.lookup(bucket_name) is not None:
+        if overwrite:
+            logger.debug("deleting old S3 bucket " + bucket_name)
+            delete_s3_bucket(conn, bucket_name)
+        else:
+            logger.debug("keeping old S3 bucket " + bucket_name)
+            return None
+    logger.debug("creating S3 bucket " + bucket_name)
+    return conn.create_bucket(bucket_name)
+
+
+# def process_feeds(out_dir, worker_count, max_feeds, overwrite):
+def process_feeds(worker_count, max_feeds, overwrite):
+# def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
+
+    # if overwrite:
+    #     conn = get_conn_redshift()
+    #     create_output_tables(conn)
+    #     conn.close()
+    conn = get_conn_s3()
+    create_s3_bucket(conn, S3_OUT_BUCKET_NAME, overwrite)
+
 
     logger.info("process %d farming out to %d childs" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(processes=worker_count, initializer=set_globals)
@@ -540,12 +490,15 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
     link_line_count_tot = 0
     # feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
     # feed_arg_iter = imap(None, key_iter())
-    feed_arg_iter = imap(None, key_iter(), repeat(load_thresh))
+    # feed_arg_iter = imap(None, key_iter(), repeat(load_thresh))
 
     time_start = time.time()
     # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_file, feed_arg_iter)):
     # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, key_iter())):
-    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db_from_file, feed_arg_iter)):
+    # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, key_iter())):
+    # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db_from_file, feed_arg_iter)):
+    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_s3, key_iter())):
+
         if i % 1000 == 0:
             time_delt = timedelta(seconds=int(time.time()-time_start))
             logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
@@ -560,8 +513,8 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
             #sys.exit("bailing")
             break
 
-    for ret in pool.imap_unordered(load_global_scratch_files):
-        pass
+    # for ret in pool.imap_unordered(load_global_scratch_files):
+    #     pass
 
     pool.terminate()
     conn.close()
@@ -663,8 +616,8 @@ if __name__ == '__main__':
 
     if args.prof_trials == 1:
         # process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite)
-        # process_feeds(args.workers, args.maxfeeds, args.overwrite)
-        process_feeds(args.workers, args.maxfeeds, args.overwrite, args.loadthresh)
+        process_feeds(args.workers, args.maxfeeds, args.overwrite)
+        # process_feeds(args.workers, args.maxfeeds, args.overwrite, args.loadthresh)
 
     else:
         profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
