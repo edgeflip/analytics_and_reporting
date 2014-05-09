@@ -34,16 +34,38 @@ logger.setLevel(logging.DEBUG)
 logger.propagate = False
 
 
+# S3 stuff
+
 def get_conn_s3(key=AWS_ACCESS_KEY, sec=AWS_SECRET_KEY):
     return S3Connection(key, sec)
 
-def key_iter(bucket_names=S3_IN_BUCKET_NAMES):
-    conn = get_conn_s3()
+def s3_key_iter(bucket_names=S3_IN_BUCKET_NAMES):
+    conn_s3 = get_conn_s3()
     for b, bucket_name in enumerate(bucket_names):
         logger.debug("reading bucket %d/%d (%s)" % (b, len(bucket_names), bucket_name))
-        for key in conn.get_bucket(bucket_name).list():
+        for key in conn_s3.get_bucket(bucket_name).list():
             yield key
+    conn_s3.close()
 
+def delete_s3_bucket(conn_s3, bucket_name):
+    buck = conn_s3.get_bucket(bucket_name)
+    for key in buck.list():
+        key.delete()
+    conn_s3.delete_bucket(bucket_name)
+
+def create_s3_bucket(conn_s3, bucket_name, overwrite=False):
+    if conn_s3.lookup(bucket_name) is not None:
+        if overwrite:
+            logger.debug("deleting old S3 bucket " + bucket_name)
+            delete_s3_bucket(conn_s3, bucket_name)
+        else:
+            logger.debug("keeping old S3 bucket " + bucket_name)
+            return None
+    logger.debug("creating S3 bucket " + bucket_name)
+    return conn_s3.create_bucket(bucket_name)
+
+
+# Redshift stuff
 
 def get_conn_redshift(host=RS_HOST, user=RS_USER, password=RS_PASS, port=RS_PORT, db=RS_DB):
     logger.debug("connecting to Redshift" + " pid " + str(os.getpid()))
@@ -51,14 +73,13 @@ def get_conn_redshift(host=RS_HOST, user=RS_USER, password=RS_PASS, port=RS_PORT
     logger.debug("connect success" + " " + str(conn))
     return conn
 
-
 def table_exists(curs, table_name):
     sql = "SELECT EXISTS(SELECT * FROM information_schema.tables WHERE table_name=%s)"
     curs.execute(sql, (table_name,))
     return curs.fetchone()[0]
 
-def create_output_tables(conn):
-    curs = conn.cursor()
+def create_output_tables(conn_rs):
+    curs = conn_rs.cursor()
     if table_exists(curs, 'posts'):  # DROP TABLE IF EXISTS is Postgres 8.2, Redshift is 8.0
         curs.execute("DROP TABLE posts;")
     sql = """
@@ -96,26 +117,15 @@ def create_output_tables(conn):
     ret = curs.execute(sql)
     logging.info("created user_posts table: " + str(ret))
 
-    conn.commit()
+    conn_rs.commit()
 
-def delete_s3_bucket(conn, bucket_name):
-    buck = conn.get_bucket(bucket_name)
-    for key in buck.list():
-        key.delete()
-    conn.delete_bucket(bucket_name)
 
-def create_s3_bucket(conn, bucket_name, overwrite=False):
-    if conn.lookup(bucket_name) is not None:
-        if overwrite:
-            logger.debug("deleting old S3 bucket " + bucket_name)
-            delete_s3_bucket(conn, bucket_name)
-        else:
-            logger.debug("keeping old S3 bucket " + bucket_name)
-            return None
-    logger.debug("creating S3 bucket " + bucket_name)
-    return conn.create_bucket(bucket_name)
+# data structs for transforming json to db rows
+
 
 class FeedFromS3(object):
+    """Holds an entire feed from a single user crawl"""
+
     def __init__(self, fbid, key):
         with tempfile.TemporaryFile() as fp:
             key.get_contents_to_file(fp)
@@ -160,9 +170,8 @@ class FeedFromS3(object):
                 link_lines.append(delim.join(f.encode('utf8', 'ignore') for f in link_fields))
         return link_lines
 
-    def write_s3(self, bucket_name, key_name_posts, key_name_links, delim="\t"):
-        conn = get_conn_s3()
-        buck = conn.get_bucket(bucket_name)
+    def write_s3(self, conn_s3, bucket_name, key_name_posts, key_name_links, delim="\t"):
+        buck = conn_s3.get_bucket(bucket_name)
 
         post_lines = self.get_post_lines()
         key_posts = Key(buck)
@@ -185,6 +194,8 @@ def parse_ts(time_string):
     return datetime.datetime.strptime(time_string[:-5], "%Y-%m-%dT%H:%M:%S") - tz_delt
 
 class FeedPostFromJson(object):
+    """Each post contributes a single post line, and multiple user-post lines to the db"""
+
     def __init__(self, post_json):
         self.post_id = str(post_json['id'])
         # self.post_ts = post_json['updated_time']
@@ -215,13 +226,16 @@ class FeedPostFromJson(object):
 
 # Each worker gets its own Redshift connection, manage that with a global variable.  There's prob
 # a better way to do this.
-conn = None
-def set_global_conn():
-    global conn
-    conn = get_conn_redshift()
+# see: http://stackoverflow.com/questions/10117073/how-to-use-initializer-to-set-up-my-multiprocess-pool
+conn_rs_global = None
+conn_s3_global = None
+def set_global_conns():
+    global conn_rs_global, conn_s3_global
+    conn_rs_global = get_conn_redshift()
+    conn_s3_global = get_conn_s3()
 
 def load_db_from_s3(bucket_name, key_names, table_name, delim="\t"):
-    curs = conn.cursor()
+    curs = conn_rs_global.cursor()
     for key_name in key_names:
         logger.debug("pid %s loading %s into %s" % (str(os.getpid()), key_name, table_name))
         sql = "COPY %s FROM 's3://%s/%s' " % (table_name, bucket_name, key_name)
@@ -233,7 +247,7 @@ def load_db_from_s3(bucket_name, key_names, table_name, delim="\t"):
         except psycopg2.InternalError as e:
             logger.debug("error loading: \n" + get_load_errs())
             raise
-    conn.commit()
+    conn_rs_global.commit()
 
 def get_load_errs():
     # see: http://docs.aws.amazon.com/redshift/latest/dg/r_STL_LOAD_ERRORS.html
@@ -253,7 +267,7 @@ def handle_feed_s3(args):
     key, load_thresh = args  #zzz todo: there's got to be a better way to handle this
 
     pid = os.getpid()
-    logger.debug("pid " + str(pid) + ", key " + key.name + ", have conn: " + str(conn))
+    logger.debug("pid " + str(pid) + ", key " + key.name + ", have conn: " + str(conn_rs_global))
 
     # name should have format primary_secondary; e.g., "100000008531200_1000760833"
     prim_id, sec_id = key.name.split("_")
@@ -269,7 +283,7 @@ def handle_feed_s3(args):
 
     key_name_posts = str(sec_id) + "_posts.tsv"
     key_name_links = str(sec_id) + "_links.tsv"
-    post_count, link_count = feed.write_s3(S3_OUT_BUCKET_NAME, key_name_posts, key_name_links)
+    post_count, link_count = feed.write_s3(conn_s3_global, S3_OUT_BUCKET_NAME, key_name_posts, key_name_links)
 
     # keep track of the feeds written with pseudo-static variable
     try:
@@ -293,18 +307,19 @@ def handle_feed_s3(args):
 def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
 
     if overwrite:
-        conn = get_conn_redshift()
-        create_output_tables(conn)
-        conn.close()
-    conn = get_conn_s3()
-    create_s3_bucket(conn, S3_OUT_BUCKET_NAME, overwrite)
+        conn_rs = get_conn_redshift()
+        create_output_tables(conn_rs)
+        conn_rs.close()
+    conn_s3 = get_conn_s3()
+    create_s3_bucket(conn_s3, S3_OUT_BUCKET_NAME, overwrite)
+    conn_s3.close()
 
     logger.info("process %d farming out to %d childs" % (os.getpid(), worker_count))
-    pool = multiprocessing.Pool(processes=worker_count, initializer=set_globals)
+    pool = multiprocessing.Pool(processes=worker_count, initializer=set_global_conns)
 
     post_line_count_tot = 0
     link_line_count_tot = 0
-    feed_arg_iter = imap(None, key_iter(), repeat(load_thresh))
+    feed_arg_iter = imap(None, s3_key_iter(), repeat(load_thresh))
 
     time_start = time.time()
     for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_s3, feed_arg_iter)):
@@ -323,8 +338,10 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
             #sys.exit("bailing")
             break
 
+    #zzz todo: deal with unloaded partial batches of feeds still stuck in S3
+
+
     pool.terminate()
-    conn.close()
     return i
 
 class Timer(object):
@@ -399,4 +416,3 @@ if __name__ == '__main__':
 
 #zzz todo: audit (non-)use of delim for different handlers
 
-#zzz todo: disambiguate two different conn objects in the code (S3 vs Redshift)
