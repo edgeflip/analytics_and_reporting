@@ -13,9 +13,7 @@ import multiprocessing
 from itertools import imap, repeat
 import os.path
 import time
-from datetime import timedelta
-
-
+import datetime
 
 
 AWS_ACCESS_KEY = "AKIAJDPO2KQRLOJBQP3Q"
@@ -70,6 +68,7 @@ def create_output_tables(conn):
           ts TIMESTAMP NOT NULL,
           type VARCHAR(64) NOT NULL,
           app VARCHAR(256),
+          post_from VARCHAR(256),
           link VARCHAR(2048),
           domain VARCHAR(1024),
           story VARCHAR(%s),
@@ -146,7 +145,8 @@ class FeedFromS3(object):
             post_fields = [self.user_id, p.post_id, p.post_ts, p.post_type, p.post_app, p.post_from,
                            p.post_link, p.post_link_domain,
                            p.post_story, p.post_description, p.post_caption, p.post_message]
-            post_lines.append(delim.join(f.replace(delim, " ").replace("\n", " ").encode('utf8', 'ignore') for f in post_fields))
+            line = delim.join(f.replace(delim, " ").replace("\n", " ").encode('utf8', 'ignore') for f in post_fields)
+            post_lines.append(line)
         return post_lines
 
     def get_link_lines(self, delim="\t"):
@@ -233,14 +233,19 @@ class FeedFromS3(object):
         return (post_count, link_count)
 
 
-
-
-
+# see: http://stackoverflow.com/questions/526406/python-time-to-age-part-2-timezones/526450#526450
+def parse_ts(time_string):
+    tz_offset_hours = int(time_string[-5:]) / 100  # we're ignoring the possibility of minutes here
+    tz_delt = datetime.timedelta(hours=tz_offset_hours)
+    ts = datetime.datetime.strptime(time_string[:-5], "%Y-%m-%dT%H:%M:%S")
+    ts -= tz_delt
+    return ts
 
 class FeedPostFromJson(object):
     def __init__(self, post_json):
         self.post_id = str(post_json['id'])
-        self.post_ts = post_json['updated_time']
+        # self.post_ts = post_json['updated_time']
+        self.post_ts = parse_ts(post_json['updated_time']).strftime("%Y-%m-%d %H:%M:%S")
         self.post_type = post_json['type']
         self.post_app = post_json['application']['id'] if 'application' in post_json else ""
 
@@ -402,10 +407,63 @@ def load_db_from_file(infile, table, delim="\t"):
     ret = curs.copy_from(infile, table, sep=delim)
     logger.debug("loaded file %s, %s" % (infile.name, str(ret)))
 
+def load_db_from_s3(bucket_name, key_names, table_name, delim="\t"):
+    curs = conn.cursor()
+    for key_name in key_names:
+        logger.debug("pid %s loading %s into %s" % (str(os.getpid()), key_name, table_name))
+        sql = "COPY %s FROM 's3://%s/%s' " % (table_name, bucket_name, key_name)
+        sql += "CREDENTIALS 'aws_access_key_id=%s;aws_secret_access_key=%s' " % (AWS_ACCESS_KEY, AWS_SECRET_KEY)
+        sql += "DELIMITER '%s'" % delim
+        logger.debug(sql)
+        try:
+            curs.execute(sql)
+        except psycopg2.InternalError as e:
+            logger.debug("error loading: \n" + get_load_errs())
+            raise
+    conn.commit()
 
+def get_load_errs():
+    # from: http://docs.aws.amazon.com/redshift/latest/dg/r_STL_LOAD_ERRORS.html
+    conn_rs = get_conn_redshift()
+    curs = conn_rs.cursor()
+    # sql = """
+    #   select d.query, substring(d.filename,14,20), d.line_number as line,
+    #          substring(d.value,1,16) as value, substring(le.err_reason,1,48) as err_reason
+    #   from stl_loaderror_detail d, stl_load_errors le
+    #   where d.query = le.query and d.query = pg_last_copy_id()
+    # """
+    sql = """
+      select *
+      from stl_load_errors
+      order by starttime desc
+      limit 3
+    """
+    curs.execute(sql)
+    ret = ""
+    for row in curs.fetchall():
+
+        ret += """userid: %s
+                  slice: %s
+                  tbl: %s
+                  starttime: %s
+                  session: %s
+                  query: %s
+                  filename: %s
+                  line_number: %s
+                  colname: %s
+                  type: %s
+                  col_length: %s
+                  position: %s
+                  raw_line: %s
+                  raw_field_value: %s
+                  err_code: %s
+                  err_reason: %s
+
+        """ % tuple([str(r)[:800] for r in row])
+    return ret
 
 def handle_feed_s3(args):
-    key = args  #zzz todo: there's got to be a better way to handle this
+    key, load_thresh = args  #zzz todo: there's got to be a better way to handle this
 
     pid = os.getpid()
     logger.debug("pid " + str(pid) + ", key " + key.name + ", have conn: " + str(conn))
@@ -422,30 +480,25 @@ def handle_feed_s3(args):
         logger.debug("pid " + str(pid) + " KeyError exception!")
         return None
 
-
-    key_name_posts = str(sec_id) + "_posts"
-    key_name_links = str(sec_id) + "_links"
+    key_name_posts = str(sec_id) + "_posts.tsv"
+    key_name_links = str(sec_id) + "_links.tsv"
     post_count, link_count = feed.write_s3(S3_OUT_BUCKET_NAME, key_name_posts, key_name_links)
 
-    #
-    # post_count = 0
-    # for line in feed.get_post_lines():
-    #     scratch_posts.write(line + "\n")
-    #     post_count += 1
-    #
-    # link_count = 0
-    # for line in feed.get_link_lines():
-    #     scratch_links.write(line + "\n")
-    #     link_count += 1
-    #
-    # if handle_feed_db_from_file.write_count_feeds >= load_thresh:
-    #     logger.debug("%d/%d users processed, loading into db" % (handle_feed_db_from_file.write_count_feeds, load_thresh))
-    #     load_global_scratch_files()
-    #
-    #     handle_feed_db_from_file.write_count = 0
-    #     set_global_scratch_files()
-    # else:
-    #     logger.debug("%d/%d users processed, delaying load" % (handle_feed_db_from_file.write_count_feeds, load_thresh))
+    # keep track of the feeds written with pseudo-static variable
+    try:
+        handle_feed_s3.posts_written.append(key_name_posts)
+        handle_feed_s3.links_written.append(key_name_links)
+    except AttributeError:
+        handle_feed_s3.posts_written = [key_name_posts]
+        handle_feed_s3.links_written = [key_name_links]
+    if len(handle_feed_s3.posts_written) >= load_thresh:
+        logger.debug("%d/%d users processed, loading into db" % (len(handle_feed_s3.posts_written), load_thresh))
+        load_db_from_s3(S3_OUT_BUCKET_NAME, handle_feed_s3.posts_written, "posts")
+        load_db_from_s3(S3_OUT_BUCKET_NAME, handle_feed_s3.links_written, "user_posts")
+        handle_feed_s3.posts_written = []
+        handle_feed_s3.links_written = []
+    else:
+        logger.debug("%d/%d users processed, delaying load" % (len(handle_feed_s3.posts_written), load_thresh))
 
     return (post_count, link_count)
 
@@ -472,13 +525,13 @@ def create_s3_bucket(conn, bucket_name, overwrite=False):
 
 
 # def process_feeds(out_dir, worker_count, max_feeds, overwrite):
-def process_feeds(worker_count, max_feeds, overwrite):
-# def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
+# def process_feeds(worker_count, max_feeds, overwrite):
+def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
 
-    # if overwrite:
-    #     conn = get_conn_redshift()
-    #     create_output_tables(conn)
-    #     conn.close()
+    if overwrite:
+        conn = get_conn_redshift()
+        create_output_tables(conn)
+        conn.close()
     conn = get_conn_s3()
     create_s3_bucket(conn, S3_OUT_BUCKET_NAME, overwrite)
 
@@ -490,17 +543,17 @@ def process_feeds(worker_count, max_feeds, overwrite):
     link_line_count_tot = 0
     # feed_arg_iter = imap(None, key_iter(), repeat(out_dir), repeat(overwrite))
     # feed_arg_iter = imap(None, key_iter())
-    # feed_arg_iter = imap(None, key_iter(), repeat(load_thresh))
+    feed_arg_iter = imap(None, key_iter(), repeat(load_thresh))
 
     time_start = time.time()
     # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_file, feed_arg_iter)):
     # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, key_iter())):
     # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db, key_iter())):
     # for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_db_from_file, feed_arg_iter)):
-    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_s3, key_iter())):
+    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_s3, feed_arg_iter)):
 
         if i % 1000 == 0:
-            time_delt = timedelta(seconds=int(time.time()-time_start))
+            time_delt = datetime.timedelta(seconds=int(time.time()-time_start))
             logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
         if counts_tup is None:
             continue
@@ -616,8 +669,8 @@ if __name__ == '__main__':
 
     if args.prof_trials == 1:
         # process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite)
-        process_feeds(args.workers, args.maxfeeds, args.overwrite)
-        # process_feeds(args.workers, args.maxfeeds, args.overwrite, args.loadthresh)
+        # process_feeds(args.workers, args.maxfeeds, args.overwrite)
+        process_feeds(args.workers, args.maxfeeds, args.overwrite, args.loadthresh)
 
     else:
         profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
@@ -630,3 +683,4 @@ if __name__ == '__main__':
 
 #zzz todo: audit (non-)use of delim for different handlers
 
+#zzz todo: disambiguate two different conn objects in the code (S3 vs Redshift)
