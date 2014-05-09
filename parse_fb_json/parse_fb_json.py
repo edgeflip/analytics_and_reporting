@@ -78,9 +78,9 @@ def table_exists(curs, table_name):
     curs.execute(sql, (table_name,))
     return curs.fetchone()[0]
 
-def create_output_tables(conn_rs):
+def create_output_tables(conn_rs, overwrite=False):
     curs = conn_rs.cursor()
-    if table_exists(curs, 'posts'):  # DROP TABLE IF EXISTS is Postgres 8.2, Redshift is 8.0
+    if overwrite and table_exists(curs, 'posts'):  # DROP TABLE IF EXISTS is Postgres 8.2, Redshift is 8.0
         curs.execute("DROP TABLE posts;")
     sql = """
         CREATE TABLE posts (
@@ -287,8 +287,8 @@ def handle_feed_s3(args):
 def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
 
     conn_rs = get_conn_redshift()
-    if overwrite:
-        create_output_tables(conn_rs)
+    create_output_tables(conn_rs, overwrite)
+
     conn_s3 = get_conn_s3()
     create_s3_bucket(conn_s3, S3_OUT_BUCKET_NAME, overwrite)
     conn_s3.close()
@@ -321,7 +321,9 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
         if i >= load_thresh:
             logger.debug("%d/%d feeds processed, loading into db" % (i, load_thresh))
             load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, post_file_names, "posts")
+            logger.debug("loaded %d post files" % (len(post_file_names)))
             load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, link_file_names, "user_posts")
+            logger.debug("loaded %d link files" % (len(link_file_names)))
             post_file_names = []
             link_file_names = []
         else:
