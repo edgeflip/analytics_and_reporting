@@ -122,7 +122,6 @@ def create_output_tables(conn_rs):
 
 # data structs for transforming json to db rows
 
-
 class FeedFromS3(object):
     """Holds an entire feed from a single user crawl"""
 
@@ -223,19 +222,16 @@ class FeedPostFromJson(object):
         if 'comments' in post_json:
             self.comment_ids.update([user['id'] for user in post_json['comments']['data']])
 
-
-# Each worker gets its own Redshift connection, manage that with a global variable.  There's prob
+# Each worker gets its own S3 connection, manage that with a global variable.  There's prob
 # a better way to do this.
 # see: http://stackoverflow.com/questions/10117073/how-to-use-initializer-to-set-up-my-multiprocess-pool
-conn_rs_global = None
 conn_s3_global = None
 def set_global_conns():
-    global conn_rs_global, conn_s3_global
-    conn_rs_global = get_conn_redshift()
+    global conn_s3_global
     conn_s3_global = get_conn_s3()
 
-def load_db_from_s3(bucket_name, key_names, table_name, delim="\t"):
-    curs = conn_rs_global.cursor()
+def load_db_from_s3(conn_rs, bucket_name, key_names, table_name, delim="\t"):
+    curs = conn_rs.cursor()
     for key_name in key_names:
         logger.debug("pid %s loading %s into %s" % (str(os.getpid()), key_name, table_name))
         sql = "COPY %s FROM 's3://%s/%s' " % (table_name, bucket_name, key_name)
@@ -247,7 +243,7 @@ def load_db_from_s3(bucket_name, key_names, table_name, delim="\t"):
         except psycopg2.InternalError as e:
             logger.debug("error loading: \n" + get_load_errs())
             raise
-    conn_rs_global.commit()
+    conn_rs.commit()
 
 def get_load_errs():
     # see: http://docs.aws.amazon.com/redshift/latest/dg/r_STL_LOAD_ERRORS.html
@@ -283,33 +279,16 @@ def handle_feed_s3(args):
 
     key_name_posts = str(sec_id) + "_posts.tsv"
     key_name_links = str(sec_id) + "_links.tsv"
-    post_count, link_count = feed.write_s3(conn_s3_global, S3_OUT_BUCKET_NAME, key_name_posts, key_name_links)
+    counts = feed.write_s3(conn_s3_global, S3_OUT_BUCKET_NAME, key_name_posts, key_name_links)
 
-    # keep track of the feeds written with pseudo-static variable
-    try:
-        handle_feed_s3.posts_written.append(key_name_posts)
-        handle_feed_s3.links_written.append(key_name_links)
-    except AttributeError:
-        handle_feed_s3.posts_written = [key_name_posts]
-        handle_feed_s3.links_written = [key_name_links]
-    if len(handle_feed_s3.posts_written) >= load_thresh:
-        logger.debug("%d/%d users processed, loading into db" % (len(handle_feed_s3.posts_written), load_thresh))
-        load_db_from_s3(S3_OUT_BUCKET_NAME, handle_feed_s3.posts_written, "posts")
-        load_db_from_s3(S3_OUT_BUCKET_NAME, handle_feed_s3.links_written, "user_posts")
-        handle_feed_s3.posts_written = []
-        handle_feed_s3.links_written = []
-    else:
-        logger.debug("%d/%d users processed, delaying load" % (len(handle_feed_s3.posts_written), load_thresh))
-
-    return (post_count, link_count)
+    return (key_name_posts, key_name_links)
 
 
 def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
 
+    conn_rs = get_conn_redshift()
     if overwrite:
-        conn_rs = get_conn_redshift()
         create_output_tables(conn_rs)
-        conn_rs.close()
     conn_s3 = get_conn_s3()
     create_s3_bucket(conn_s3, S3_OUT_BUCKET_NAME, overwrite)
     conn_s3.close()
@@ -317,31 +296,43 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
     logger.info("process %d farming out to %d childs" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(processes=worker_count, initializer=set_global_conns)
 
-    post_line_count_tot = 0
-    link_line_count_tot = 0
+    post_file_names = []
+    link_file_names = []
     feed_arg_iter = imap(None, s3_key_iter(), repeat(load_thresh))
-
     time_start = time.time()
-    for i, counts_tup in enumerate(pool.imap_unordered(handle_feed_s3, feed_arg_iter)):
+    for i, out_file_names in enumerate(pool.imap_unordered(handle_feed_s3, feed_arg_iter)):
 
         if i % 1000 == 0:
             time_delt = datetime.timedelta(seconds=int(time.time()-time_start))
-            logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, post_line_count_tot, link_line_count_tot))
-        if counts_tup is None:
+            logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, len(post_file_names), len(link_file_names)))
+
+        if out_file_names is None:
             continue
         else:
-            post_lines, link_lines = counts_tup
-            post_line_count_tot += post_lines
-            link_line_count_tot += link_lines
+            post_file_name, link_file_name = out_file_names
+            post_file_names.append(post_file_name)
+            link_file_names.append(link_file_name)
 
         if (max_feeds is not None) and (i >= max_feeds):
             #sys.exit("bailing")
             break
 
-    #zzz todo: deal with unloaded partial batches of feeds still stuck in S3
+        #todo: this should probably be spun off into another process so it doesn't hold things up
+        if i >= load_thresh:
+            logger.debug("%d/%d feeds processed, loading into db" % (i, load_thresh))
+            load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, post_file_names, "posts")
+            load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, link_file_names, "user_posts")
+            post_file_names = []
+            link_file_names = []
+        else:
+            logger.debug("%d/%d users processed, delaying load" % (i, load_thresh))
 
+    # load whatever is left over
+    load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, post_file_names, "posts")
+    load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, link_file_names, "user_posts")
 
     pool.terminate()
+    conn_rs.close()
     return i
 
 class Timer(object):
@@ -381,15 +372,15 @@ def profile_process_feeds(out_dir, max_worker_count, max_feeds, overwrite,
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Eat up the FB sync data and put it into a tsv')
-    # parser.add_argument('out_dir', type=str, help='base dir for output files')
+    parser = argparse.ArgumentParser(description='Eat up the FB sync json and put it into Redshift')
     parser.add_argument('--workers', type=int, help='number of workers to multiprocess', default=1)
     parser.add_argument('--maxfeeds', type=int, help='bail after x feeds are done', default=None)
     parser.add_argument('--overwrite', action='store_true', help='overwrite previous runs')
     parser.add_argument('--logfile', type=str, help='for debugging', default=None)
     parser.add_argument('--prof_trials', type=int, help='run x times with incr workers', default=1)
     parser.add_argument('--prof_incr', type=int, help='profile worker decrement', default=5)
-    parser.add_argument('--loadthresh', type=int, help='number of feeds to write to file before loading to db', default=50)
+    parser.add_argument('--loadthresh', type=int,
+                        help='number of feeds to write to file before loading to db', default=50)
     args = parser.parse_args()
 
     hand_s = logging.StreamHandler()
