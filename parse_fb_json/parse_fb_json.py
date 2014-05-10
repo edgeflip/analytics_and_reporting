@@ -61,15 +61,15 @@ def create_s3_bucket(conn_s3, bucket_name):
     logger.debug("creating S3 bucket " + bucket_name)
     return conn_s3.create_bucket(bucket_name)
 
-def move_s3_keys(conn_s3, bucket_name, key_names, dest_dir):
-    buck = conn_s3.get_bucket(bucket_name)
-    for key_name_old in key_names:
-        logger.debug("moving key %s to %s" % (key_name_old, dest_dir))
-        k = Key(buck)
-        k.key = key_name_old
-        k.copy(bucket_name, os.path.join(dest_dir, key_name_old))
-        k.delete()
-        logger.debug("done moving key %s to %s" % (key_name_old, dest_dir))
+# def move_s3_keys(conn_s3, bucket_name, key_names, dest_dir):
+#     buck = conn_s3.get_bucket(bucket_name)
+#     for key_name_old in key_names:
+#         logger.debug("moving key %s to %s" % (key_name_old, dest_dir))
+#         k = Key(buck)
+#         k.key = key_name_old
+#         k.copy(bucket_name, os.path.join(dest_dir, key_name_old))
+#         k.delete()
+#         logger.debug("done moving key %s to %s" % (key_name_old, dest_dir))
 
 
 # Redshift stuff
@@ -125,6 +125,43 @@ def create_output_tables(conn_rs):
     logging.info("created user_posts table: " + str(ret))
 
     conn_rs.commit()
+
+def load_db_from_s3(conn_rs, conn_s3, bucket_name, key_names, table_name, dest_dir, delim="\t"):
+    buck = conn_s3.get_bucket(bucket_name)
+    curs = conn_rs.cursor()
+    for key_name in key_names:
+        logger.debug("pid %s loading %s into %s" % (str(os.getpid()), key_name, table_name))
+        sql = "COPY %s FROM 's3://%s/%s' " % (table_name, bucket_name, key_name)
+        sql += "CREDENTIALS 'aws_access_key_id=%s;aws_secret_access_key=%s' " % (AWS_ACCESS_KEY, AWS_SECRET_KEY)
+        sql += "DELIMITER '%s'" % delim
+        # logger.debug(sql)
+        try:
+            curs.execute(sql)
+        except psycopg2.InternalError as e:
+            logger.debug("error loading: \n" + get_load_errs())
+            raise
+
+        conn_rs.commit()
+
+        logger.debug("moving key %s to %s" % (key_name, dest_dir))
+        buck.copy_key(os.path.join(dest_dir, key_name), bucket_name, key_name)
+        buck.delete_key(key_name)
+        logger.debug("done moving key %s to %s" % (key_name, dest_dir))
+
+# useful for debugging
+def get_load_errs():
+    # see: http://docs.aws.amazon.com/redshift/latest/dg/r_STL_LOAD_ERRORS.html
+    conn_rs = get_conn_redshift()
+    curs = conn_rs.cursor()
+    sql = "select * from stl_load_errors order by starttime desc limit 2"
+    curs.execute(sql)
+    fmt = ": %s\n\t".join(["userid", "slice", "tbl", "starttime", "session", "query", "filename",
+                           "line_number", "colname", "type", "col_length", "position", "raw_line",
+                           "raw_field_value", "err_code", "err_reason"]) + ": %s\n"
+    ret = ""
+    for row in curs.fetchall():
+        ret += fmt % tuple([str(r)[:80] for r in row])
+    return ret
 
 
 # data structs for transforming json to db rows
@@ -237,35 +274,6 @@ def set_global_conns():
     global conn_s3_global
     conn_s3_global = get_conn_s3()
 
-def load_db_from_s3(conn_rs, bucket_name, key_names, table_name, delim="\t"):
-    curs = conn_rs.cursor()
-    for key_name in key_names:
-        logger.debug("pid %s loading %s into %s" % (str(os.getpid()), key_name, table_name))
-        sql = "COPY %s FROM 's3://%s/%s' " % (table_name, bucket_name, key_name)
-        sql += "CREDENTIALS 'aws_access_key_id=%s;aws_secret_access_key=%s' " % (AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        sql += "DELIMITER '%s'" % delim
-        logger.debug(sql)
-        try:
-            curs.execute(sql)
-        except psycopg2.InternalError as e:
-            logger.debug("error loading: \n" + get_load_errs())
-            raise
-    conn_rs.commit()
-
-def get_load_errs():
-    # see: http://docs.aws.amazon.com/redshift/latest/dg/r_STL_LOAD_ERRORS.html
-    conn_rs = get_conn_redshift()
-    curs = conn_rs.cursor()
-    sql = "select * from stl_load_errors order by starttime desc limit 2"
-    curs.execute(sql)
-    fmt = ": %s\n\t".join(["userid", "slice", "tbl", "starttime", "session", "query", "filename",
-                           "line_number", "colname", "type", "col_length", "position", "raw_line",
-                           "raw_field_value", "err_code", "err_reason"]) + ": %s\n"
-    ret = ""
-    for row in curs.fetchall():
-        ret += fmt % tuple([str(r)[:80] for r in row])
-    return ret
-
 def handle_feed_s3(args):
     key, bucket_name = args  #zzz todo: there's got to be a better way to handle this
 
@@ -313,7 +321,7 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh, bucket_name):
             time_delt = datetime.timedelta(seconds=int(time.time()-time_start))
             logger.info("\t%s %d feeds, %d posts, %d links" % (str(time_delt), i, len(post_file_names), len(link_file_names)))
 
-        if out_file_names is None:
+        if out_file_names is None:  # error reading the key
             continue
         else:
             post_file_name, link_file_name = out_file_names
@@ -327,13 +335,10 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh, bucket_name):
         #todo: this should probably be spun off into another process so it doesn't hold things up
         if i >= load_thresh:
             logger.debug("%d/%d feeds processed, loading into db" % (i, load_thresh))
-            load_db_from_s3(conn_rs, bucket_name, post_file_names, "posts")
+            load_db_from_s3(conn_rs, conn_s3, bucket_name, post_file_names, "posts", S3_DONE_DIR)
             logger.debug("loaded %d post files" % (len(post_file_names)))
-            load_db_from_s3(conn_rs, bucket_name, link_file_names, "user_posts")
+            load_db_from_s3(conn_rs, conn_s3, bucket_name, link_file_names, "user_posts", S3_DONE_DIR)
             logger.debug("loaded %d link files" % (len(link_file_names)))
-
-            move_s3_keys(conn_s3, bucket_name, post_file_names, S3_DONE_DIR)
-            move_s3_keys(conn_s3, bucket_name, link_file_names, S3_DONE_DIR)
 
             post_file_names = []
             link_file_names = []
@@ -341,15 +346,14 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh, bucket_name):
             logger.debug("%d/%d users processed, delaying load" % (i, load_thresh))
 
     # load whatever is left over
-    load_db_from_s3(conn_rs, bucket_name, post_file_names, "posts")
-    load_db_from_s3(conn_rs, bucket_name, link_file_names, "user_posts")
-    move_s3_keys(conn_s3, bucket_name, post_file_names, S3_DONE_DIR)
-    move_s3_keys(conn_s3, bucket_name, link_file_names, S3_DONE_DIR)
+    load_db_from_s3(conn_rs, conn_s3, bucket_name, post_file_names, "posts", S3_DONE_DIR)
+    load_db_from_s3(conn_rs, conn_s3, bucket_name, link_file_names, "user_posts", S3_DONE_DIR)
 
     pool.terminate()
     conn_s3.close()
     conn_rs.close()
     return i
+
 
 class Timer(object):
     def __init__(self):
@@ -379,7 +383,6 @@ def profile_process_feeds(out_dir, max_worker_count, max_feeds, overwrite,
             process_feeds(out_dir, worker_count, max_feeds, overwrite)
             elapsed = tim.end()
         logger.info(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
-
 
 
 
