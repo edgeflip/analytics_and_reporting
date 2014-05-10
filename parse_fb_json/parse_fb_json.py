@@ -20,6 +20,7 @@ AWS_ACCESS_KEY = "AKIAJDPO2KQRLOJBQP3Q"
 AWS_SECRET_KEY = "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"
 S3_IN_BUCKET_NAMES = [ "user_feeds_%d" % i for i in range(5) ]
 S3_OUT_BUCKET_NAME = "user_feeds_parsed"
+S3_DONE_DIR = "loaded"
 RS_HOST = 'wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com'
 RS_USER = 'edgeflip'
 RS_PASS = 'XzriGDp2FfVy9K'
@@ -53,16 +54,22 @@ def delete_s3_bucket(conn_s3, bucket_name):
         key.delete()
     conn_s3.delete_bucket(bucket_name)
 
-def create_s3_bucket(conn_s3, bucket_name, overwrite=False):
+def create_s3_bucket(conn_s3, bucket_name):
     if conn_s3.lookup(bucket_name) is not None:
-        if overwrite:
-            logger.debug("deleting old S3 bucket " + bucket_name)
-            delete_s3_bucket(conn_s3, bucket_name)
-        else:
-            logger.debug("keeping old S3 bucket " + bucket_name)
-            return None
+        logger.debug("deleting old S3 bucket " + bucket_name)
+        delete_s3_bucket(conn_s3, bucket_name)
     logger.debug("creating S3 bucket " + bucket_name)
     return conn_s3.create_bucket(bucket_name)
+
+def move_s3_keys(conn_s3, bucket_name, key_names, dest_dir):
+    buck = conn_s3.get_bucket(bucket_name)
+    for key_name_old in key_names:
+        logger.debug("moving key %s to %s" % (key_name_old, dest_dir))
+        k = Key(buck)
+        k.key = key_name_old
+        k.copy(bucket_name, os.path.join(dest_dir, key_name_old))
+        k.delete()
+        logger.debug("done moving key %s to %s" % (key_name_old, dest_dir))
 
 
 # Redshift stuff
@@ -78,9 +85,9 @@ def table_exists(curs, table_name):
     curs.execute(sql, (table_name,))
     return curs.fetchone()[0]
 
-def create_output_tables(conn_rs, overwrite=False):
+def create_output_tables(conn_rs):
     curs = conn_rs.cursor()
-    if overwrite and table_exists(curs, 'posts'):  # DROP TABLE IF EXISTS is Postgres 8.2, Redshift is 8.0
+    if table_exists(curs, 'posts'):  # DROP TABLE IF EXISTS is Postgres 8.2, Redshift is 8.0
         curs.execute("DROP TABLE posts;")
     sql = """
         CREATE TABLE posts (
@@ -136,7 +143,7 @@ class FeedFromS3(object):
                 logger.debug("no data in feed %s" % key.name)
                 logger.debug(str(feed_json))
                 raise
-        logger.debug("\tread feed json with %d posts from %s" % (len(feed_json_list), key.name))
+        logger.debug("%s got feed with %d posts from %s" % (os.getpid(), len(feed_json_list), key.name))
 
         self.user_id = fbid
         self.posts = []
@@ -260,47 +267,47 @@ def get_load_errs():
     return ret
 
 def handle_feed_s3(args):
-    key, load_thresh = args  #zzz todo: there's got to be a better way to handle this
+    key, bucket_name = args  #zzz todo: there's got to be a better way to handle this
 
     pid = os.getpid()
-    logger.debug("pid " + str(pid) + ", key " + key.name + ", have conn: " + str(conn_rs_global))
+    logger.debug("pid " + str(pid) + ", key " + key.name)
 
     # name should have format primary_secondary; e.g., "100000008531200_1000760833"
     prim_id, sec_id = key.name.split("_")
-    logger.debug("pid " + str(pid) + " have prim, sec: " + prim_id + ", " + sec_id)
+    # logger.debug("pid " + str(pid) + " have prim, sec: " + prim_id + ", " + sec_id)
 
     try:
-        logger.debug("pid " + str(pid) + " creating feed")
+        # logger.debug("pid " + str(pid) + " creating feed")
         feed = FeedFromS3(sec_id, key)
-        logger.debug("pid " + str(pid) + " got feed")
+        # logger.debug("pid " + str(pid) + " got feed")
     except KeyError:  # gets logged and reraised upstream
         logger.debug("pid " + str(pid) + " KeyError exception!")
         return None
 
     key_name_posts = str(sec_id) + "_posts.tsv"
     key_name_links = str(sec_id) + "_links.tsv"
-    counts = feed.write_s3(conn_s3_global, S3_OUT_BUCKET_NAME, key_name_posts, key_name_links)
+    counts = feed.write_s3(conn_s3_global, bucket_name, key_name_posts, key_name_links)
 
     return (key_name_posts, key_name_links)
 
 
-def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
+def process_feeds(worker_count, max_feeds, overwrite, load_thresh, bucket_name):
 
-    conn_rs = get_conn_redshift()
-    create_output_tables(conn_rs, overwrite)
-
+    conn_rs = get_conn_redshift()  # keep these connections around
     conn_s3 = get_conn_s3()
-    create_s3_bucket(conn_s3, S3_OUT_BUCKET_NAME, overwrite)
-    conn_s3.close()
+    if (overwrite):
+        create_output_tables(conn_rs)
+        create_s3_bucket(conn_s3, bucket_name)
 
     logger.info("process %d farming out to %d childs" % (os.getpid(), worker_count))
     pool = multiprocessing.Pool(processes=worker_count, initializer=set_global_conns)
 
     post_file_names = []
     link_file_names = []
-    feed_arg_iter = imap(None, s3_key_iter(), repeat(load_thresh))
+    feed_arg_iter = imap(None, s3_key_iter(), repeat(bucket_name))
     time_start = time.time()
-    for i, out_file_names in enumerate(pool.imap_unordered(handle_feed_s3, feed_arg_iter)):
+    # for i, out_file_names in enumerate(pool.imap_unordered(handle_feed_s3, feed_arg_iter)):
+    for i, out_file_names in enumerate(pool.imap(handle_feed_s3, feed_arg_iter)):
 
         if i % 1000 == 0:
             time_delt = datetime.timedelta(seconds=int(time.time()-time_start))
@@ -320,20 +327,27 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh):
         #todo: this should probably be spun off into another process so it doesn't hold things up
         if i >= load_thresh:
             logger.debug("%d/%d feeds processed, loading into db" % (i, load_thresh))
-            load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, post_file_names, "posts")
+            load_db_from_s3(conn_rs, bucket_name, post_file_names, "posts")
             logger.debug("loaded %d post files" % (len(post_file_names)))
-            load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, link_file_names, "user_posts")
+            load_db_from_s3(conn_rs, bucket_name, link_file_names, "user_posts")
             logger.debug("loaded %d link files" % (len(link_file_names)))
+
+            move_s3_keys(conn_s3, bucket_name, post_file_names, S3_DONE_DIR)
+            move_s3_keys(conn_s3, bucket_name, link_file_names, S3_DONE_DIR)
+
             post_file_names = []
             link_file_names = []
         else:
             logger.debug("%d/%d users processed, delaying load" % (i, load_thresh))
 
     # load whatever is left over
-    load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, post_file_names, "posts")
-    load_db_from_s3(conn_rs, S3_OUT_BUCKET_NAME, link_file_names, "user_posts")
+    load_db_from_s3(conn_rs, bucket_name, post_file_names, "posts")
+    load_db_from_s3(conn_rs, bucket_name, link_file_names, "user_posts")
+    move_s3_keys(conn_s3, bucket_name, post_file_names, S3_DONE_DIR)
+    move_s3_keys(conn_s3, bucket_name, link_file_names, S3_DONE_DIR)
 
     pool.terminate()
+    conn_s3.close()
     conn_rs.close()
     return i
 
@@ -379,10 +393,12 @@ if __name__ == '__main__':
     parser.add_argument('--maxfeeds', type=int, help='bail after x feeds are done', default=None)
     parser.add_argument('--overwrite', action='store_true', help='overwrite previous runs')
     parser.add_argument('--logfile', type=str, help='for debugging', default=None)
+    parser.add_argument('--loadthresh', type=int, default=100,
+                        help='number of feeds to write to file before loading to db')
+    parser.add_argument('--bucket', type=str, default=S3_OUT_BUCKET_NAME,
+                        help='S3 bucket for writing transformed data and loading into Redshift')
     parser.add_argument('--prof_trials', type=int, help='run x times with incr workers', default=1)
     parser.add_argument('--prof_incr', type=int, help='profile worker decrement', default=5)
-    parser.add_argument('--loadthresh', type=int,
-                        help='number of feeds to write to file before loading to db', default=50)
     args = parser.parse_args()
 
     hand_s = logging.StreamHandler()
@@ -398,7 +414,7 @@ if __name__ == '__main__':
     logger.addHandler(hand_s)
 
     if args.prof_trials == 1:
-        process_feeds(args.workers, args.maxfeeds, args.overwrite, args.loadthresh)
+        process_feeds(args.workers, args.maxfeeds, args.overwrite, args.loadthresh, args.bucket)
 
     else:
         profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
