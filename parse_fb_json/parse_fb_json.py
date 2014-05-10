@@ -61,16 +61,6 @@ def create_s3_bucket(conn_s3, bucket_name):
     logger.debug("creating S3 bucket " + bucket_name)
     return conn_s3.create_bucket(bucket_name)
 
-# def move_s3_keys(conn_s3, bucket_name, key_names, dest_dir):
-#     buck = conn_s3.get_bucket(bucket_name)
-#     for key_name_old in key_names:
-#         logger.debug("moving key %s to %s" % (key_name_old, dest_dir))
-#         k = Key(buck)
-#         k.key = key_name_old
-#         k.copy(bucket_name, os.path.join(dest_dir, key_name_old))
-#         k.delete()
-#         logger.debug("done moving key %s to %s" % (key_name_old, dest_dir))
-
 
 # Redshift stuff
 
@@ -373,14 +363,15 @@ class Timer(object):
         splits = self.get_splits()
         return prefix + "avg time over %d trials: %.1f secs" % (len(self.ends), sum(splits)/len(splits))
 
-def profile_process_feeds(out_dir, max_worker_count, max_feeds, overwrite,
+def profile_process_feeds(max_worker_count, max_feeds, overwrite, load_thresh, bucket_name,
                           profile_trials, profile_incr):
     worker_counts = range(max_worker_count, 1, -1*profile_incr) + [1]
     logger.info("worker counts: %s" % str(worker_counts))
     for worker_count in worker_counts:
         tim = Timer()
         for t in range(profile_trials):
-            process_feeds(out_dir, worker_count, max_feeds, overwrite)
+            process_feeds(worker_count, max_feeds, overwrite, load_thresh, bucket_name)
+
             elapsed = tim.end()
         logger.info(tim.report_splits_avg("%d workers " % worker_count) + "\n\n")
 
@@ -420,8 +411,10 @@ if __name__ == '__main__':
         process_feeds(args.workers, args.maxfeeds, args.overwrite, args.loadthresh, args.bucket)
 
     else:
-        profile_process_feeds(args.out_dir, args.workers, args.maxfeeds, args.overwrite,
+        profile_process_feeds(args.workers, args.maxfeeds, args.overwrite,
+                              args.loadthresh, args.bucket,
                               args.prof_trials, args.prof_incr)
+
 
 
 #zzz todo: do something more intelligent with \n and \t in text
