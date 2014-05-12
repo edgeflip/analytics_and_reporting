@@ -123,7 +123,7 @@ def load_db_from_s3(conn_rs, conn_s3, bucket_name, key_names, table_name, dest_d
         logger.debug("pid %s loading %s into %s" % (str(os.getpid()), key_name, table_name))
         sql = "COPY %s FROM 's3://%s/%s' " % (table_name, bucket_name, key_name)
         sql += "CREDENTIALS 'aws_access_key_id=%s;aws_secret_access_key=%s' " % (AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        sql += "DELIMITER '%s'" % delim
+        sql += "DELIMITER '%s' TRUNCATECOLUMNS" % delim
         # logger.debug(sql)
         try:
             curs.execute(sql)
@@ -240,11 +240,10 @@ class FeedPostFromJson(object):
         self.post_link = post_json.get('link', "")
         self.post_link_domain = urlparse(self.post_link).hostname if (self.post_link) else ""
 
-        #todo: fix this terrible, terrible thing that limits the length of strings
-        self.post_story = post_json.get('story', "")[:DB_TEXT_LEN / 2]
-        self.post_description = post_json.get('description', "")[:DB_TEXT_LEN / 2]
-        self.post_caption = post_json.get('caption', "")[:DB_TEXT_LEN / 2]
-        self.post_message = post_json.get('message', "")[:DB_TEXT_LEN / 2]
+        self.post_story = post_json.get('story', "")
+        self.post_description = post_json.get('description', "")
+        self.post_caption = post_json.get('caption', "")
+        self.post_message = post_json.get('message', "")
 
         self.to_ids = set()
         self.like_ids = set()
