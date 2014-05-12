@@ -390,10 +390,10 @@ class ETL(object):
 
     def metric_expressions(self):
         return """
-            COUNT(DISTINCT CASE WHEN t.type='heartbeat' THEN t.visit_id ELSE NULL END) AS visits,
+            COUNT(DISTINCT CASE WHEN t.type='incoming_redirect' THEN t.visit_id ELSE NULL END) AS visits,
             SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
             COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.visit_id ELSE NULL END) AS authorized_visits,
-            COUNT(DISTINCT CASE WHEN t.type='authorized' THEN fbid ELSE NULL END) AS uniq_users_authorized,
+            COUNT(DISTINCT fbid) AS uniq_users_authorized,
             SUM(CASE WHEN (t.type='auth_fail' or t.type='oauth_declined') THEN 1 ELSE 0 END) AS auth_fails,
             COUNT(DISTINCT CASE WHEN t.type='generated' THEN visit_id ELSE NULL END) AS visits_generated_faces,
             COUNT(DISTINCT CASE WHEN t.type='generated' THEN fbid ELSE NULL END) AS users_generated_faces,
@@ -414,11 +414,11 @@ class ETL(object):
         staging_table = 'clientstats_staging'
         drop_table_if_exists(staging_table, self.pconn, self.pcur)
         megaquery = """
-    CREATE TABLE {0} AS
+    CREATE TABLE {} AS
     SELECT
         root_campaign.campaign_id,
         date_trunc('hour', t.updated) as hour,
-        {1}
+        {}
         from events t
         inner join visits using (visit_id)
         inner join visitors v using (visitor_id)
