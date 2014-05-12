@@ -443,10 +443,10 @@ class ETL(object):
         staging_table = 'clientrollups_staging'
         drop_table_if_exists(staging_table, self.pconn, self.pcur)
         megaquery = """
-    CREATE TABLE {0} AS
+    CREATE TABLE {} AS
     SELECT
         client_id,
-        {0}
+        {}
         from events t
         inner join visits using (visit_id)
         inner join visitors v using (visitor_id)
