@@ -322,12 +322,12 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh, bucket_name):
 
         #todo: this should probably be spun off into another process so it doesn't hold things up
         if max(len(post_file_names), len(link_file_names)) >= load_thresh:
-            logger.info("%d/%d feeds processed, loading %d posts, %d links into db" % (i, load_thresh, len(post_file_names), len(link_file_names)))
-            load_db_from_s3(conn_rs, conn_s3, bucket_name, post_file_names, "posts", S3_DONE_DIR)
-            logger.info("loaded %d post files" % (len(post_file_names)))
-            load_db_from_s3(conn_rs, conn_s3, bucket_name, link_file_names, "user_posts", S3_DONE_DIR)
-            logger.info("loaded %d link files" % (len(link_file_names)))
-
+            if load_thresh > 0:
+                logger.info("%d/%d feeds processed, loading %d posts, %d links into db" % (i, load_thresh, len(post_file_names), len(link_file_names)))
+                load_db_from_s3(conn_rs, conn_s3, bucket_name, post_file_names, "posts", S3_DONE_DIR)
+                logger.info("loaded %d post files" % (len(post_file_names)))
+                load_db_from_s3(conn_rs, conn_s3, bucket_name, link_file_names, "user_posts", S3_DONE_DIR)
+                logger.info("loaded %d link files" % (len(link_file_names)))
             post_file_names = []
             link_file_names = []
         else:
@@ -386,7 +386,7 @@ if __name__ == '__main__':
     parser.add_argument('--overwrite', action='store_true', help='overwrite previous runs')
     parser.add_argument('--logfile', type=str, help='for debugging', default=None)
     parser.add_argument('--loadthresh', type=int, default=100,
-                        help='number of feeds to write to file before loading to db')
+                        help='number of feeds to write to S3 before loading to db (0 for no load)')
     parser.add_argument('--bucket', type=str, default=S3_OUT_BUCKET_NAME,
                         help='S3 bucket for writing transformed data and loading into Redshift')
     parser.add_argument('--prof_trials', type=int, help='run x times with incr workers', default=1)
