@@ -323,11 +323,11 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh, bucket_name):
 
         #todo: this should probably be spun off into another process so it doesn't hold things up
         if max(len(post_file_names), len(link_file_names)) >= load_thresh:
-            logger.info("%d/%d feeds processed, loading into db" % (i, load_thresh))
+            logger.info("%d/%d feeds processed, loading %d posts, %d links into db" % (i, load_thresh, len(post_file_names), len(link_file_names)))
             load_db_from_s3(conn_rs, conn_s3, bucket_name, post_file_names, "posts", S3_DONE_DIR)
-            logger.debug("loaded %d post files" % (len(post_file_names)))
+            logger.info("loaded %d post files" % (len(post_file_names)))
             load_db_from_s3(conn_rs, conn_s3, bucket_name, link_file_names, "user_posts", S3_DONE_DIR)
-            logger.debug("loaded %d link files" % (len(link_file_names)))
+            logger.info("loaded %d link files" % (len(link_file_names)))
 
             post_file_names = []
             link_file_names = []
