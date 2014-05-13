@@ -281,8 +281,8 @@ def handle_feed_s3(args):
         logger.debug("pid " + str(pid) + " KeyError exception!")
         return None
 
-    key_name_posts = str(sec_id) + "_posts.tsv"
-    key_name_links = str(sec_id) + "_links.tsv"
+    key_name_posts = "posts/" + str(sec_id) + ".tsv"
+    key_name_links = "links/" + str(sec_id) + ".tsv"
     counts = feed.write_s3(conn_s3_global, bucket_name, key_name_posts, key_name_links)
 
     return (key_name_posts, key_name_links)
@@ -303,8 +303,7 @@ def process_feeds(worker_count, max_feeds, overwrite, load_thresh, bucket_name):
     link_file_names = []
     feed_arg_iter = imap(None, s3_key_iter(), repeat(bucket_name))
     time_start = time.time()
-    # for i, out_file_names in enumerate(pool.imap_unordered(handle_feed_s3, feed_arg_iter)):
-    for i, out_file_names in enumerate(pool.imap(handle_feed_s3, feed_arg_iter)):
+    for i, out_file_names in enumerate(pool.imap_unordered(handle_feed_s3, feed_arg_iter)):
 
         if i % 1000 == 0:
             time_delt = datetime.timedelta(seconds=int(time.time()-time_start))
