@@ -123,7 +123,7 @@ def load_db_from_s3(conn_rs, conn_s3, bucket_name, key_names, table_name, dest_d
         logger.debug("pid %s loading %d/%d %s into %s" % (str(os.getpid()), i, len(key_names), key_name, table_name))
         sql = "COPY %s FROM 's3://%s/%s' " % (table_name, bucket_name, key_name)
         sql += "CREDENTIALS 'aws_access_key_id=%s;aws_secret_access_key=%s' " % (AWS_ACCESS_KEY, AWS_SECRET_KEY)
-        sql += "DELIMITER '%s' TRUNCATECOLUMNS ACCEPTINVCHARS" % delim
+        sql += "DELIMITER '%s' TRUNCATECOLUMNS ACCEPTINVCHARS NULL AS '\000'" % delim
         # logger.debug(sql)
         try:
             curs.execute(sql)
