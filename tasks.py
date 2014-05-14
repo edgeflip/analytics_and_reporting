@@ -317,6 +317,9 @@ class ETL(object):
         """ main for syncing with RDS """
         from table_to_redshift import main as rds2rs
 
+        self.mkstats()
+        self.mkrollups()
+
         for table, table_id in [
             ('visits', 'visit_id'),
             ('visitors', 'visitor_id'),
@@ -403,6 +406,7 @@ class ETL(object):
             COUNT(DISTINCT CASE WHEN t.type='shown' THEN fbid ELSE NULL END) AS users_shown_faces,
             SUM(CASE WHEN t.type='shown' THEN 1 ELSE 0 END) AS total_faces_shown,
             COUNT(DISTINCT CASE WHEN t.type='shown' THEN t.friend_fbid ELSE NULL END) AS distinct_faces_shown,
+            COUNT(DISTINCT CASE WHEN t.type='share_click' THEN t.visit_id ELSE NULL END) as visits_with_share_clicks,
             COUNT(DISTINCT CASE WHEN t.type='shared' THEN visit_id ELSE NULL END) AS visits_with_shares,
             COUNT(DISTINCT CASE WHEN t.type='shared' THEN fbid ELSE NULL END) AS users_who_shared,
             COUNT(DISTINCT CASE WHEN t.type='shared' THEN t.friend_fbid ELSE NULL END) AS audience,
