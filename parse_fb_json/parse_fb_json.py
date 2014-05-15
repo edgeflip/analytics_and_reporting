@@ -209,12 +209,12 @@ class FeedFromS3(object):
         post_lines = self.get_post_lines()
         key_posts = Key(buck)
         key_posts.key = key_name_posts
-        key_posts.set_contents_from_string("\n".join(post_lines))
+        key_posts.set_contents_from_string("\n".join(post_lines) + "\n")
 
         link_lines = self.get_link_lines()
         key_links = Key(buck)
         key_links.key = key_name_links
-        key_links.set_contents_from_string("\n".join(link_lines))
+        key_links.set_contents_from_string("\n".join(link_lines) + "\n")
 
         return len(post_lines), len(link_lines)
 
