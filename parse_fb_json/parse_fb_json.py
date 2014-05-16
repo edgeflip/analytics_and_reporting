@@ -14,6 +14,7 @@ from itertools import imap, repeat
 import os.path
 import time
 import datetime
+import ssl
 
 
 AWS_ACCESS_KEY = "AKIAJDPO2KQRLOJBQP3Q"
@@ -40,13 +41,44 @@ logger.propagate = False
 def get_conn_s3(key=AWS_ACCESS_KEY, sec=AWS_SECRET_KEY):
     return S3Connection(key, sec)
 
+# def s3_key_iter(bucket_names=S3_IN_BUCKET_NAMES):
+#     conn_s3 = get_conn_s3()
+#     for b, bucket_name in enumerate(bucket_names):
+#         logger.debug("reading bucket %d/%d (%s)" % (b, len(bucket_names), bucket_name))
+#         mark = None
+#
+#         for key in conn_s3.get_bucket(bucket_name).list():
+#             yield key
+#     conn_s3.close()
+
 def s3_key_iter(bucket_names=S3_IN_BUCKET_NAMES):
-    conn_s3 = get_conn_s3()
     for b, bucket_name in enumerate(bucket_names):
         logger.debug("reading bucket %d/%d (%s)" % (b, len(bucket_names), bucket_name))
-        for key in conn_s3.get_bucket(bucket_name).list():
+        for key in s3_key_iter_bucket(bucket_name):
             yield key
-    conn_s3.close()
+
+def s3_key_iter_bucket(bucket_name, retries=2):
+    conn_s3 = get_conn_s3()
+    buck_list = conn_s3.get_bucket(bucket_name).list()
+    key_name_prev = ''
+    while True:
+        try:
+            for key in buck_list:
+                yield key
+                key_name_prev = key.name
+        except ssl.SSLError:
+            logger.debug("pid " + str(os.getpid()) + " SSLError exception, reconnecting")
+            for r in range(retries):
+                conn_s3 = get_conn_s3()
+                buck_list = conn_s3.get_bucket(bucket_name).list(marker=key_name_prev)
+                try:
+                    yield key
+                    key_name_prev = key.name
+                except ssl.SSLError:
+                    logger.debug("pid %d retry %d failure" % (os.getpid(), r))
+                    continue
+                logger.debug("pid %d retry %d success" % (os.getpid(), r))
+                break
 
 def delete_s3_bucket(conn_s3, bucket_name):
     buck = conn_s3.get_bucket(bucket_name)
@@ -263,7 +295,7 @@ def set_global_conns():
     global conn_s3_global
     conn_s3_global = get_conn_s3()
 
-def handle_feed_s3(args):
+def handle_feed_s3(args, retries=1):
     key, bucket_name = args  #zzz todo: there's got to be a better way to handle this
 
     pid = os.getpid()
