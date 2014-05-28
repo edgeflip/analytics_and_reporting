@@ -318,6 +318,7 @@ class ETL(object):
         from table_to_redshift import main as rds2rs
 
         self.mkstats()
+        self.mkcampaignrollups()
         self.mkrollups()
 
         for table, table_id in [
@@ -335,6 +336,7 @@ class ETL(object):
 
         self.mkchains()
         self.mkstats()
+        self.mkcampaignrollups()
         self.mkrollups()
         info('RDS extraction complete, waiting for next run')
 
@@ -442,6 +444,36 @@ class ETL(object):
         self.updated = strftime('%x %X')
 
         debug('Done.')
+
+
+    def mkcampaignrollups(self):
+        staging_table = 'campaignstats_staging'
+        drop_table_if_exists(staging_table, self.pconn, self.pcur)
+        megaquery = """
+    CREATE TABLE {} AS
+    SELECT
+        root_campaign.campaign_id,
+        {}
+        from events t
+        inner join visits using (visit_id)
+        inner join visitors v using (visitor_id)
+        inner join campaigns using (campaign_id)
+        inner join clients cl using (client_id)
+        inner join campaign_properties using (campaign_id)
+        inner join campaigns root_campaign on (root_campaign.campaign_id = campaign_properties.root_campaign_id)
+        GROUP BY root_campaign.campaign_id
+        """.format(staging_table, self.metric_expressions())
+
+        debug('Calculating campaign stats')
+        with self.pconn:
+            self.pcur.execute(megaquery)
+        debug('beginning deploy table on campaignstats')
+        deploy_table('campaignstats', staging_table, 'campaignstats_old', self.pcur, self.pconn)
+
+        self.updated = strftime('%x %X')
+
+        debug('Done.')
+
 
     def mkrollups(self):
         staging_table = 'clientrollups_staging'
