@@ -89,7 +89,7 @@ def main(table):
             csvtime = time.time()
             runcsv = csvtime - start
     except StandardError as e:
-        warning("error: {0}".format(e))
+        logger.warning("error: {0}".format(e))
 
     redconn = psycopg2.connect( **redshift)
     redcursor = redconn.cursor()
