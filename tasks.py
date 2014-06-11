@@ -287,14 +287,21 @@ class ETL(object):
     old_fbids = set([])  # fbids in the users table that we suspect have changed
     edge_fbids = set([]) # fbids in the users table that we don't have edge info for
 
-    def connect(self):
+    def connect_dynamo(self):
         # set up db connections, should put this in worker.py probably
+        debug('Connecting to redshift..')
+        from keys import redshift
+        self.pconn = psycopg2.connect( **redshift)
+        self.pcur = self.pconn.cursor(cursor_factory = psycopg2.extras.DictCursor)
 
-        """
-        I think that long running transactions cause:
-        # OperationalError: SSL SYSCALL error: EOF detected
-        eg, we should rebuild this cursor more often, or commit() every so often
-        """
+
+        from keys import aws
+        self.dconn = boto.dynamodb.connect_to_region('us-east-1', **aws)
+        # This table gets used in a few places pretty steadily, "cache" it in here
+        self.usertable = self.dconn.get_table('prod.users')
+
+
+    def connect_rds(self):
         debug('Connecting to redshift..')
         from keys import redshift
         self.pconn = psycopg2.connect( **redshift)
@@ -305,12 +312,6 @@ class ETL(object):
         self.mconn = MySQLdb.connect( cursorclass=MySQLdb.cursors.DictCursor, **rds)
         self.mcur = self.mconn.cursor()
 
-        from keys import aws
-        self.dconn = boto.dynamodb.connect_to_region('us-east-1', **aws)
-        # This table gets used in a few places pretty steadily, "cache" it in here
-        self.usertable = self.dconn.get_table('prod.users')
-
-        debug('Done.')
 
     @mail_tracebacks
     def extract(self):

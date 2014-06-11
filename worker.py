@@ -31,20 +31,22 @@ class App(ETL, tornado.web.Application):
         #    (r"/", MainHandler),
         ]
 
-        # build connections to redshift, RDS
-        self.connect()
-
-        # If we end up running this as a daemon, refresh the connections and cursors every so often
-        P = tornado.ioloop.PeriodicCallback(self.connect, 600000)
-        P.start()
 
         tornado.web.Application.__init__(self, handlers, **settings)
- 
+
+
     @mail_tracebacks
     def fromRDS(self): 
         """
         Pretty basic ETL sort of loop for grabbing tables out of RDS
         """
+        # build connections to redshift, RDS
+        self.connect_rds()
+
+        # If we end up running this as a daemon, refresh the connections and cursors every so often
+        P = tornado.ioloop.PeriodicCallback(self.connect_rds, 600000)
+        P.start()
+
         self.extract()
         P = tornado.ioloop.PeriodicCallback(self.extract, 1000 * 60 * 10)
         P.start()
@@ -56,6 +58,12 @@ class App(ETL, tornado.web.Application):
         we need to stream records out at a steady pace, we queue things up
         according to various priorities
         """
+        # build connections to redshift, dynamo
+        self.connect_dynamo()
+
+        # If we end up running this as a daemon, refresh the connections and cursors every so often
+        P = tornado.ioloop.PeriodicCallback(self.connect_dynamo, 600000)
+        P.start()
 
         self.queue_edges()
         self.queue_users()
