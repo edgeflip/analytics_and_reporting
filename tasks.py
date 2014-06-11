@@ -568,24 +568,35 @@ class ETL(object):
 
     @mail_tracebacks
     def extract_user_batch(self, collection, batch_size):
+        self.batch_process(collection, batch_size, self.seek_user)
+
+
+    @mail_tracebacks
+    def extract_edge_batch(self):
+        self.batch_process(self.edge_fbids, 10, self.extract_edge)
+
+
+    def batch_process(self, collection, batch_size, procedure):
         batch = set()
         while collection and len(batch) < batch_size:
             batch.add(collection.pop())
 
-        info('Created fbid batch {} from Dynamo'.format(batch))
+        if len(batch) > 0:
+            info('Created extraction batch for function {}. Contents: '.format(procedure, batch))
 
         with self.pconn:
             for fbid in batch:
                 if fbid:
                     try:
-                        self.seek_user(fbid)
+                        procedure(fbid)
                     except StandardError as e:
                         # Complain, 'requeue', and fix the current transaction
                         # so the batch can proceed
                         warning('Error processing fbid {}'.format(fbid))
                         collection.add(fbid)
                         self.pconn.commit()
-        info('Batch complete')
+        if len(batch) > 0:
+            info('Batch complete')
 
 
     @mail_tracebacks
@@ -672,10 +683,10 @@ class ETL(object):
 
         info("{} fbids queued for edge extraction".format(len(self.edge_fbids)))
 
+
+
     @mail_tracebacks
-    def extract_edge(self):
-        if len(self.edge_fbids) < 1: return
-        fbid = self.edge_fbids.pop()
+    def extract_edge(self, fbid):
         # EDGE DATA
         table = self.dconn.get_table('prod.edges_incoming')
         try:

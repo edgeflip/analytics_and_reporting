@@ -79,7 +79,7 @@ class App(ETL, tornado.web.Application):
         P.start()
 
         # and edge info
-        P = tornado.ioloop.PeriodicCallback(self.extract_edge, 2000)
+        P = tornado.ioloop.PeriodicCallback(self.extract_edge_batch, 2 * 1000)
         P.start()
         # slightly less priority, updating users
         P = tornado.ioloop.PeriodicCallback(self.refresh_user, 1000 * 5)
