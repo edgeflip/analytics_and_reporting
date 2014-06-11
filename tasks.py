@@ -582,7 +582,7 @@ class ETL(object):
             batch.add(collection.pop())
 
         if len(batch) > 0:
-            info('Created extraction batch for function {}. Contents: '.format(procedure, batch))
+            info('Created extraction batch for function {}. Contents: {}'.format(procedure, batch))
 
         with self.pconn:
             for fbid in batch:
@@ -736,9 +736,7 @@ class ETL(object):
                 self.pcur.execute("INSERT INTO missingedges (fbid, retries, next_try) VALUES (%s, 1, getdate())", (fbid,))
             else:
                 self.pcur.execute("UPDATE missingedges set next_try = null where fbid = %s", (fbid,))
-            self.pconn.commit()
             return
 
         info( 'Successfully updated edges table for fbid {}'.format(fbid))
-        self.pconn.commit()
 
