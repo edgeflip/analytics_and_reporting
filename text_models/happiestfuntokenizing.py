@@ -36,13 +36,14 @@ and Twitter is cooperating, then it should tokenize a random
 English-language tweet.
 """
 
-__author__ = "Christopher Potts"
+__author__ = "original: Christopher Potts, updated: H. Andrew Schwartz"
 __copyright__ = "Copyright 2011, Christopher Potts"
 __credits__ = []
 __license__ = "Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License: http://creativecommons.org/licenses/by-nc-sa/3.0/"
-__version__ = "1.0"
-__maintainer__ = "Christopher Potts"
+__version__ = "1.1"
+__maintainer__ = "Christopher Potts, H. Andrew Schwartz"
 __email__ = "See the author's website"
+
 
 ######################################################################
 
@@ -70,14 +71,22 @@ else:
 emoticon_string = r"""
     (?:
       [<>]?
-      [:;=8]                     # eyes
+      [:;=8>]                     # eyes
       [\-o\*\']?                 # optional nose
-      [\)\]\(\[dDpP/\:\}\{@\|\\] # mouth      
+      [\)\]\(\[dDpPxX/\:\}\{@\|\\] # mouth      
       |
-      [\)\]\(\[dDpP/\:\}\{@\|\\] # mouth
+      [\)\]\(\[dDpPxX/\:\}\{@\|\\] # mouth
       [\-o\*\']?                 # optional nose
-      [:;=8]                     # eyes
+      [:;=8<]                     # eyes
       [<>]?
+      |
+      <3[3]*                     # heart(added: has)
+      |
+      \(?\(?\#?                   #left cheeck
+      [>\-\^\*\+o\~]              #left eye
+      [\_\.\|oO\,]                #nose
+      [<\-\^\*\+o\~]              #right eye
+      [\#\;]?\)?\)?               #right cheek
     )"""
 
 # The components of the tokenizer:
@@ -102,8 +111,20 @@ regex_strings = (
     # Emoticons:
     emoticon_string
     ,    
+    # http:
+    # Web Address:
+    r"""(?:(?:http[s]?\:\/\/)?(?:[\w\_\-]+\.)+(?:com|net|gov|edu|info|org|ly|be|gl|co|gs|pr|me|cc|us|gd|nl|ws|am|im|fm|kr|to|jp|sg))"""
+    ,
+    r"""(?:http[s]?\:\/\/)"""   #need to capture it alone sometimes
+    ,
+    #command in parens:
+    r"""(?:\[[a-z_]+\])"""   #need to capture it alone sometimes
+    ,
+    # HTTP GET Info
+    r"""(?:\/\w+\?(?:\;?\w+\=\w+)+)"""
+    ,
     # HTML tags:
-     r"""<[^>]+>"""
+    r"""<[^>]+>"""
     ,
     # Twitter username:
     r"""(?:@[\w_]+)"""
@@ -160,8 +181,13 @@ class Tokenizer:
             s = unicode(s)
         # Fix HTML character entitites:
         s = self.__html2unicode(s)
+        
+        # replace sequences of the same character 3 or more times to just 3 times.
+        s = re.sub(r'(.)\1{2,}', r'\1\1\1', s)       
+        
         # Tokenize:
         words = word_re.findall(s)
+        #print words #debug
         # Possible alter the case, but avoid changing emoticons like :D into :d:
         if not self.preserve_case:            
             words = map((lambda x : x if emoticon_re.search(x) else x.lower()), words)
@@ -207,7 +233,7 @@ class Tokenizer:
         for ent in ents:
             entname = ent[1:-1]
             try:            
-                s = s.replace(ent, unichr(html_entities.name2codepoint[entname]))
+                s = s.replace(ent, unichr(htmlentitydefs.name2codepoint[entname]))
             except:
                 pass                    
             s = s.replace(amp, " and ")
@@ -216,15 +242,30 @@ class Tokenizer:
 ###############################################################################
 
 if __name__ == '__main__':
+    #tok = Tokenizer(preserve_case=True)
     tok = Tokenizer(preserve_case=False)
+
+    import sys
+
     samples = (
         u"RT @ #happyfuncoding: this is a typical Twitter tweet :-)",
         u"HTML entities &amp; other Web oddities can be an &aacute;cute <em class='grumpy'>pain</em> >:(",
-        u"It's perhaps noteworthy that phone numbers like +1 (800) 123-4567, (800) 123-4567, and 123-4567 are treated as words despite their whitespace."
-        )
+        u"It's perhaps noteworthy that phone numbers like +1 (800) 123-4567, (800) 123-4567, and 123-4567 are treated as words despite their whitespace.",
+        u"This is more like a Facebook message with a url: http://www.youtube.com/watch?v=dQw4w9WgXcQ, youtube.com google.com https://google.com",
+        u"Feliz Día :D",
+        u"MI BFFFFFFFFF :3",
+        u"Love, love, looooovvvvveeeee, <3, love",
+        u"15 DIAS<3333333333333333 y en Peru hehe"
+)
+
+    if len(sys.argv) > 1 and (sys.argv[1]):
+        samples = sys.argv[1:]
 
     for s in samples:
         print("======================================================================")
         print(s)
         tokenized = tok.tokenize(s)
-        print("\n".join(tokenized))
+        if sys.version_info < (3, 0):
+            print("\n".join(tokenized).encode('ascii', 'ignore'))
+        else:
+            print("\n".join(tokenized))
