@@ -2,6 +2,7 @@ from db_utils import *
 import os
 import nltk
 import random
+from happiestfuntokenizing import Tokenizer
 
 def birth_year_to_age_range(birth_year):
     '''
@@ -110,32 +111,86 @@ def create_user_post_type_documents(data_dir, user_sample_file_name, sample_size
         file.write(document)
         file.close()
 
-def get_all_words(dir):
+def get_document_words(document_dirs):
     '''
-    For each file in dir, read the raw text and tokenize to get list of all words
-    in the corpus.
+    Given a list of directories, for each file, read the raw text and tokenize to get
+    a list of all words in that document.
+    Returns a dictionary from file to a list of words.
     '''
-    words = []
-    for document in os.listdir(dir):
-        file = open(dir + '/' + document, 'r')
-        raw = file.read()
-        words.extend(nltk.word_tokenize(raw))
-    return words
+    document_to_words = {}
+    for document_dir in document_dirs:
+        for document in os.listdir(data_dir + '/' + document_dir):
+            filename = data_dir + '/' + document_dir + '/' + document
+            file = open(filename, 'r')
+            raw = file.read()
+            if raw: # prunes out empty documents (don't train/predict with them)
+#                 document_to_words[(document_dir, document)] = [w.lower() for w in nltk.word_tokenize(raw)]
+                document_to_words[(document_dir, document)] = [w.lower() for w in tok.tokenize(raw)]
+            file.close()
+    return document_to_words
+    
+def get_corpus_word_frequency(document_to_words):
+    '''
+    Given document_name -> word_list, collate and create a corpus-wide frequency distribution.
+    Return frequency of all words that appear.
+    '''
+    corpus_words = []
+    for words in document_to_words.values():
+        corpus_words.extend(words)
+    return nltk.FreqDist(corpus_words)
+    
+def get_top_k_words(corpus_frequencies, k):
+    return corpus_frequencies.keys()[:k]
 
-def get_top_k_words(all_words, k):
-    all_words = nltk.FreqDist(w.lower() for w in all_words)
-    top_k_words = all_words.keys()[:k]
-    return top_k_words
-
-def document_features(document, word_features):
+def document_count_threshold_features(document, word_features, thresholds):
     document_words = set(document)
     features = {}
     for word in word_features:
-        features['contains(%s)' % word] = (word in document_words)
-        features["count(%s)>3" % word] = (document.count(word) > 3)
-        features["count(%s)>7" % word] = (document.count(word) > 7)
-        features["count(%s)>15" % word] = (document.count(word) > 15)
+        for threshold in thresholds:
+            features['count({})>{}'.format(word, threshold)] = document.count(word) > threshold
     return features
+    
+def document_contains_feature(document, word_features):
+    document_words = set(document)
+    features = {}
+    for word in word_features:
+        features['contains({})'.format(word)] = word in document_words
+    return features
+
+def naive_bayes_experiment(classes, top_ks, feature_methods_and_args, trials):
+    document_dirs = classes
+    print('reading all documents...')
+    document_to_words = get_document_words(document_dirs)
+    corpus_frequencies = get_corpus_word_frequency(document_to_words) 
+
+    for top_k in sorted(top_ks):
+        print('getting top {} words...'.format(top_k))
+        top_words = get_top_k_words(corpus_frequencies, top_k)
+        print(top_words)
+        
+        # create a list of document features and document category
+        print('getting features for each document...')
+        featuresets = []
+        for (d,c) in [(words, doc_handle[0]) for doc_handle, words in document_to_words.items()]:
+            document_features = {}
+            for feature_method, args in feature_methods_and_args:
+                document_features.update( feature_method(d, top_words, *args) )
+            featuresets.append( (document_features, c) )
+
+        for trial in range(trials):
+            random.shuffle(featuresets)
+        
+            # train, test folds
+            train_set = featuresets[int(len(featuresets)*0.1):]
+            test_set = featuresets[:int(len(featuresets)*0.1)]
+
+            # train naive bayes classifier
+            print('training naive bayes classifier...')
+            classifier = nltk.NaiveBayesClassifier.train(train_set)
+
+            # classifier.show_most_informative_features(100)
+            print(nltk.classify.accuracy(classifier, test_set))
+
 
 ## Parameters ##
 sample_size = 1000
@@ -150,46 +205,12 @@ post_type = 'status'
 #create_user_post_type_documents(data_dir, user_sample_file_name, sample_size, post_type, conn)
 #redshift_disconnect(conn)
 
-## Document manipulation with nltk ##
-#document_dirs = ['25-34', 'less-18', '35-44', '65-greater', '45-54', '18-24', '55-64']
-document_dirs = ['25-34', '55-64']
-#corpus_words = []
-#for document_dir in document_dirs:
-#    corpus_words.extend( get_all_words(data_dir + '/' + document_dir) )
-#print(len(corpus_words))
-#top_words = get_top_k_words(corpus_words, 10000)
-#print(top_words)
+## Naive Bayes classifier experiment with nltk ##
+tok = Tokenizer()
+classes = ['less-18', '18-24', '25-34', '35-44', '45-54', '55-64', '65-greater']
+top_ks = [100, 1000, 2000]
+feature_methods_and_args = [(document_contains_feature, []), 
+                            (document_count_threshold_features, [[3, 7, 15]])]
+trials = 3
+naive_bayes_experiment(classes, top_ks, feature_methods_and_args, trials)
 
-top_words = []
-for document_dir in document_dirs:
-    corpus_words = get_all_words(data_dir + '/' + document_dir)
-    top_words.extend( get_top_k_words(corpus_words, 500) )
-
-# get pairs of document words and document category
-document_category_pairs = []
-for document_dir in document_dirs:
-    full_dir = data_dir + '/' + document_dir
-    for document in os.listdir(full_dir):
-        file = open(full_dir + '/' + document, 'r')
-        raw = file.read()
-        document_category_pairs.append( (nltk.word_tokenize(raw), document_dir) )
-random.shuffle(document_category_pairs)
-
-# create a list of document features and document category
-print('getting features for each document...')
-featuresets = [(document_features(d, top_words), c) for (d,c) in document_category_pairs]
-# train, test folds
-train_set, test_set = featuresets[100:], featuresets[:100]
-# train naive bayes classifier
-print('training naive bayes classifier...')
-classifier = nltk.NaiveBayesClassifier.train(train_set)
-
-print(nltk.classify.accuracy(classifier, test_set))
-classifier.show_most_informative_features(100)
-
-# TODO:
-# - Work on tokenizer (stemming?, removing stop words, removing punctuation..except for #,!.)
-# - Feature selection
-# - Different models: SVM, decision trees
-# - Adding documents (messages from photos and videos, crawling links, stripping html)
-# - Adding liked documents (same set of sources)
