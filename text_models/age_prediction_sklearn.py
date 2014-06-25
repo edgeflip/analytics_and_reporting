@@ -1,24 +1,24 @@
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
-from sklearn.decomposition import PCA
+# from sklearn.decomposition import PCA
 from sklearn.decomposition import TruncatedSVD
-from sklearn.cross_validation import train_test_split
+# from sklearn.cross_validation import train_test_split
 from sklearn.cross_validation import KFold
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import SGDClassifier
-from sklearn.linear_model import SGDRegressor
+# from sklearn.naive_bayes import MultinomialNB
+# from sklearn.linear_model import SGDClassifier
+# from sklearn.linear_model import SGDRegressor
 from sklearn.linear_model import Ridge
-from sklearn.linear_model import RidgeCV
-from sklearn.linear_model import Lasso
-from sklearn.random_projection import SparseRandomProjection
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.svm import SVC
+# from sklearn.linear_model import RidgeCV
+# from sklearn.linear_model import Lasso
+# from sklearn.random_projection import SparseRandomProjection
+# from sklearn.tree import DecisionTreeRegressor
+# from sklearn.neighbors import KNeighborsRegressor
+# from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
-from sklearn.pipeline import Pipeline
+# from sklearn.pipeline import Pipeline
 from sklearn.grid_search import GridSearchCV
 from sklearn import metrics
-from scipy.sparse import csc_matrix
+from scipy.sparse import csc_matrix, hstack
 from scipy.io import mmwrite, mmread
 import happiestfuntokenizing
 import numpy as np
@@ -31,24 +31,6 @@ import os
 t0 = time()
 
 #### parameters ####
-cached_filenames = True
-cached_users = True
-cached_features = True
-cached_tsvd = True
-input = 'filename' # will pass a list of filenames to fit that vectorizer will read
-min_df = 0.01 # minimum number/proportion of documents containing word
-max_df = 0.9 # maximum number/proportion of documents containing word
-tokenizer = happiestfuntokenizing.Tokenizer().tokenize # custom tokenizer
-ngram_range = (1, 3) # range of lengths for n-grams
-
-user_sample_file = '/data/user_samples/user_sample_50000_with_birth_year_and_gender.tsv'
-data_dir = '/data/user_documents/all_originating_posts'
-cache_dir = '/data/caches'
-
-test_size = 0.2
-num_folds = 5
-num_truncated_features = 1000
-
 if len(sys.argv) > 1:
     outcome = sys.argv[1]
 else:
@@ -59,8 +41,35 @@ if len(sys.argv) > 2:
     sample_size = int(sys.argv[2])
 else:
     sample_size = 1000
-    
+
+feature_classes = {1: 'user_posts', 
+                   2: 'from_friend_posts'}
+cached_filenames = {1: True, 2: True}
+cached_users = True
+cached_outcome = {'age': True, 'gender': False}
+cached_features = {1: True, 2: True}
+cached_tsvd = {1: True, 2: True}
+
+input = 'filename' # will pass a list of filenames to fit that vectorizer will read
+min_df = 0.01 # minimum number/proportion of documents containing word
+max_df = 0.9 # maximum number/proportion of documents containing word
+tokenizer = happiestfuntokenizing.Tokenizer().tokenize # custom tokenizer
+ngram_range = (1, 3) # range of lengths for n-grams
+
+user_sample_file = '/data/user_samples/user_sample_50000_with_birth_year_and_gender.tsv'
+data_dirs = {1: '/data/user_documents/all_originating_posts', 
+             2: '/data/user_documents/all_from_friend_posts'}
+document_suffixes = {1: '_messages.txt',
+                     2: '_from_friend_messages.txt'}
+cache_dir = '/data/caches/user_and_from_friend_posts'
+
+test_size = 0.2
+num_folds = 5
+num_truncated_features = 1000
 random_state = 42
+document_byte_size_minimum = 1#1000
+min_birth_year = 1949
+max_birth_year = 2014
 
 # models is a list of estimator class, optional parameters, and sparsity flag
 if outcome == 'age':
@@ -68,12 +77,14 @@ if outcome == 'age':
     models = []
     
     # grid search for ridge regression over a range of alpha penalties
-    alphas = [x/100.0 for x in range(5, 201, 5)]
-    models.append( (GridSearchCV, {'estimator': Ridge(), 
-                                   'param_grid': [{'alpha': alphas}], 
-                                   'cv': 5, 
-                                   'scoring': 'r2',
-                                   'verbose': 3}, True, True) ) 
+    # NB: copy_X = False 'may' be a problem (documentation says it 'may be overwritten')
+    models.append( (Ridge, {'alpha': 1.45}, True, False) )
+#     alphas = [x/100.0 for x in range(5, 201, 5)]
+#     models.append( (GridSearchCV, {'estimator': Ridge(copy_X=False), 
+#                                    'param_grid': [{'alpha': alphas}], 
+#                                    'cv': 5, 
+#                                    'scoring': 'r2',
+#                                    'verbose': 3}, True, True) ) 
 
     # Too slow with 1e6 n_iter and too inaccurate with fewer iterations
     # stochastic gradient descent using L1 and L2 penalties
@@ -128,7 +139,6 @@ else:
 
 # build up list of filenames that will be input to vectorizer (documents->features)
 # also construct an array of class labels to align with the document features
-print('Building user to birth year and gender mapping')
 user_to_birth_year_and_gender = {}
 for user_filename in [user_sample_file]:
     user_file = open(user_filename, 'r')
@@ -137,107 +147,119 @@ for user_filename in [user_sample_file]:
         user_to_birth_year_and_gender[vals[0]] = (int(vals[1]), vals[3])
     user_file.close()
 
-print('Building list of user-message-document filenames')
-byte_size_minimum = 1000 # default: 5000
-min_birth_year = 1949# default: 1949
-max_birth_year = 2014# default: 2001
-filenames = []
-y = []
+# Load list of user ids
+sys.stdout.write('Getting user ids...\n')
+user_ids = []
+if not cached_users:
+    # Build list of possible users by age restriction and existence of a document in every
+    # feature class
+    # todo: could extend this to more complex combinations, like existence of at least one 
+    #       feature class or class-specific byte minimums
 
-if not cached_filenames and not cached_users:
-    all_documents = os.listdir(data_dir)
-    random.shuffle(all_documents)
-    for document in all_documents:
-        if len(filenames) >= sample_size:
-            break
-        user_id = document.split('_')[0]
-        if user_id in user_to_birth_year_and_gender \
-            and max_birth_year >= user_to_birth_year_and_gender[user_id][0] >= min_birth_year:
-            filename = data_dir + '/' + document
-            if os.stat(filename).st_size > byte_size_minimum:
-                filenames.append(filename)
-                if outcome == 'age':
-                    y.append(user_to_birth_year_and_gender[user_id][0])
-                else:
-                    y.append(user_to_birth_year_and_gender[user_id][1])
-    y = np.array(y)
-    filenames = np.array(filenames)
-    joblib.dump(y, cache_dir + '/' + 'users_{}_{}_cache.out'.format(sample_size, outcome))
-    joblib.dump(filenames, cache_dir + '/' + 'filenames_{}_cache.out'.format(sample_size))
-elif cached_filenames and not cached_users:
-    filenames = joblib.load(cache_dir + '/' + 'filenames_{}_cache.out'.format(sample_size))
-    for filename in filenames:
-        user_id = filename.split('/')[-1].split('_')[0]
+    # build dict of sets of documents for each feature class
+    feature_documents = {feature_idx: set(os.listdir(data_dirs[feature_idx])) 
+                            for feature_idx in feature_classes}
+    possible_user_ids = []
+    for user_id, (birth_year, gender) in user_to_birth_year_and_gender.items():
+        if max_birth_year >= birth_year >= min_birth_year: # passes age filter
+            if all(['{}{}'.format(user_id, document_suffixes[feature_idx]) in feature_documents[feature_idx]
+                        for feature_idx in feature_classes]): # passes feature document filter
+                possible_user_ids.append(user_id)
+
+#     if os.stat(filename).st_size > document_byte_size_minimum: # filter for document size
+    random.shuffle(possible_user_ids)
+    user_ids = np.array(possible_user_ids[:sample_size])
+    joblib.dump(user_ids, cache_dir + '/' + 'users_{}_cache.out'.format(sample_size))
+else:
+    user_ids = joblib.load(cache_dir + '/' + 'users_{}_cache.out'.format(sample_size))    
+
+# Load outcome values
+sys.stdout.write('Getting outcome values for {}...\n'.format(outcome))
+y = []
+if not cached_outcome[outcome]:
+    for user_id in user_ids:
         if outcome == 'age':
             y.append(user_to_birth_year_and_gender[user_id][0])
         else:
             y.append(user_to_birth_year_and_gender[user_id][1])
     y = np.array(y)
-    joblib.dump(y, cache_dir + '/' + 'users_{}_{}_cache.out'.format(sample_size, outcome))
+    joblib.dump(y, cache_dir + '/' + 'outcome_{}_{}_cache.out'.format(sample_size, outcome))
 else:
-    y = joblib.load(cache_dir + '/' + 'users_{}_{}_cache.out'.format(sample_size, outcome))
-    filenames = joblib.load(cache_dir + '/' + 'filenames_{}_cache.out'.format(sample_size))
-    
-print('...found {} documents with more than {} bytes'.format(len(filenames), byte_size_minimum))
+    y = joblib.load(cache_dir + '/' + 'outcome_{}_{}_cache.out'.format(sample_size, outcome))
 
-if not cached_features and not cached_tsvd:
-    print('Creating document x term counts matrix')
-    t_cache_write_start = time()
+# Load filenames for each feature class
+sys.stdout.write('Getting filenames for each feature class...\n')
+filenames = {}
+if not all([is_cached for is_cached in cached_filenames.values()]):
+    for user_id in user_ids:
+        for feature_idx in feature_classes:
+            if not cached_filenames[feature_idx]:
+                filename = data_dirs[feature_idx] + '/' + '{}{}'.format(user_id, document_suffixes[feature_idx])
+                filenames.setdefault(feature_idx, []).append(filename)
+    for feature_idx in feature_classes:
+        if not cached_filenames[feature_idx]:
+            filenames[feature_idx] = np.array(filenames[feature_idx])
+            joblib.dump(filenames[feature_idx], cache_dir + '/' + 'filenames_{}_{}_cache.out'.format(sample_size, feature_classes[feature_idx]))
+for feature_idx in feature_classes:
+    if cached_filenames[feature_idx]:
+        filenames[feature_idx] = joblib.load(cache_dir + '/' + 'filenames_{}_{}_cache.out'.format(sample_size, feature_classes[feature_idx]))
 
-    # initialize the vectorizer with the given parameters
-    vectorizer = CountVectorizer(input=input, min_df=min_df, max_df=max_df,
-                                       tokenizer=tokenizer, ngram_range=ngram_range)
+# Load in or build tfidf matrix or truncated SVD matrix if cached
+features = {feature_idx: None for feature_idx in feature_classes} # dict from feature_idx to feature matrix
+for feature_idx in feature_classes:
+    if not cached_features[feature_idx] and not cached_tsvd[feature_idx]:
+        sys.stdout.write('Creating document x term counts matrix for {}\n'.format(feature_classes[feature_idx]))
+        t_cache_write_start = time()
 
-    # read in, tokenize, and create a sparse matrix of document x term counts
-    X = vectorizer.fit_transform(filenames)
+        # initialize the vectorizer with the given parameters
+        vectorizer = CountVectorizer(input=input, min_df=min_df, max_df=max_df,
+                                           tokenizer=tokenizer, ngram_range=ngram_range)
+
+        # read in, tokenize, and create a sparse matrix of document x term counts
+        features[feature_idx] = vectorizer.fit_transform(filenames[feature_idx])
  
-    # transform the matrix of term counts into a matrix of tfidfs
-    tfidf_transformer = TfidfTransformer()
-    print('Transforming with tfidf')
-    X = tfidf_transformer.fit_transform(X)
+        # transform the matrix of term counts into a matrix of tfidfs
+        tfidf_transformer = TfidfTransformer()
+        sys.stdout.write('Transforming with tfidf for {}\n'.format(feature_classes[feature_idx]))
+        features[feature_idx] = tfidf_transformer.fit_transform(features[feature_idx])
     
-    # output tfidf matrix to file
-    mmwrite(cache_dir + '/' + 'user_messages_{}_1kB_age_restricted_tfidf.mtx'.format(sample_size), X)
-    print('\tdone. time: {}'.format(time() - t_cache_write_start))
-elif cached_features and not cached_tsvd:
-    print('Reading in cached features...')
-    t_cache_read_start = time()
-    X = mmread(cache_dir + '/' + 'user_messages_{}_1kB_age_restricted_tfidf.mtx'.format(sample_size))
-    X = csc_matrix(X)
-    print(X.shape)
-    print('\tdone. time: {}'.format(time() - t_cache_read_start))
+        # output tfidf matrix to file
+        mmwrite(cache_dir + '/' + 'tfidf_{}_{}.mtx'.format(sample_size, feature_classes[feature_idx]), features[feature_idx])
+        sys.stdout.write('\tdone. time: {}\n'.format(time() - t_cache_write_start))
+        sys.stdout.flush()
+    elif cached_features[feature_idx] and not cached_tsvd[feature_idx]:
+        sys.stdout.write('Reading in cached features for {}...\n'.format(feature_classes[feature_idx]))
+        t_cache_read_start = time()
+        features[feature_idx] = mmread(cache_dir + '/' + 'tfidf_{}_{}.mtx'.format(sample_size, feature_classes[feature_idx]))
+        features[feature_idx] = csc_matrix(features[feature_idx])
+        sys.stdout.write('{}\n'.format(features[feature_idx].shape))
+        sys.stdout.write('\tdone. time: {}\n'.format(time() - t_cache_read_start))
+        sys.stdout.flush()
 
-# print('Sparse random projection...')
-# t_srp_start = time()
-# srp = SparseRandomProjection()
-# X = srp.fit_transform(X)
-# print(X.shape)
-# print('\tdone. time: {}'.format(time() - t_srp_start))
-# print('PCA...')
-# t_pca_start = time()
-# pca = PCA(n_components=num_truncated_features)
-# X = pca.fit_transform(X.todense())
-# X = csc_matrix(X)
-# print(X.shape)
-# print('\tdone. time: {}'.format(time() - t_pca_start))
+    if not cached_tsvd[feature_idx]:
+        sys.stdout.write('Running TruncatedSVD for {}...\n'.format(feature_classes[feature_idx]))
+        t_tsvd_start = time()
+        t_svd = TruncatedSVD(n_components=num_truncated_features)
+        features[feature_idx] = t_svd.fit_transform(features[feature_idx])
+        features[feature_idx] = csc_matrix(features[feature_idx])
+        sys.stdout.write('{}\n'.format(features[feature_idx].shape))
+        mmwrite(cache_dir + '/' + 'tsvd_{}_{}_{}.mtx'.format(sample_size, feature_classes[feature_idx], num_truncated_features), features[feature_idx])
+        sys.stdout.write('\tdone. time: {}\n'.format(time() - t_tsvd_start))
+        sys.stdout.flush()
+    else:
+        sys.stdout.write('Reading in cached truncated features for {}...\n'.format(feature_classes[feature_idx]))
+        t_cache_read_start = time()
+        features[feature_idx] = mmread(cache_dir + '/' + 'tsvd_{}_{}_{}.mtx'.format(sample_size, feature_classes[feature_idx], num_truncated_features))
+        features[feature_idx] = csc_matrix(features[feature_idx])
+        sys.stdout.write('{}\n'.format(features[feature_idx].shape))
+        sys.stdout.write('\tdone. time: {}\n'.format(time() - t_cache_read_start))
+        sys.stdout.flush()
 
-if not cached_tsvd:
-    sys.stdout.write('TruncatedSVD...\n')
-    t_tsvd_start = time()
-    t_svd = TruncatedSVD(n_components=num_truncated_features)
-    X = t_svd.fit_transform(X)
-    X = csc_matrix(X)
-    sys.stdout.write('{}\n'.format(X.shape))
-    mmwrite(cache_dir + '/' + 'user_messages_{}_1kB_age_restricted_tfidf_{}_tsvd.mtx'.format(sample_size, num_truncated_features), X)
-    sys.stdout.write('\tdone. time: {}\n'.format(time() - t_tsvd_start))
-    sys.stdout.flush()
-else:
-    print('Reading in cached truncated features...')
-    t_cache_read_start = time()
-    X = mmread(cache_dir + '/' + 'user_messages_{}_1kB_age_restricted_tfidf_{}_tsvd.mtx'.format(sample_size, num_truncated_features))
-    X = csc_matrix(X)
-    print(X.shape)
-    print('\tdone. time: {}'.format(time() - t_cache_read_start))
+# hstack together all features
+sys.stdout.write('Stacking feature classes together...\n')
+X = hstack([feature_matrix for feature_matrix in features.values()])
+sys.stdout.write('{}\n'.format(X.shape))
+sys.stdout.flush()
 
 # sys.exit()
 
@@ -308,7 +330,7 @@ def benchmark(clf_class, params, sparse_flag, grid_flag, score_type):
     clf_descr = str(clf).split('(')[0] + str(params)
     return clf_descr, res_scores
 
-print('Training classifier')
+sys.stdout.write('Training classifiers\...n')
 
 for model in models:
     clf_description, clf_performance = benchmark(model[0], model[1], model[2], model[3], score_type)
@@ -318,4 +340,4 @@ for model in models:
                                                     mean_results(clf_performance).items()])))
     sys.stdout.flush()
 
-print('\tdone. total time: {}'.format(time() - t0))
+sys.stdout.write('\tdone. total time: {}\n'.format(time() - t0))
