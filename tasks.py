@@ -16,6 +16,7 @@ from errors import mail_tracebacks
 from redshift_utils import deploy_table, drop_table_if_exists
 
 MAX_RETRIES = 4
+OUR_IP_STRING = ','.join("'{}'".format(ip) for ip in ('38.88.227.194',))
 
 def mkCSV(application, t=False, client_id=2):
     """ Grab event data for the hour preceding t """
@@ -433,8 +434,9 @@ class ETL(object):
         inner join clients cl using (client_id)
         inner join campaign_properties using (campaign_id)
         inner join campaigns root_campaign on (root_campaign.campaign_id = campaign_properties.root_campaign_id)
+        WHERE visits.ip not in ({})
         GROUP BY root_campaign.campaign_id, hour
-        """.format(staging_table, self.metric_expressions())
+        """.format(staging_table, self.metric_expressions(), OUR_IP_STRING)
 
         debug('Calculating client stats')
         with self.pconn:
@@ -462,8 +464,9 @@ class ETL(object):
         inner join clients cl using (client_id)
         inner join campaign_properties using (campaign_id)
         inner join campaigns root_campaign on (root_campaign.campaign_id = campaign_properties.root_campaign_id)
+        WHERE visits.ip not in ({})
         GROUP BY root_campaign.campaign_id
-        """.format(staging_table, self.metric_expressions())
+        """.format(staging_table, self.metric_expressions(), OUR_IP_STRING)
 
         debug('Calculating campaign stats')
         with self.pconn:
@@ -489,8 +492,9 @@ class ETL(object):
         inner join visitors v using (visitor_id)
         inner join campaigns using (campaign_id)
         inner join clients cl using (client_id)
+        WHERE visits.ip not in ({})
         GROUP BY client_id
-        """.format(staging_table, self.metric_expressions())
+        """.format(staging_table, self.metric_expressions(), OUR_IP_STRING)
 
         debug('Calculating client rollups')
         with self.pconn:
