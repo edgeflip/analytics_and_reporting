@@ -135,8 +135,8 @@ def create_output_tables(conn_rs):
         curs.execute("DROP TABLE user_posts;")
     sql = """
         CREATE TABLE user_posts (
-          fbid_user VARCHAR(64) NOT NULL,
           fbid_post VARCHAR(64) NOT NULL,
+          fbid_user VARCHAR(64) NOT NULL,
           user_to BOOLEAN,
           user_like BOOLEAN,
           user_comment BOOLEAN
