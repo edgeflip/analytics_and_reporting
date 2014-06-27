@@ -135,8 +135,8 @@ def create_output_tables(conn_rs):
         curs.execute("DROP TABLE user_posts;")
     sql = """
         CREATE TABLE user_posts (
-          fbid_user VARCHAR(64) NOT NULL,
           fbid_post VARCHAR(64) NOT NULL,
+          fbid_user VARCHAR(64) NOT NULL,
           user_to BOOLEAN,
           user_like BOOLEAN,
           user_comment BOOLEAN
@@ -231,7 +231,7 @@ class FeedFromS3(object):
                 has_to = "1" if user_id in p.to_ids else ""
                 has_like = "1" if user_id in p.like_ids else ""
                 has_comm = "1" if user_id in p.comment_ids else ""
-                link_fields = [user_id, p.post_id, has_to, has_like, has_comm]
+                link_fields = [p.post_id, user_id, has_to, has_like, has_comm]
                 link_lines.append(delim.join(f.encode('utf8', 'ignore') for f in link_fields))
         return link_lines
 
