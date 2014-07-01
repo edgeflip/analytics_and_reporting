@@ -15,6 +15,47 @@ from redshift_utils import deploy_table, drop_table_if_exists
 MAX_RETRIES = 4
 OUR_IP_STRING = ','.join("'{}'".format(ip) for ip in ('38.88.227.194',))
 
+USER_COLUMNS = (
+    'fbid',
+    'birthday',
+    'fname',
+    'lname',
+    'email',
+    'gender',
+    'city',
+    'state',
+    'country',
+    'activities',
+    'affiliations',
+    'books',
+    'devices',
+    'friend_request_count',
+    'has_timeline',
+    'interests',
+    'languages',
+    'likes_count',
+    'movies',
+    'music',
+    'political',
+    'profile_update_time',
+    'quotes',
+    'relationship_status',
+    'religion',
+    'sports',
+    'tv',
+    'wall_count',
+    'updated',
+)
+
+INSERT_USER_QUERY = """
+    INSERT INTO users
+    ({})
+    VALUES ({})
+""".format(
+    ','.join(USER_COLUMNS),
+    ','.join(['%s'] * len(USER_COLUMNS))
+)
+
 
 class ETL(object):
 
@@ -282,7 +323,7 @@ class ETL(object):
                     except StandardError as e:
                         # Complain, 'requeue', and fix the current transaction
                         # so the batch can proceed
-                        warning('Error processing fbid {}'.format(fbid))
+                        warning('Error processing fbid {}: {}'.format(fbid, e))
                         collection.add(fbid)
                         self.pconn.commit()
         if len(batch) > 0:
@@ -336,14 +377,10 @@ class ETL(object):
             data['updated'] = datetime.datetime.now()
 
         # insert whatever we got, even if it's a blank row
-        self.pcur.execute("""
-            INSERT INTO users
-            (fbid, fname, lname, email, gender, birthday, city, state, updated)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (fbid, data['fname'], data['lname'], data['email'],
-                    data['gender'], data['birthday'], data['city'], data['state'],
-                    data['updated'])
-            )
+        self.pcur.execute(
+            INSERT_USER_QUERY,
+            [list(data[col]) if type(data[col]) == set else data[col] for col in USER_COLUMNS],
+        )
 
         return data
 
