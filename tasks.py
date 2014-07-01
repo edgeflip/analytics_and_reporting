@@ -359,8 +359,9 @@ class ETL(object):
             # cast timestamps from seconds since epoch to dates and times
             if 'birthday' in dyndata and dyndata['birthday']:
                 dyndata['birthday'] = datetime.date.fromtimestamp( dyndata['birthday'])
-            else:
-                dyndata['birthday'] = None
+
+            if 'profile_update_time' in dyndata and dyndata['profile_update_time']:
+                dyndata['profile_update_time'] = datetime.datetime.fromtimestamp(dyndata['profile_update_time'])
 
             if 'updated' in dyndata and dyndata['updated']:
                 dyndata['updated'] = datetime.datetime.fromtimestamp( dyndata['updated'])
@@ -381,8 +382,6 @@ class ETL(object):
             INSERT_USER_QUERY,
             [list(data[col]) if type(data[col]) == set else data[col] for col in USER_COLUMNS],
         )
-
-        return data
 
 
     @mail_tracebacks
