@@ -348,6 +348,13 @@ class ETL(object):
         info( 'Updated fbid {} from Dynamo'.format(fbid))
 
 
+    def transform_field(self, field):
+        if type(field) == set:
+            return str(list(field))
+        if type(field) == list:
+            return str(field)
+
+
     def seek_user(self, fbid):
 
         data = defaultdict(lambda: None)
@@ -380,7 +387,7 @@ class ETL(object):
         # insert whatever we got, even if it's a blank row
         self.pcur.execute(
             INSERT_USER_QUERY,
-            [list(data[col]) if type(data[col]) == set else data[col] for col in USER_COLUMNS],
+            [fbid if col == 'fbid' else self.transform_field(data[col]) for col in USER_COLUMNS]
         )
 
 
