@@ -357,7 +357,7 @@ class ETL(object):
             string_representation = str(field)
 
         if isinstance(string_representation, str) and len(string_representation) > MAX_STRINGLEN:
-            return string[:MAX_STRINGLEN]
+            return string_representation[:MAX_STRINGLEN]
 
         return string_representation
 
