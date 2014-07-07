@@ -13,6 +13,7 @@ from errors import mail_tracebacks
 from redshift_utils import deploy_table, drop_table_if_exists
 
 MAX_RETRIES = 4
+MAX_STRINGLEN = 4096
 OUR_IP_STRING = ','.join("'{}'".format(ip) for ip in ('38.88.227.194',))
 
 USER_COLUMNS = (
@@ -349,11 +350,16 @@ class ETL(object):
 
 
     def transform_field(self, field):
+        string_representation = None
         if isinstance(field, set):
-            return str(list(field))
+            string_representation = str(list(field))
         if isinstance(field, list):
-            return str(field)
-        return field
+            string_representation = str(field)
+
+        if isinstance(string_representation, str) and len(string_representation) > MAX_STRINGLEN:
+            return string[:MAX_STRINGLEN]
+
+        return string_representation
 
 
     def seek_user(self, fbid):
@@ -366,16 +372,16 @@ class ETL(object):
 
             # cast timestamps from seconds since epoch to dates and times
             if 'birthday' in dyndata and dyndata['birthday']:
-                dyndata['birthday'] = datetime.date.fromtimestamp( dyndata['birthday'])
+                dyndata['birthday'] = datetime.datetime.utcfromtimestamp( dyndata['birthday']).date()
 
             if 'profile_update_time' in dyndata and dyndata['profile_update_time']:
-                dyndata['profile_update_time'] = datetime.datetime.fromtimestamp(dyndata['profile_update_time'])
+                dyndata['profile_update_time'] = datetime.datetime.utcfromtimestamp(dyndata['profile_update_time'])
 
             if 'updated' in dyndata and dyndata['updated']:
-                dyndata['updated'] = datetime.datetime.fromtimestamp( dyndata['updated'])
+                dyndata['updated'] = datetime.datetime.utcfromtimestamp( dyndata['updated'])
             else:
                 # some sort of blank row, track updated just to know when we went looking for it
-                dyndata['updated'] = datetime.datetime.now()
+                dyndata['updated'] = datetime.datetime.utcnow()
 
             data.update(dyndata)
 
