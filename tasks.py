@@ -324,7 +324,7 @@ class ETL(object):
                     except StandardError as e:
                         # Complain, 'requeue', and fix the current transaction
                         # so the batch can proceed
-                        warning('Error processing fbid {}: {}'.format(fbid, e))
+                        warning('Error processing fbid {}'.format(fbid), exc_info=True)
                         collection.add(fbid)
                         self.pconn.commit()
         if len(batch) > 0:
