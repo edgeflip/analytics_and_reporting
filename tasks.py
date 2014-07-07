@@ -349,10 +349,11 @@ class ETL(object):
 
 
     def transform_field(self, field):
-        if type(field) == set:
+        if isinstance(field, set):
             return str(list(field))
-        if type(field) == list:
+        if isinstance(field, list):
             return str(field)
+        return field
 
 
     def seek_user(self, fbid):
