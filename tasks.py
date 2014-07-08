@@ -69,6 +69,8 @@ class ETL(object):
     old_fbids = set([])  # fbids in the users table that we suspect have changed
     edge_fbids = set([]) # fbids in the users table that we don't have edge info for
 
+    max_stringlen = MAX_STRINGLEN
+
     def connect_dynamo(self):
         # set up db connections, should put this in worker.py probably
         debug('Connecting to redshift..')
@@ -350,14 +352,14 @@ class ETL(object):
 
 
     def transform_field(self, field):
-        string_representation = None
+        string_representation = field
         if isinstance(field, set):
             string_representation = str(list(field))
         if isinstance(field, list):
             string_representation = str(field)
 
-        if isinstance(string_representation, str) and len(string_representation) > MAX_STRINGLEN:
-            return string_representation[:MAX_STRINGLEN]
+        if isinstance(string_representation, basestring) and len(string_representation) > self.max_stringlen:
+            return string_representation[:self.max_stringlen]
 
         return string_representation
 
