@@ -127,10 +127,12 @@ class ETL(object):
 
     def metric_expressions(self):
         return """
+            COUNT(DISTINCT CASE WHEN t.type='initial_redirect' or t.type='incoming_redirect' THEN t.visit_id ELSE NULL END) AS initial_redirects,
             COUNT(DISTINCT CASE WHEN t.type='incoming_redirect' THEN t.visit_id ELSE NULL END) AS visits,
             SUM(CASE WHEN t.type='button_click' THEN 1 ELSE 0 END) AS clicks,
             COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.visit_id ELSE NULL END) AS authorized_visits,
             COUNT(DISTINCT fbid) AS uniq_users_authorized,
+            COUNT(DISTINCT CASE WHEN t.type='initial_redirect' or t.type='incoming_redirect' THEN t.visit_id ELSE NULL END) - COUNT(DISTINCT CASE WHEN t.type='authorized' THEN t.visit_id ELSE NULL END) as failed_visits,
             SUM(CASE WHEN (t.type='auth_fail' or t.type='oauth_declined') THEN 1 ELSE 0 END) AS auth_fails,
             COUNT(DISTINCT CASE WHEN t.type='generated' THEN visit_id ELSE NULL END) AS visits_generated_faces,
             COUNT(DISTINCT CASE WHEN t.type='generated' THEN fbid ELSE NULL END) AS users_generated_faces,
