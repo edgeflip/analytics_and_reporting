@@ -167,6 +167,7 @@ class ETL(object):
         inner join campaign_properties using (campaign_id)
         inner join campaigns root_campaign on (root_campaign.campaign_id = campaign_properties.root_campaign_id)
         WHERE visits.ip not in ({})
+        AND campaigns.delete_dt is null
         GROUP BY root_campaign.campaign_id, hour
         """.format(staging_table, self.metric_expressions(), OUR_IP_STRING)
 
@@ -197,6 +198,7 @@ class ETL(object):
         inner join campaign_properties using (campaign_id)
         inner join campaigns root_campaign on (root_campaign.campaign_id = campaign_properties.root_campaign_id)
         WHERE visits.ip not in ({})
+        AND campaigns.delete_dt is null
         GROUP BY root_campaign.campaign_id
         """.format(staging_table, self.metric_expressions(), OUR_IP_STRING)
 
@@ -225,6 +227,7 @@ class ETL(object):
         inner join campaigns using (campaign_id)
         inner join clients cl using (client_id)
         WHERE visits.ip not in ({})
+        AND campaigns.delete_dt is null
         GROUP BY client_id
         """.format(staging_table, self.metric_expressions(), OUR_IP_STRING)
 
