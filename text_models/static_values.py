@@ -1,5 +1,5 @@
 redshift = dict(
-    host='wes-rs-inst.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com',
+    host='analytics.cd5t1q8wfrkk.us-east-1.redshift.amazonaws.com',
     user='edgeflip',
     database='edgeflip',
     port=5439,
