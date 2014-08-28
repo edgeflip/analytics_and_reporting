@@ -26,3 +26,4 @@ for row in rows:
     file.write("{fbid_post} {message}\n".format(fbid_post=fbid_post, message=message))
 file.close()
 redshift_disconnect(conn)
+

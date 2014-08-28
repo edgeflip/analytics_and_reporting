@@ -43,3 +43,4 @@ for row in rows:
     file.write("{fbid} {message}\n".format(fbid=fbid, message=message))
 file.close()
 redshift_disconnect(conn)
+
