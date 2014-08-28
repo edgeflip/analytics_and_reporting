@@ -205,7 +205,10 @@ if __name__ == '__main__':
                     """.format(table_name=table_name, fbid=fbid)
             rows = execute_query(query, conn)
             labels.append(label)
-            values.append(float(rows[0][0]))
+            if not rows or not rows[0] or not rows[0][0]:
+                values.append(None)
+            else:
+                values.append(float(rows[0][0]))
         
         prediction_df = pd.DataFrame(values, index=labels)
         prediction_df.columns = ['prediction']
