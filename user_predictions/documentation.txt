@@ -1,0 +1,76 @@
+# All relevant scripts are located under ~/analytics_and_reporting/user_predictions
+# Training and test data are located under /data/user_documents/individual_posts_{label}
+# Model output files are located under /data/model_runs/{positive_label}....
+
+(1) Create a table in redshift called fbid_sample_{label} that consists of a set of identified fbids that match a particular label (e.g., jewish).
+	Tips for identifying fbids:
+		- Find relevant fields in the user table (religion, interests, political status)
+		- Use the helper interest_counts table to see which keywords would produce large sets of labeled fbids
+
+	Example:
+     		CREATE TABLE fbid_sample_jewish distkey (fbid) sortkey (fbid) AS
+		SELECT fbid FROM users
+		WHERE religion ilike '%jew%' OR religion ilike '%judaism%' OR interests ilike '%jewish%' OR interests ilike '%judai%' OR interests ilike '%yom kippur%' OR interests ilike '%rosh hashanah%' OR interests ilike '%purim%' OR interests ilike '%hanukkah%' OR interests ilike '%yom hashoah%' OR interests ilike '%sukkot%' OR interests ilike '%passover%' OR interests ilike '%bar and bat mitzvah%' OR interests ilike '%synagogue%' OR interests ilike '%shalom%' OR interests ilike '%yisrael%' OR interests ilike '%hebrew%' OR interests ilike '%shabbat%' OR interests ilike '%talmud%' OR interests ilike '%torah%' OR interests ilike '%tikkun%' OR interests ilike '%shavuot%';
+
+(2) Populate /data/user_documents/individual_posts_{label} with data.
+	sudo bash ~/analytics_and_reporting/text_models/get_label_data.sh jewish
+	(This creates the directory and retrieves aboutme and posts data in the background)
+
+(3) Repeat (1) and (2) to get a set of negative instances corresponding to {label} or use 100000 for a default set of 100k randomly chosen users.
+
+(4) Create train and test sets of ids for the positive and negative sets.
+	(a) cd /data/user_documents/individual_posts_{label}
+	(b) Check how many fbids were identified (e.g., wc -l /data/user_documents/individual_posts_jewish/all-individual-aboutme.txt)
+	(c) If more than necessary (or will probably exceed memory limits), choose an appropriate sample size (e.g., 25000)
+	(d) sudo bash ~/analytics_and_reporting/user_predictions/train_test_ids.sh [25000]
+		(the argument is optional, only required if taking a subset of all labeled fbids)
+	Note: This creates an 80/20 train/test split
+	Note: If using 100000 as negative, the train and test sets are already populated for 50000
+
+(5) Train and test the model.
+	(a) Run the predict script:
+		nohup sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/predict_labels_from_words.py {positive_label} {negative_label} 1 1 &
+		(e.g., positive_label=jewish, negative_label=100000)
+	(b) Monitor the report:
+		tail -f /data/model_runs/{positive_label}_{negative_label}_post_1_aboutme_1_or/report_{positive_label}_{negative_label}_post_1_aboutme_1.out
+		(e.g., positive_label=jewish, negative_label=100000)
+		This provides details about the script execution status, top classifier features and weights, model performance on train and test sets, and a list of false positive users with their names.
+
+(6) Analyze the model performance and make adjustments.
+	(a) If there are clearly incorrect phrases that appear as model features that you wish to exclude, create a file called /data/user_documents/individual_posts_{label}/bad_phrases.txt with each excluded phrase per new line.
+	(b) If there are positive/negative train/test fbids that are clearly in the wrong sets, create one of four files to re-route those instances:
+		/data/user_documents/individual_posts_{label}/positive-train-from-negatives-user-ids.txt
+		/data/user_documents/individual_posts_{label}/positive-test-from-negatives-user-ids.txt
+		/data/user_documents/individual_posts_{label}/negative-train-from-positives-user-ids.txt
+		/data/user_documents/individual_posts_{label}/negative-test-from-positives-user-ids.txt
+	(c) [Add latest idea for identifying people with certain phrases in negative posts and joining to add in right sets?]
+	(d) If adjustments were made, clear (most of the) cached files with the following script:
+		sudo bash ~/analytics_and_reporting/user_predictions/clear_model_run_for_iteration.sh {directory_of_model_run}
+		(e.g., /data/model_runs/jewish_100000_post_1_aboutme_1_or)
+		Note: Will spit out rm errors if already cleared (not a problem).
+
+(7) Repeat (5) and (6) until satisfied.
+	Make sure to append to the files created in previous iterations of step (6).
+
+(8) Roll-out predictions to full set of users in redshift.
+	nohup sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/batch_predict_label.py {positive_label} {negative_label} >> ~/analytics_and_reporting/user_predictions/logs/batch_{positive_label}_log.out 2>&1 &
+	(e.g., positive_label=jewish, negative_label=100000)
+
+(9) Add label and pointers to monitoring scripts
+	(a) ~/analytics_and_reporting/user_predictions/get_prediction_stats.py
+	(b) ~/analytics_and_reporting/user_predictions/roll_out_classifiers.sh
+	(c) ~/analytics_and_reporting/user_predictions/get_predictions_for_fbid.py
+
+### Extras ###
+
+(1) Monitor rolled-out predictions
+	~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/get_prediction_stats.py
+
+(2)  Re-dispatch roll-out of all classifiers after redshift updates/fbsync (or on hiccups)
+	sudo bash ~/analytics_and_reporting/user_predictions/roll_out_classifiers.sh
+
+(3) View the command-line prototype demo
+	sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/get_predictions_for_fbid.py fbid [on_network] [top_k] [network_posts_cached]
+	(e.g., 9108088 1 10 True OR 9108088 0 10)
+	Note: the network posts cache needs to be created manually with their paths hard-coded in the script
+
