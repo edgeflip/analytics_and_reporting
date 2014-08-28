@@ -21,7 +21,6 @@ file = open(aboutme_document_filename, 'w')
 for row in rows:
     fbid = row[0]
     books, interests, movies, tv, music, quotes, sports = row[1:]
-#     interests, quotes = row[1:]
     if not books:
         books = ''
     if not interests:
@@ -37,7 +36,6 @@ for row in rows:
     if not sports:
         sports = ''
     message = ' '.join([books, interests, movies, tv, music, quotes, sports])
-#     message = ' '.join([interests, quotes])
     message = ' '.join(re.split('\s+', message))
     
     file.write("{fbid} {message}\n".format(fbid=fbid, message=message))
