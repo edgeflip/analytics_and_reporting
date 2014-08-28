@@ -15,15 +15,15 @@ import re
 import os
 
 np.seterr('ignore')
-User_Posts = namedtuple('User_Posts', ['fbid', 'posts'])
+User_Posts = namedtuple('User_Posts', ['fbid', 'posts', 'aboutme', 'link_desc'])
 
 def get_ids_from_file(ids_filename):
     ids_file = open(ids_filename, 'r')
-    ids = [line.strip() for line in ids_file]
+    ids = [line.strip() for line in ids_file if line.strip()]
     ids_file.close()
     return ids
 
-def get_user_posts(post_document_filenames, *user_sets):
+def get_user_posts(post_document_filename, aboutme_document_filename, link_desc_document_filename, *user_sets):
     '''
     Return a list of lists of User_Posts by scanning all posts in post_document_filename
     and recording them according to the position of the user_set that the user falls 
@@ -34,7 +34,8 @@ def get_user_posts(post_document_filenames, *user_sets):
         user_to_posts = [{}]
     else:
         user_to_posts = [{} for i in range(len(user_sets))]
-    for post_document_filename in post_document_filenames:
+    
+    if post_document_filename:
         post_document_file = open(post_document_filename, 'r')
         for line in post_document_file:
             vals = line.split()
@@ -49,12 +50,87 @@ def get_user_posts(post_document_filenames, *user_sets):
                         break
             if bucket != -1:
                 words = ' '.join(vals[1:])
-                user_to_posts[bucket].setdefault(user, StringIO())
-                user_to_posts[bucket][user].write(words)
-                user_to_posts[bucket][user].write(' ')
+                user_to_posts[bucket].setdefault(user, [StringIO(), StringIO(), StringIO()])
+                user_to_posts[bucket][user][0].write(words)
+                user_to_posts[bucket][user][0].write(' ')
         post_document_file.close()
-    return [[User_Posts(user, posts.getvalue()) for user, posts in user_to_posts[bucket].items()] 
-                for bucket in range(len(user_to_posts))]
+    
+    if aboutme_document_filename:
+        aboutme_document_file = open(aboutme_document_filename, 'r')
+        for line in aboutme_document_file:
+            vals = line.split()
+            user = vals[0].split('_')[0]
+            if not user_sets:
+                bucket = 0
+            else:
+                bucket = -1
+                for idx, user_set in enumerate(user_sets):
+                    if user in user_set:
+                        bucket = idx
+                        break
+            if bucket != -1:
+                words = ' '.join(vals[1:])
+                user_to_posts[bucket].setdefault(user, [StringIO(), StringIO(), StringIO()])
+                user_to_posts[bucket][user][1].write(words)
+                user_to_posts[bucket][user][1].write(' ')
+        aboutme_document_file.close()
+
+    if link_desc_document_filename:
+        link_desc_document_file = open(link_desc_document_filename, 'r')
+        for line in link_desc_document_file:
+            vals = line.split()
+            user = vals[0].split('_')[0]
+            if not user_sets:
+                bucket = 0
+            else:
+                bucket = -1
+                for idx, user_set in enumerate(user_sets):
+                    if user in user_set:
+                        bucket = idx
+                        break
+            if bucket != -1:
+                words = ' '.join(vals[1:])
+                user_to_posts[bucket].setdefault(user, [StringIO(), StringIO(), StringIO()])
+                user_to_posts[bucket][user][2].write(words)
+                user_to_posts[bucket][user][2].write(' ')
+        link_desc_document_file.close()
+
+    return [[User_Posts(user, posts.getvalue(), aboutme.getvalue(), link_desc.getvalue()) 
+                for user, (posts, aboutme, link_desc) in user_to_posts[bucket].items()] 
+                    for bucket in range(len(user_to_posts))]
+
+# def get_user_posts(post_document_filenames, *user_sets):
+#     '''
+#     Return a list of lists of User_Posts by scanning all posts in post_document_filename
+#     and recording them according to the position of the user_set that the user falls 
+#     into (if at all). If no user_sets are supplied, it returns a list of a single 
+#     list of User_Posts.
+#     '''
+#     if not user_sets:
+#         user_to_posts = [{}]
+#     else:
+#         user_to_posts = [{} for i in range(len(user_sets))]
+#     for post_document_filename in post_document_filenames:
+#         post_document_file = open(post_document_filename, 'r')
+#         for line in post_document_file:
+#             vals = line.split()
+#             user = vals[0].split('_')[0]
+#             if not user_sets:
+#                 bucket = 0
+#             else:
+#                 bucket = -1
+#                 for idx, user_set in enumerate(user_sets):
+#                     if user in user_set:
+#                         bucket = idx
+#                         break
+#             if bucket != -1:
+#                 words = ' '.join(vals[1:])
+#                 user_to_posts[bucket].setdefault(user, StringIO())
+#                 user_to_posts[bucket][user].write(words)
+#                 user_to_posts[bucket][user].write(' ')
+#         post_document_file.close()
+#     return [[User_Posts(user, posts.getvalue()) for user, posts in user_to_posts[bucket].items()] 
+#                 for bucket in range(len(user_to_posts))]
 
 def order_user_posts(user_posts, user_ids):
     '''
@@ -63,7 +139,7 @@ def order_user_posts(user_posts, user_ids):
     user_id_to_user_post = {}
     for user_post in user_posts:
         user_id_to_user_post[user_post.fbid] = user_post
-    return [user_id_to_user_post[user_id] for user_id in user_ids]
+    return [user_id_to_user_post[user_id] for user_id in user_ids if user_id in user_id_to_user_post]
 
 def get_vectorizer(vocabulary_filename, idf_filename, user_posts_list, canonical_word_vector_filename):
     if os.path.isfile(vocabulary_filename) and os.path.isfile(idf_filename):
@@ -106,13 +182,14 @@ def get_largest_word_differences(vector1, vector2, tfidf_vectorizer, k=10):
     for col, ratio in bottom_k:
         print(words[col], ratio)
 
-def get_post_vectors(tfidf_vectorizer, user_posts_list, post_vector_matrix_filename):
-    if os.path.isfile(post_vector_matrix_filename):
+def get_post_vectors(tfidf_vectorizer, user_posts_list, post_vector_matrix_filename, cache=True):
+    if cache and os.path.isfile(post_vector_matrix_filename):
         sys.stdout.write('\tReading in cached post vectors\n')
         return csr_matrix(mmread(post_vector_matrix_filename))
     else:
         vector_mx = tfidf_vectorizer.transform([user_posts.posts for user_posts in user_posts_list])
-        mmwrite(post_vector_matrix_filename, vector_mx)
+        if cache:
+            mmwrite(post_vector_matrix_filename, vector_mx)
         return vector_mx
 
 def get_users_sorted_by_canonical_distance(user_list, user_to_word_vector_mx, canonical_vector, 
