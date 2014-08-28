@@ -16,3 +16,11 @@ def execute_query(query, connection, fetchable=True):
     cursor.close()
     if fetchable:
         return rows
+
+def does_table_exist(table_name, conn):
+    query = """
+            SELECT count(*)
+            FROM information_schema.tables
+            WHERE table_name = '{table_name}'
+            """.format(table_name=table_name)
+    return execute_query(query, conn)[0][0]
