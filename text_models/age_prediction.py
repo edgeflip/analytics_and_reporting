@@ -208,7 +208,7 @@ post_type = 'status'
 ## Naive Bayes classifier experiment with nltk ##
 tok = Tokenizer()
 classes = ['less-18', '18-24', '25-34', '35-44', '45-54', '55-64', '65-greater']
-top_ks = [100, 1000, 2000]
+top_ks = [5000]#[100, 1000, 2000]
 feature_methods_and_args = [(document_contains_feature, []), 
                             (document_count_threshold_features, [[3, 7, 15]])]
 trials = 3
