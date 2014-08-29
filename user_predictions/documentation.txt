@@ -13,7 +13,7 @@
 		WHERE religion ilike '%jew%' OR religion ilike '%judaism%' OR interests ilike '%jewish%' OR interests ilike '%judai%' OR interests ilike '%yom kippur%' OR interests ilike '%rosh hashanah%' OR interests ilike '%purim%' OR interests ilike '%hanukkah%' OR interests ilike '%yom hashoah%' OR interests ilike '%sukkot%' OR interests ilike '%passover%' OR interests ilike '%bar and bat mitzvah%' OR interests ilike '%synagogue%' OR interests ilike '%shalom%' OR interests ilike '%yisrael%' OR interests ilike '%hebrew%' OR interests ilike '%shabbat%' OR interests ilike '%talmud%' OR interests ilike '%torah%' OR interests ilike '%tikkun%' OR interests ilike '%shavuot%';
 
 (2) Populate /data/user_documents/individual_posts_{label} with data.
-	sudo bash ~/analytics_and_reporting/text_models/get_label_data.sh jewish
+	sudo bash ~/analytics_and_reporting/user_predictions/get_label_data.sh jewish
 	(This creates the directory and retrieves aboutme and posts data in the background)
 
 (3) Repeat (1) and (2) to get a set of negative instances corresponding to {label} or use 100000 for a default set of 100k randomly chosen users.
