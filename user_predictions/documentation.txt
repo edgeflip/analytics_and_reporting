@@ -29,7 +29,7 @@
 
 (4b) Consider sampling down positive and negative training sets to match post and aboutme word frequency distributions
 	If so, run:
-		sudo ~/virtualenvs/py27/bin/python match_train_word_distributions.py {positive_label} {negative_label}
+		sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/match_train_word_distributions.py {positive_label} {negative_label}
 	Then, in step (5) train the model with 'True' as the 5th argument to tell it to look for the new sampled training sets.
 
 (5) Train and test the model.
@@ -58,7 +58,7 @@
 	Make sure to append to the files created in previous iterations of step (6).
 
 (8) Roll-out predictions to full set of users in redshift.
-	nohup sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/batch_predict_label.py {positive_label} {negative_label} >> ~/analytics_and_reporting/user_predictions/logs/batch_{positive_label}_log.out 2>&1 &
+	nohup sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/batch_predict_label.py {positive_label} {negative_label} >> ~/analytics_and_reporting/user_predictions/logs/batch_{positive_label}.log 2>&1 &
 	(e.g., positive_label=jewish, negative_label=100000)
 
 (9) Add label and pointers to monitoring scripts

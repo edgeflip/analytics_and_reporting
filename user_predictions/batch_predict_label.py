@@ -174,7 +174,7 @@ if __name__ == '__main__':
     if pos_label == 'vegan':
         model_run_suffix = '_post_aboutme_100'
         model_run_dir = '/data/model_runs/vegan{}'.format(model_run_suffix)
-    elif pos_label == 'jewish':
+    elif pos_label in ['jewish', 'atheist']:
         model_run_suffix = '_{}_{}_post_1_aboutme_1'.format(pos_label, neg_label)
         model_run_dir = '/data/model_runs/{}_or_sampled'.format(model_run_suffix[1:])        
     else:
