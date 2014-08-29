@@ -166,7 +166,8 @@ label_to_files['muslim']           = ('/data/model_runs',
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         sys.stderr.write('Usage: python get_predictions_for_fbid.py ')
-        sys.stderr.write('fbid [on_network] [top k features] [network_posts_cached]\n')
+        sys.stderr.write('fbid [on_network] [top_k_friends] [top_k_features] ')
+        sys.stderr.write('[network_posts_cached]\n')
         sys.exit()
     
     fbid = int(sys.argv[1])
@@ -177,13 +178,18 @@ if __name__ == '__main__':
         on_network = int(sys.argv[2])
     else:
         on_network = 0
-    
+
     if len(sys.argv) > 3:
-        top_k = int(sys.argv[3])
+        top_k_friends = int(sys.argv[3])
     else:
-        top_k = 0
+        top_k_friends = 0
     
     if len(sys.argv) > 4:
+        top_k_features = int(sys.argv[4])
+    else:
+        top_k_features = 0
+    
+    if len(sys.argv) > 5:
         posts_from_cache = True
         posts_cache_filename = ('/data/user_documents/individual_posts_marc_friends/'
                                 'all-individual-posts.txt')
@@ -213,7 +219,7 @@ if __name__ == '__main__':
         prediction_df = pd.DataFrame(values, index=labels)
         prediction_df.columns = ['prediction']
         
-        if top_k:
+        if top_k_features:
             fbid_user_post = get_post_and_aboutme_document_from_id(fbid, conn)
             fbid_user_post = User_Posts(fbid_user_post.fbid, 
                                        fbid_user_post.posts + fbid_user_post.aboutme, 
@@ -222,7 +228,8 @@ if __name__ == '__main__':
             for label in label_to_table_names:
                 sys.stdout.write('computing top features for {}...\n'.format(label))
                 sys.stdout.flush()            
-                df = get_k_most_discriminative_features([fbid_user_post], top_k, label)
+                df = get_k_most_discriminative_features([fbid_user_post], 
+                                                        top_k_features, label)
                 df['label'] = [label]*len(df)
                 dfs.append(df)
             feature_df = pd.concat(dfs)
@@ -234,7 +241,7 @@ if __name__ == '__main__':
                                                    on=['label'])
             prediction_with_features_df = prediction_with_features_df.set_index(['label'])
             for label in label_to_table_names:
-                print(prediction_with_features_df.ix[label].head(100))
+                print(prediction_with_features_df.ix[label].head(top_k_features))
                 print('')
         else:
             print(prediction_df)
@@ -255,13 +262,11 @@ if __name__ == '__main__':
                 """.format(temp_network_table_name=temp_network_table_name, 
                            fbid=fbid)
         execute_query(query, conn, fetchable=False)
-        sys.stdout.write('created temp network table\n')
-        sys.stdout.flush()
         
-        if top_k and not posts_from_cache:
+        if top_k_features and not posts_from_cache:
             _, fbid_user_posts, _ = get_post_and_aboutme_document_from_ids_helper(
                                                          temp_network_table_name, conn)
-        elif top_k and posts_from_cache:
+        elif top_k_features and posts_from_cache:
             fbid_user_posts = get_user_posts(posts_cache_filename, 
                                              aboutme_cache_filename)[0]
             fbid_user_posts = [User_Posts(user_posts.fbid, 
@@ -294,20 +299,21 @@ if __name__ == '__main__':
         prediction_df = prediction_df.sort(['label', 'prediction'], 
                                            ascending=[True, False])
         
-        if top_k:
+        if top_k_features:
             dfs = []
             for label in label_to_table_names:
                 sys.stdout.write('computing top features for {}...\n'.format(label))
                 sys.stdout.flush()            
-                df = get_k_most_discriminative_features(fbid_user_posts, top_k, label)
+                df = get_k_most_discriminative_features(fbid_user_posts, 
+                                                        top_k_features, label)
                 df['label'] = [label]*len(df)
                 dfs.append(df)
             feature_df = pd.concat(dfs)
         
-        if not top_k:
+        if not top_k_features:
             for label in label_to_table_names:
                 print(prediction_df[prediction_df['label'] == label].sort(
-                                    'prediction', ascending=False).head(10))
+                                    'prediction', ascending=False).head(top_k_friends))
                 print('')
         else:
             pd.set_option('display.max_rows', 500)
@@ -317,7 +323,8 @@ if __name__ == '__main__':
                                                    on=['label', 'fbid'])
             prediction_with_features_df = prediction_with_features_df.set_index(['label'])
             for label in label_to_table_names:
-                print(prediction_with_features_df.ix[label].head(100))
+                print(prediction_with_features_df.ix[label].head(
+                                                           top_k_features*top_k_friends))
                 print('')
         
     redshift_disconnect(conn)
