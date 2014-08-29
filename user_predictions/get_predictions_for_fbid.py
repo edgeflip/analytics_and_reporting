@@ -155,7 +155,7 @@ label_to_files['christian']        = ('/data/model_runs',
 label_to_files['jewish']           = ('/data/model_runs',
                                       'jewish',
                                       '100000',
-                                      '_post_1_aboutme_1_or',
+                                      '_post_1_aboutme_1_or_sampled',
                                       '_post_1_aboutme_1')
 label_to_files['muslim']           = ('/data/model_runs',
                                       'muslim',

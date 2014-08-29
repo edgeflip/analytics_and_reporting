@@ -149,7 +149,7 @@ def get_post_and_aboutme_document_from_id(fbid_in, conn):
     aboutme_message = ' '.join([books, interests, movies, tv, 
                                 music, quotes, sports]).strip()
     if aboutme_message:
-        aboutme_message = ' '.join(re.split('\s+', aboutme))
+        aboutme_message = ' '.join(re.split('\s+', aboutme_message))
             
     return User_Posts(fbid_in, post_message.getvalue().strip(), aboutme_message.strip())
 
