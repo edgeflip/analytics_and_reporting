@@ -27,6 +27,11 @@
 	Note: This creates an 80/20 train/test split
 	Note: If using 100000 as negative, the train and test sets are already populated for 50000
 
+(4b) Consider sampling down positive and negative training sets to match post and aboutme word frequency distributions
+	If so, run:
+		sudo ~/virtualenvs/py27/bin/python match_train_word_distributions.py {positive_label} {negative_label}
+	Then, in step (5) train the model with 'True' as the 5th argument to tell it to look for the new sampled training sets.
+
 (5) Train and test the model.
 	(a) Run the predict script:
 		nohup sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/predict_labels_from_words.py {positive_label} {negative_label} 1 1 &
@@ -70,7 +75,6 @@
 	sudo bash ~/analytics_and_reporting/user_predictions/roll_out_classifiers.sh
 
 (3) View the command-line prototype demo
-	sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/get_predictions_for_fbid.py fbid [on_network] [top_k] [network_posts_cached]
-	(e.g., 9108088 1 10 True OR 9108088 0 10)
+	sudo ~/virtualenvs/py27/bin/python ~/analytics_and_reporting/user_predictions/get_predictions_for_fbid.py fbid [on_network] [top_k_friends] [top_k_features] [network_posts_cached]
+	(e.g., 9108088 1 10 10 True OR 9108088 0 0 10)
 	Note: the network posts cache needs to be created manually with their paths hard-coded in the script
-

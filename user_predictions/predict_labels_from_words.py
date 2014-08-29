@@ -112,6 +112,7 @@ if __name__ == '__main__':
     neg_label = sys.argv[2]
     post_threshold = None if sys.argv[3] == 'None' else int(sys.argv[3])
     aboutme_threshold = None if sys.argv[4] == 'None' else int(sys.argv[4])
+    use_sampled_train = False if len(sys.argv) < 5 else sys.argv[5] == 'True'
     
     neg_dir = '/data/user_documents/individual_posts_{}'.format(neg_label)
     pos_dir = '/data/user_documents/individual_posts_{}'.format(pos_label)
@@ -119,7 +120,10 @@ if __name__ == '__main__':
                             pos_label, neg_label, 
                             '_{}'.format(post_threshold) if post_threshold else '',
                             '_{}'.format(aboutme_threshold) if aboutme_threshold else '')
-    model_run_dir = '/data/model_runs/{}_or'.format(model_run_suffix[1:])
+    if use_sampled_train:
+        model_run_dir = '/data/model_runs/{}_or_sampled'.format(model_run_suffix[1:])
+    else:
+        model_run_dir = '/data/model_runs/{}_or'.format(model_run_suffix[1:])
     if not os.path.exists(model_run_dir):
         os.makedirs(model_run_dir)
     
@@ -129,7 +133,8 @@ if __name__ == '__main__':
     # Get positive train/test user ids.
     report_file.write('Getting positive training and test ids\n')
     report_file.flush()
-    pos_train_ids_filename = pos_dir + '/' + 'train-user-ids.txt'
+    pos_train_ids_filename = pos_dir + '/' + 'train-user-ids{}.txt'.format(
+                                            '-sample' if use_sampled_train else '')
     pos_train_ids = get_ids_from_file(pos_train_ids_filename)
     pos_test_ids_filename = pos_dir + '/' + 'test-user-ids.txt'
     pos_test_ids = get_ids_from_file(pos_test_ids_filename)
@@ -137,7 +142,10 @@ if __name__ == '__main__':
     # Get negative train/test user ids.
     report_file.write('Getting negative training and test ids\n')
     report_file.flush()
-    neg_train_ids_filename = neg_dir + '/' + 'train-user-ids.txt'
+    neg_train_ids_filename = neg_dir + '/' + \
+                                'train-user-ids{}.txt'.format(
+                                  '-sample-for-{}'.format(pos_label) if use_sampled_train
+                                  else '')
     neg_train_ids = get_ids_from_file(neg_train_ids_filename)
     neg_test_ids_filename = neg_dir + '/' + 'test-user-ids.txt'
     neg_test_ids = get_ids_from_file(neg_test_ids_filename)
@@ -324,7 +332,11 @@ if __name__ == '__main__':
         clf = LinearSVC(C=1)
         clf.fit(X_train, y_train)
         joblib.dump(clf, clf_filename)
-        
+
+    pd.set_option('display.max_rows', 500)
+    pd.set_option('display.max_columns', 500)
+    pd.set_option('display.width', 1000)
+    
     report_file.write('{} total features\n'.format(len(clf.coef_[0])))    
     report_file.write('Top 100 positive discriminative features:\n')
     report_file.flush()
