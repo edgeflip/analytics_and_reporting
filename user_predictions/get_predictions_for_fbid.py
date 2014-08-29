@@ -94,6 +94,7 @@ label_to_table_names['liberal'] = 'user_px5_liberal_updated'
 label_to_table_names['christian'] = 'user_px5_christian_updated'
 label_to_table_names['jewish'] = 'user_px5_jewish_updated'
 label_to_table_names['muslim'] = 'user_px5_muslim_updated'
+label_to_table_names['atheist'] = 'user_px5_atheist_updated'
 
 label_to_files = {} # label -> (dir_name, positive_label, negative_label, 
 #                               dir_suffix, file_suffix)
@@ -154,6 +155,11 @@ label_to_files['christian']        = ('/data/model_runs',
                                       '_post_1_aboutme_1')
 label_to_files['jewish']           = ('/data/model_runs',
                                       'jewish',
+                                      '100000',
+                                      '_post_1_aboutme_1_or_sampled',
+                                      '_post_1_aboutme_1')
+label_to_files['atheist']           = ('/data/model_runs',
+                                      'atheist',
                                       '100000',
                                       '_post_1_aboutme_1_or_sampled',
                                       '_post_1_aboutme_1')

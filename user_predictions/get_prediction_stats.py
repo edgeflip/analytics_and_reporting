@@ -20,6 +20,7 @@ label_and_table_names.append(('liberal', 'user_px5_liberal_updated'))
 label_and_table_names.append(('christian', 'user_px5_christian_updated'))
 label_and_table_names.append(('jewish', 'user_px5_jewish_updated'))
 label_and_table_names.append(('muslim', 'user_px5_muslim_updated'))
+label_and_table_names.append(('atheist', 'user_px5_atheist_updated'))
 
 conn = redshift_connect()
 labels = []

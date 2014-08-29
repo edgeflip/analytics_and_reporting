@@ -39,3 +39,6 @@ nohup sudo ~/virtualenvs/py27/bin/python ${script_dir}/batch_predict_label.py je
 
 echo muslim
 nohup sudo ~/virtualenvs/py27/bin/python ${script_dir}/batch_predict_label.py muslim 100000 >> ${log_dir}/batch_muslim.log 2>&1 &
+
+echo atheist
+nohup sudo ~/virtualenvs/py27/bin/python ${script_dir}/batch_predict_label.py atheist 100000 >> ${log_dir}/batch_atheist.log 2>&1 &
