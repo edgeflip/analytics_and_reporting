@@ -112,7 +112,7 @@ if __name__ == '__main__':
     neg_label = sys.argv[2]
     post_threshold = None if sys.argv[3] == 'None' else int(sys.argv[3])
     aboutme_threshold = None if sys.argv[4] == 'None' else int(sys.argv[4])
-    use_sampled_train = False if len(sys.argv) < 5 else sys.argv[5] == 'True'
+    use_sampled_train = False if len(sys.argv) <= 5 else sys.argv[5] == 'True'
     
     neg_dir = '/data/user_documents/individual_posts_{}'.format(neg_label)
     pos_dir = '/data/user_documents/individual_posts_{}'.format(pos_label)
