@@ -380,6 +380,8 @@ class ETL(object):
             # cast timestamps from seconds since epoch to dates and times
             if 'birthday' in dyndata and dyndata['birthday']:
                 dyndata['birthday'] = datetime.datetime.utcfromtimestamp( dyndata['birthday']).date()
+            elif 'birthday' in dyndata and dyndata['birthday'] == 0:
+                del dyndata['birthday']
 
             if 'profile_update_time' in dyndata and dyndata['profile_update_time']:
                 dyndata['profile_update_time'] = datetime.datetime.utcfromtimestamp(dyndata['profile_update_time'])

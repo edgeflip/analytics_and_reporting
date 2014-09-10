@@ -8,3 +8,4 @@ requests==2.0.0
 simples3==1.0
 tornado==3.1
 wsgiref==0.1.2
+unicodecsv
